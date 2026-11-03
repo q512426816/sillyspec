@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-turn-activity-watchdog",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-turn-activity-watchdog:flow:测试绑定FR-01",
+      "tests": [
+        "test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「到点触发：interrupt 尝试 + 复位 active + staleRunResetAt + 清 pendingInjectCount + 保留 currentRunId + onTurnActivityTimeout 回调」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-turn-activity-watchdog"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-turn-activity-watchdog:flow:测试绑定FR-02",
+      "tests": [
+        "test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「轮事件/心跳续防窗口重挂不提前触发；result/终态撤防；env 0=关闭、非法回落默认」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-turn-activity-watchdog"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-turn-activity-watchdog:flow:测试绑定FR-03",
+      "tests": [
+        "test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「假活保护：currentRunId 已切新轮/非 running 静默跳过不回调；与启动看门狗并存不重复回报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-turn-activity-watchdog"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-turn-activity-watchdog:flow:测试绑定FR-04",
+      "tests": [
+        "test/sillyhub-daemon/tests/daemon-turn-activity-timeout-report.test.ts「桥：state 在 → notifyRunResult(status=turn_activity_timeout, is_error=true) 一次；state 缺失 warn no-op；上报失败 warn 不抛」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-turn-activity-watchdog"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-turn-activity-watchdog:flow:测试绑定FR-04",
+      "tests": [
+        "test/sillyhub-daemon/tests/interactive/turn-start-watchdog.test.ts「既有轮启动看门狗用例全量回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-turn-activity-watchdog"
+    }
+  ]
+}

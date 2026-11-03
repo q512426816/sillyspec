@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-turn-activity-watchdog",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7655b855d6dc14758145527f5b648eae2892c55c",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "fire 守卫与状态复位间存在 await 缺口，design 盲维Q2「检查与复位之间无 await（同步段完成状态翻转）」声明与实现不符",
+      "evidence": "fireTurnActivityWatchdog 在守卫（turn-control.ts:785 status!==running||currentRunId!==runId）与复位（:787 status='active'）之间有 :786 `await interrupt(...)`——同文件既有 fireTurnStartWatchdog（:668→:669）才是无 await 的同步翻转，design 该句系从启动看门狗形态误植。窗口内到达的 onMessage/onResult/新 inject 不被复核（interrupt 后无二次守卫）：若引擎恰在 interrupt 调用期间（sub-second～秒级）吐出新事件（仍 running→会续防新 timer）或真 result，fire 恢复后仍无条件复位会话并把该 run 回报 failed——有存活证据的活轮被误杀、先报失败后吐 result 的 run 停留 failed（backend close_interactive_run 终态幂等 no-op 不翻写，已核实 close_run_steps.py 文档与映射）。后果与已披露「误杀超长静默轮」接受面同款、且窗口极窄（须事件恰落在单次 interrupt 调用期内且正值 30min 边界），故评 P2 契约不符而非 P1；建议 interrupt await 后补一次 status/currentRunId 复核即可关窗。｜主会话修复：fireTurnActivityWatchdog 在 await interrupt 后增加二次双守卫复核（turn-control.ts fire 函数），interrupt 窗口内到达的事件/result 挡下复位与回报；新增回归用例「interrupt await 窗口内事件到达→复核守卫静默跳过」锁定。",
+      "location": "sillyhub-daemon/src/interactive/session-manager/turn-control.ts:785-787"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "commit 消息用例计数不符：声称 turn-activity-watchdog.test.ts「19 用例」且「19+4 全绿」，实测该文件 15 用例（两文件合计 15+4=19）",
+      "evidence": "vitest 实跑该文件 15 tests（it 块 grep 计数 15），全量口径 6 文件 56 tests 全绿；纯 commit 文案计数错误，无代码/契约影响。",
+      "location": "commit 7655b855d message"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "env 解析 parseInt 宽松边界：'0.5'→0（截断后命中显式关闭而非回落默认）、'1500abc'→1500（前缀容忍）",
+      "evidence": "turnActivityWatchdogMs() 用 Number.parseInt 截断：非整数字符串按整数前缀取值，'0.5' 落到 0=关闭而非 FR-02「非法回落默认」。与既有 turnStartWatchdogMs() 同款解析风格（house precedent），FR 的非法示例（abc/-5）行为正确且各有断言；边界如实记录，实际影响趋零。",
+      "location": "sillyhub-daemon/src/interactive/session-manager/turn-control.ts:722-728"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "披露裁决①：30min 窗可能误杀超长静默工具轮——可接受",
+      "evidence": "测「无活动时长」非「轮总时长」（生成期心跳续防）+ 默认窗远超常规工具静默期 + env 可调且 0 显式关闭（逃生口实测有断言）+ interrupt 软收敛给活引擎 abort 收尾机会——多层缓解下接受面成立。",
+      "location": "design.md 风险与死路"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "披露裁决②：误报下该轮迟到 result 丢弃——可接受",
+      "evidence": "backend close_interactive_run 对已终态 run 幂等 no-op（docstring 明示「do not flip a completed run back to failed」，反向同理不翻写），迟到 result 落旧轮不污染新轮（currentRunId 保留锚 + 下次 inject 无条件覆盖），用户重发即恢复。",
+      "location": "backend/app/modules/daemon/run_sync/service/__init__.py:428-430"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "披露裁决③：notifyRunResult 上报失败不重试、靠 offline sweep 兜底——可接受",
+      "evidence": "该残余形态要求 REST 持续失败而 WS 存活（概率极低），WS 亦断时 600s offline sweep 兜底；与既有 onTurnStartTimeout 桥同款 warn 边界，测试覆盖「失败不抛」。",
+      "location": "sillyhub-daemon/src/daemon.ts:4837-4845"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok",
+    "作用域": "ok",
+    "探针-cli-copy-selfsufficient": "ok",
+    "探针-config-absent-zero-regression": "ok",
+    "探针-crossrepo-path-compat": "n/a"
+  },
+  "reviewedAt": "2026-11-04T01:10:44+08:00"
+}

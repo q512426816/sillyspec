@@ -1,0 +1,1029 @@
+diff --git a/sillyhub-daemon/src/cli.ts b/sillyhub-daemon/src/cli.ts
+index fa373c521..002b5f1fd 100644
+--- a/sillyhub-daemon/src/cli.ts
++++ b/sillyhub-daemon/src/cli.ts
+@@ -885,6 +885,12 @@ export async function startAction(opts: StartOptions): Promise<number> {
+       // 日志，backend 侧由 pending run 启动超时清扫兜底）。
+       onTurnStartTimeout: (sessionId, runId) =>
+         daemon.onTurnStartTimeout(sessionId, runId),
++      // 2026-11-04-turn-activity-watchdog：轮活动看门狗触发 → daemon 桥
++      // notifyRunResult 收敛该 run（session-manager 已 interrupt + 重置会话态；
++      // 回报失败仅日志，backend 侧 running run 无独立兜底——与启动看门狗同款
++      // warn 边界，详见 daemon.onTurnActivityTimeout 注释）。
++      onTurnActivityTimeout: (sessionId, runId) =>
++        daemon.onTurnActivityTimeout(sessionId, runId),
+       onSessionEvent: (sessionId, runId, event: SessionEventForBackend) => {
+         void (async () => {
+           try {
+diff --git a/sillyhub-daemon/src/daemon.ts b/sillyhub-daemon/src/daemon.ts
+index 2cd5374dc..0eb4dce13 100644
+--- a/sillyhub-daemon/src/daemon.ts
++++ b/sillyhub-daemon/src/daemon.ts
+@@ -4808,6 +4808,57 @@ export class Daemon {
+     }
+   }
+ 
++  /**
++   * 2026-11-04-turn-activity-watchdog：轮活动看门狗触发的失败回报。
++   *
++   * SessionManager 活动看门狗到点（running 轮超窗无事件/心跳——引擎 turn 疑似
++   * 中途挂死，腾讯云生产会话 414bc7d5 实证形态）且已 best-effort interrupt +
++   * 重置会话态后经 deps.onTurnActivityTimeout 到达本方法。用 state 的
++   * leaseId/claimToken 经 notifyRunResult 把该 run 收敛 failed（status=
++   * 'turn_activity_timeout' + is_error=true → backend close_interactive_run 落
++   * error_code=interactive_failed + result_summary 作可读原因，SSE 终态随之到达
++   * 前端并解锁输入框、派发排队消息）。
++   *
++   * 边界：session-manager / state 缺失（终态清理后迟到触发）→ warn no-op；
++   * notifyRunResult 网络/HTTP 失败 → warn 不重试（与 onTurnStartTimeout 同款
++   * 收敛姿势。残余风险：backend running run 无独立超时兜底——该形态要求 REST
++   * 持续失败而 WS 存活，概率极低；WS 亦断时 600s offline sweep 兜底）。
++   */
++  async onTurnActivityTimeout(sessionId: string, runId: string): Promise<void> {
++    if (!this._sessionManager) {
++      this._logger.warn('on_turn_activity_timeout_no_manager', { session_id: sessionId });
++      return;
++    }
++    const state = this._sessionManager.get(sessionId);
++    if (!state) {
++      this._logger.warn('on_turn_activity_timeout_session_not_found', {
++        session_id: sessionId,
++      });
++      return;
++    }
++    try {
++      await this._client.notifyRunResult(state.leaseId, state.claimToken, runId, {
++        status: 'turn_activity_timeout',
++        is_error: true,
++        result_summary:
++          '本轮执行长时间无任何进展（引擎疑似挂死），已自动打断并收敛为失败。' +
++          '请重新发送消息即可继续',
++      });
++      this._logger.info('turn_activity_timeout_reported', {
++        session_id: sessionId,
++        run_id: runId,
++        lease_id: state.leaseId,
++      });
++    } catch (e) {
++      this._logger.warn('turn_activity_timeout_report_failed', {
++        session_id: sessionId,
++        run_id: runId,
++        lease_id: state.leaseId,
++        error: e,
++      });
++    }
++  }
++
+ 
+   /**
+    * 桥接：增量上报 agent 执行消息（流式）。
+diff --git a/sillyhub-daemon/src/interactive/session-manager.ts b/sillyhub-daemon/src/interactive/session-manager.ts
+index f737afc1b..b7d1bbaaa 100644
+--- a/sillyhub-daemon/src/interactive/session-manager.ts
++++ b/sillyhub-daemon/src/interactive/session-manager.ts
+@@ -215,10 +215,12 @@ import {
+ import {
+   armTurnStartWatchdog,
+   disarmTurnStartWatchdog,
++  disarmTurnActivityWatchdog,
+   downloadAttachmentWithTimeout,
+   getPendingInjectCount,
+   inject,
+   interrupt,
++  refreshTurnActivityWatchdog,
+   interruptInternal,
+   refreshClaimToken,
+   resolvePlanResponse,
+@@ -433,6 +435,17 @@ export class SessionManager {
+     { timer: ReturnType<typeof setTimeout>; runId: string }
+   >();
+ 
++  /**
++   * 2026-11-04-turn-activity-watchdog：轮活动看门狗（sessionId → timer + 布防轮
++   * runId）。running 期间任意轮事件/心跳续防；超窗静默触发（interrupt 软收敛 +
++   * 复位会话态 + 经 deps.onTurnActivityTimeout 回报该 run 失败）。方法体在
++   * turn-control.ts 尾部簇。
++   */
++  private readonly _turnActivityWatchdogs = new Map<
++    string,
++    { timer: ReturnType<typeof setTimeout>; runId: string }
++  >();
++
+   /**
+    * 2026-10-25-trajectory-source-model task-03：sessionId → 上次已采集的配置面
+    * 请求头快照（变更检测基线）。create / reloadWithConfig 内核 / restore
+@@ -1393,6 +1406,12 @@ export class SessionManager {
+       if (!isAuthoritative()) return;
+       const runId = state.currentRunId;
+       if (!runId) return;
++      // 2026-11-04-turn-activity-watchdog：心跳 = 引擎活着的最强证据（生成期
++      // input_json_delta/token_usage），续防活动看门狗。仅 running 态：触发守卫
++      // 本会拦非 running，此处显式判省 stray timer。
++      if (state.status === 'running') {
++        this._refreshTurnActivityWatchdog(state.sessionId, runId);
++      }
+       try {
+         void Promise.resolve(
+           this.deps.onTurnMessage(state.sessionId, runId, {
+@@ -1584,6 +1603,18 @@ export class SessionManager {
+     return disarmTurnStartWatchdog(this._core(), sessionId);
+   }
+ 
++  // ── 2026-11-04-turn-activity-watchdog：轮活动看门狗（方法体在 turn-control.ts）──
++
++  /** 布防/续防看门狗（inject/轮事件/心跳到达调用；窗口 0=显式关闭 no-op）。 */
++  private _refreshTurnActivityWatchdog(sessionId: string, runId: string): void {
++    return refreshTurnActivityWatchdog(this._core(), sessionId, runId);
++  }
++
++  /** 撤防看门狗（轮 result/会话终态/stale-reset/stop 调用；幂等）。 */
++  private _disarmTurnActivityWatchdog(sessionId: string): void {
++    return disarmTurnActivityWatchdog(this._core(), sessionId);
++  }
++
+   /**
+    * task-03（2026-09-14-session-ctx-compact / FR-02 / D-002@v3 单点接线）：
+    * 会话级上下文压缩入口——六守卫（不存在 / running / reconnecting / ended /
+diff --git a/sillyhub-daemon/src/interactive/session-manager/events.ts b/sillyhub-daemon/src/interactive/session-manager/events.ts
+index 0496245c2..cba086ebf 100644
+--- a/sillyhub-daemon/src/interactive/session-manager/events.ts
++++ b/sillyhub-daemon/src/interactive/session-manager/events.ts
+@@ -73,6 +73,9 @@ export async function onResult(
+   }
+   // 2026-10-21-daemon-zombie-turn FR-01：result 到达 = 轮确实启动过，撤防看门狗。
+   mgr._disarmTurnStartWatchdog(state.sessionId);
++  // 2026-11-04-turn-activity-watchdog：轮边界已落，撤防活动看门狗（下一轮由
++  // 下一次 inject 重新布防；排队消息的 SDK 拉取亦经 inject 派发路径）。
++  mgr._disarmTurnActivityWatchdog(state.sessionId);
+   // 先切换 status→active + 清空 currentRunId（turn 边界已落，spike D4），
+   // 再 await onTurnResult。这样即便调用方同步触发 onResult（fire-and-forget），
+   // 也能在 onTurnResult 回调内读到稳定的 active 状态；且避免 onTurnResult 抛错时
+@@ -296,6 +299,13 @@ export async function onMessage(
+   // 刷新 stale 判定基准（lastTurnEventAt），并登记当前 run 为「已启动」。
+   state.lastTurnEventAt = Date.now();
+   if (state.currentRunId) rememberObservedRun(state, state.currentRunId);
++  // 2026-11-04-turn-activity-watchdog：envelope = 轮内活动证据，续防活动看门狗
++  // （重挂窗口）。仅 running 态续防：轮结束后的后台任务锚点事件（currentRunId
++  // 保留但 status=active）不给已收口轮续命；触发守卫本会拦，此处显式判省 stray
++  // timer。粒度取舍对齐上方启动看门狗撤防注释：后台任务事件也算活动，宽面续防。
++  if (state.status === 'running' && state.currentRunId) {
++    mgr._refreshTurnActivityWatchdog(state.sessionId, state.currentRunId);
++  }
+   const events = Array.isArray(envelope?.events) ? envelope.events : [];
+   // 对账表 #4 前置判定：本 envelope 是否含 Task/Agent tool_use 事件——归一化器把
+   // 同一 assistant message 的 tool_use 派生会话信号（agent_task_status running）
+diff --git a/sillyhub-daemon/src/interactive/session-manager/lifecycle.ts b/sillyhub-daemon/src/interactive/session-manager/lifecycle.ts
+index d2d1bf84f..d9e4423cb 100644
+--- a/sillyhub-daemon/src/interactive/session-manager/lifecycle.ts
++++ b/sillyhub-daemon/src/interactive/session-manager/lifecycle.ts
+@@ -77,6 +77,11 @@ export function stop(mgr: SessionManagerCore): void {
+     clearTimeout(w.timer);
+   }
+   mgr._turnStartWatchdogs.clear();
++  // 2026-11-04-turn-activity-watchdog：清轮活动看门狗（同上）。
++  for (const w of mgr._turnActivityWatchdogs.values()) {
++    clearTimeout(w.timer);
++  }
++  mgr._turnActivityWatchdogs.clear();
+   // ql-20260621-partial（task-08 改造）：partial flush 定时器已随缓冲链下沉
+   // 归一化器（driver.consume finally dispose），daemon 侧无 timer 需清；此处仅
+   // 清会话级 usage 台账（纯内存 Map，防退出途中残留引用）。
+@@ -221,6 +226,8 @@ export async function terminateSession(
+   // 0b. 2026-10-21-daemon-zombie-turn FR-01：撤防轮启动看门狗（会话终态，
+   //     布防轮不再有「启动后回报失败」的语义）。
+   mgr._disarmTurnStartWatchdog(state.sessionId);
++  // 0b. 2026-11-04-turn-activity-watchdog：撤防轮活动看门狗（同上语义）。
++  mgr._disarmTurnActivityWatchdog(state.sessionId);
+ 
+   // 1. 设终态 status（原 end→'ended' / fail→'failed'）。
+   state.status = isManual ? 'ended' : 'failed';
+diff --git a/sillyhub-daemon/src/interactive/session-manager/turn-control.ts b/sillyhub-daemon/src/interactive/session-manager/turn-control.ts
+index 43eb4b8a4..33ba7ddfd 100644
+--- a/sillyhub-daemon/src/interactive/session-manager/turn-control.ts
++++ b/sillyhub-daemon/src/interactive/session-manager/turn-control.ts
+@@ -250,6 +250,9 @@ export async function inject(
+     state.staleRunResetAt = Date.now();
+     // 清理可能挂起的 pending 计数（旧 turn 的排队消息已无意义）。
+     mgr._pendingInjectCount.delete(sessionId);
++    // 2026-11-04-turn-activity-watchdog：stale 翻转 = status 离开 running，撤防
++    // （下方本条 inject 会按新 run 重新布防）。
++    disarmTurnActivityWatchdog(mgr, sessionId);
+   }
+   // 同 runId 注入恒按「追加输入」处理：即使此前 stale 翻转把 status 翻成 active，
+   // 也不得走首轮启动路径（否则会给活轮重新布防看门狗）。
+@@ -392,6 +395,12 @@ export async function inject(
+   // 为空 no-op（create/reload 采集时有 runId 已直发）。
+   mgr._flushPendingSessionHeader(sessionId, runId);
+ 
++  // 2026-11-04-turn-activity-watchdog：inject = 活动点，布防/续防（换防 keyed by
++  // 本 runId）。首轮路径与排队路径统一在此布防：排队 inject 虽然轮未启动，但
++  // currentRunId 已切本 run，超窗回报对象正确；steering 同 runId 注入 = 刷新
++  // 窗口（用户输入也是活跃信号）。窗口 0（显式关闭）内部 no-op。
++  refreshTurnActivityWatchdog(mgr, sessionId, runId);
++
+   if (wasRunningBeforeInject) {
+     // 本条 inject 排在前一未 result turn 之后（spike S1 QUEUED 语义）。
+     const next = (mgr._pendingInjectCount.get(sessionId) ?? 0) + 1;
+@@ -673,3 +682,122 @@ async function fireTurnStartWatchdog(
+     await cb(sessionId, runId);
+   }
+ }
++
++// ── 2026-11-04-turn-activity-watchdog：轮活动看门狗 ─────────────────────────
++//
++// 根因（腾讯云生产会话 414bc7d5 实证 + 2026-10-21 宿主冻结/2026-10-26 假活同族）：
++// 引擎 turn 中途挂死（已产生过事件后引擎僵死/宿主冻结吞 result）→ daemon 永停
++// running、backend run 永停 running（sweep 档4 只管 pending 不敢动 running）→
++// 会话后续消息全排队、满 5 条 409，永久无法继续发消息。启动看门狗（上方）只布防
++// 「首轮零事件」形态；本看门狗补「轮中途静默」形态：running 期间任意轮事件
++// （events.ts onMessage）/轮内心跳（onHeartbeat）续防，超窗静默即触发。
++//
++// 误杀防护（2026-06-24「不加 turn 超时兜底」否决的复潮缓解，decisions D-001）：
++// 测「无活动时长」非「轮总时长」——生成期恒有 input_json_delta/token_usage 心跳
++// 续防，静默只剩工具执行；默认窗 30min 远大于常规工具静默期；env 0 可关；触发走
++// interrupt 软收敛（引擎若活着可经 abort 收尾正常吐 result）非硬杀。
++
++/** 活动看门狗默认窗口（ms）。静默工具执行（测试/构建套件）常规在分钟级，
++ * 30min 给足余量；复现/调参用 env 覆写。 */
++export const DEFAULT_TURN_ACTIVITY_WATCHDOG_MS = 30 * 60_000;
++
++/**
++ * 读取活动看门狗窗口（env SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS）。
++ * 与启动看门狗 env 解析的差异：`0` 显式关闭（长静默工具作业的仓主逃生口，
++ * 对齐 config sillyspec_update_interval_sec 0=关闭惯例）；缺省/空/非法/负数
++ * 回落默认。逐次读取便于测试覆写。
++ */
++export function turnActivityWatchdogMs(): number {
++  const raw = process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS;
++  if (raw === undefined || raw === '') return DEFAULT_TURN_ACTIVITY_WATCHDOG_MS;
++  const v = Number.parseInt(raw, 10);
++  if (!Number.isFinite(v) || v < 0) return DEFAULT_TURN_ACTIVITY_WATCHDOG_MS;
++  return v;
++}
++
++/**
++ * 布防/续防（换防 = 清旧 timer 挂新，keyed by runId——同会话任何活动点重挂窗口）。
++ * 窗口 0（显式关闭）no-op。timer unref 不阻塞 daemon 退出。
++ * 触发时的假活保护见 fireTurnActivityWatchdog（status/currentRunId 双守卫）。
++ */
++export function refreshTurnActivityWatchdog(
++  mgr: SessionManagerCore,
++  sessionId: string,
++  runId: string,
++): void {
++  const windowMs = turnActivityWatchdogMs();
++  if (windowMs <= 0) return;
++  disarmTurnActivityWatchdog(mgr, sessionId);
++  const timer = setTimeout(() => {
++    mgr._turnActivityWatchdogs.delete(sessionId);
++    void fireTurnActivityWatchdog(mgr, sessionId, runId).catch((err) => {
++      // eslint-disable-next-line no-console
++      console.error(
++        '[session-manager] turn activity watchdog fire failed',
++        sessionId,
++        runId,
++        err,
++      );
++    });
++  }, windowMs);
++  if (typeof timer.unref === 'function') {
++    timer.unref();
++  }
++  mgr._turnActivityWatchdogs.set(sessionId, { timer, runId });
++}
++
++/** 撤防（幂等）：轮 result / 会话终态 / stale-reset 翻 active / stop 时调用。 */
++export function disarmTurnActivityWatchdog(
++  mgr: SessionManagerCore,
++  sessionId: string,
++): void {
++  const w = mgr._turnActivityWatchdogs.get(sessionId);
++  if (w) {
++    clearTimeout(w.timer);
++    mgr._turnActivityWatchdogs.delete(sessionId);
++  }
++}
++
++/**
++ * 看门狗触发：会话态仍停留在布防轮（status=running & currentRunId 未变）才动作
++ * ——期间 result 已收（撤防）/新 inject 已切 runId（换防）则静默跳过；首轮启动
++ * 看门狗先行触发（status 已复位 active）后本守卫同样拦下，不重复回报。
++ *
++ * 动作（对齐启动看门狗姿势 + inject stale-reset 的写通道宽限）：
++ * 1. best-effort interrupt（活着但卡住的引擎给一次 abort 收敛机会；失败/假死
++ *    no-op 返回 false 静默）——必须在状态复位前调（interrupt 要求 running）；
++ * 2. status→active + staleRunResetAt 记录（假阳性下「仍活着但安静」的长轮写类
++ *    工具在宽限窗内放行，见 _writeChannelGuardDeny）；
++ * 3. pendingInjectCount 清零（旧 turn 的排队计数已无意义；backend 侧排队消息
++ *    由 run 终态化后的 dispatch_next_queued_message 派发，不归本层管）；
++ * 4. currentRunId 有意保留（迟到 result 幂等归属锚，同启动看门狗 P2 缓解）；
++ * 5. 经 deps.onTurnActivityTimeout（可选）由 daemon 桥 notifyRunResult 收敛该
++ *    run（backend close_interactive_run → 广播 turn_completed 解锁输入框 →
++ *    自动派发排队消息）。
++ */
++async function fireTurnActivityWatchdog(
++  mgr: SessionManagerCore,
++  sessionId: string,
++  runId: string,
++): Promise<void> {
++  const state = mgr._store.get(sessionId);
++  if (!state) return;
++  if (state.status !== 'running' || state.currentRunId !== runId) return;
++  await interrupt(mgr, sessionId).catch(() => false);
++  state.status = 'active';
++  state.lastActiveAt = Date.now();
++  state.staleRunResetAt = Date.now();
++  mgr._pendingInjectCount.delete(sessionId);
++  // eslint-disable-next-line no-console
++  console.warn(
++    '[session-manager] turn activity watchdog fired: no turn events or ' +
++      'heartbeats within window (engine turn likely hung). Interrupt sent ' +
++      'best-effort; session state reset to active; run will be reported failed.',
++    { sessionId, runId, windowMs: turnActivityWatchdogMs() },
++  );
++  mgr._scheduleFlush();
++  const cb = mgr.deps.onTurnActivityTimeout;
++  if (typeof cb === 'function') {
++    await cb(sessionId, runId);
++  }
++}
+diff --git a/sillyhub-daemon/src/interactive/session-manager/types.ts b/sillyhub-daemon/src/interactive/session-manager/types.ts
+index 138a77f17..43548736e 100644
+--- a/sillyhub-daemon/src/interactive/session-manager/types.ts
++++ b/sillyhub-daemon/src/interactive/session-manager/types.ts
+@@ -588,6 +588,11 @@ export interface SessionManagerCore {
+     string,
+     { timer: ReturnType<typeof setTimeout>; runId: string }
+   >;
++  /** 2026-11-04-turn-activity-watchdog：轮活动看门狗（sessionId → timer + 布防轮 runId）。 */
++  readonly _turnActivityWatchdogs: Map<
++    string,
++    { timer: ReturnType<typeof setTimeout>; runId: string }
++  >;
+   /** 2026-10-25-trajectory-source-model task-03：配置面请求头快照缓存（变更检测基线）。 */
+   readonly _headerSnapshotBySession: Map<string, SessionHeaderSnapshot>;
+   /** 2026-10-25-trajectory-source-model task-04：无 runId 采集的待上报快照（inject 补发）。 */
+@@ -601,6 +606,10 @@ export interface SessionManagerCore {
+   _armTurnStartWatchdog(sessionId: string, runId: string): void;
+   /** turn-control.ts（同上，撤防） */
+   _disarmTurnStartWatchdog(sessionId: string): void;
++  /** turn-control.ts（2026-11-04-turn-activity-watchdog：轮活动看门狗布防/续防） */
++  _refreshTurnActivityWatchdog(sessionId: string, runId: string): void;
++  /** turn-control.ts（同上，撤防） */
++  _disarmTurnActivityWatchdog(sessionId: string): void;
+   /** facade 类内保留（create/restore/reload 编排） */
+   _runConsume(state: SessionState): Promise<void>;
+   /** persistence.ts */
+diff --git a/sillyhub-daemon/src/interactive/types.ts b/sillyhub-daemon/src/interactive/types.ts
+index 7feae1e66..c6d7d46a3 100644
+--- a/sillyhub-daemon/src/interactive/types.ts
++++ b/sillyhub-daemon/src/interactive/types.ts
+@@ -642,6 +642,17 @@ export interface SessionManagerDeps {
+    * 零影响（对齐 onTaskWakeupInject 的 additive-optional 先例）。
+    */
+   onTurnStartTimeout?: (sessionId: string, runId: string) => void | Promise<void>;
++  /**
++   * 2026-11-04-turn-activity-watchdog：轮活动看门狗触发回调。
++   *
++   * running 轮超窗（默认 30min，env SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS 可调，
++   * 0=关闭）无任何轮事件/心跳时，session-manager 已 best-effort interrupt +
++   * 重置会话态（active + staleRunResetAt 写通道宽限），经本回调由 daemon 桥
++   * notifyRunResult 把该 run 收敛 failed（backend close_interactive_run 既有
++   * 路径 → 广播 turn_completed → 派发排队消息）。可选：未注入时仅收敛本地态
++   * 不上报，测试 mock 零影响（对齐 onTurnStartTimeout 的 additive-optional 先例）。
++   */
++  onTurnActivityTimeout?: (sessionId: string, runId: string) => void | Promise<void>;
+   /**
+    * task-10（§4.3）：元数据持久化端口。
+    *
+diff --git a/sillyhub-daemon/tests/daemon-turn-activity-timeout-report.test.ts b/sillyhub-daemon/tests/daemon-turn-activity-timeout-report.test.ts
+new file mode 100644
+index 000000000..b5e385331
+--- /dev/null
++++ b/sillyhub-daemon/tests/daemon-turn-activity-timeout-report.test.ts
+@@ -0,0 +1,158 @@
++// tests/daemon-turn-activity-timeout-report.test.ts
++// 2026-11-04-turn-activity-watchdog：daemon 桥 onTurnActivityTimeout。
++//
++// 覆盖（对齐 daemon-interrupt-noop-report.test.ts 的 onTurnStartTimeout 桥用例）：
++//   - state 在 → notifyRunResult(status='turn_activity_timeout', is_error=true)
++//     调一次（含中文 result_summary）
++//   - state 缺失 → warn no-op（不调 notifyRunResult）
++//   - sessionManager 未挂 → warn no-op
++//   - notifyRunResult 抛错 → warn 不向上抛
++
++import { describe, it, expect, vi } from 'vitest';
++import { Daemon } from '../src/daemon.js';
++import type { DaemonConfig } from '../src/config.js';
++import type { DetectedAgent } from '../src/agent-detector.js';
++import type { SessionManager } from '../src/interactive/session-manager.js';
++import type { SessionState } from '../src/interactive/types.js';
++
++const mockConfig: DaemonConfig = {
++  server_url: 'http://127.0.0.1:8000',
++  token: 'test-token',
++  runtime_id: 'runtime-uuid-123',
++  profile: 'default',
++  workspace_dir: '/tmp/ws',
++  poll_interval: 0.02,
++  heartbeat_interval: 0.02,
++  max_concurrent_tasks: 5,
++  log_level: 'debug',
++};
++
++function createMockClient() {
++  return {
++    register: vi.fn(async () => ({ id: 'srv-rid-1' })),
++    heartbeat: vi.fn(async () => ({})),
++    markOffline: vi.fn(async () => ({})),
++    claimLease: vi.fn(async () => ({ claim_token: 't', payload: {} })),
++    startLease: vi.fn(async () => ({})),
++    completeLease: vi.fn(async () => ({})),
++    getPendingLeases: vi.fn(async () => []),
++    getExecutionContext: vi.fn(async () => ({ agent_run_id: 'r' })),
++    close: vi.fn(),
++    notifyRunResult: vi.fn(async () => ({})),
++    submitMessages: vi.fn(async () => ({})),
++    notifySessionEnd: vi.fn(async () => ({})),
++  };
++}
++
++function createMockSessionManager(
++  state: Partial<SessionState> | undefined,
++): SessionManager {
++  const fullState: SessionState | undefined = state
++    ? ({
++        sessionId: 'sess-1',
++        leaseId: 'lease-1',
++        claimToken: 'claim-token-1',
++        currentRunId: 'run-1',
++        status: 'active',
++        lastActiveAt: Date.now(),
++        cwd: '/tmp',
++        provider: 'claude',
++        pathToClaudeCodeExecutable: '/bin/claude',
++        inputQueue: { push() {}, close() {} } as never,
++        ...state,
++      } as SessionState)
++    : undefined;
++  return {
++    create: vi.fn(async () => {}),
++    inject: vi.fn(async () => ({ runId: '' })),
++    interrupt: vi.fn(async () => false),
++    end: vi.fn(async () => {}),
++    fail: vi.fn(async () => {}),
++    get: vi.fn((() => fullState) as never),
++    start: vi.fn(() => {}),
++    stop: vi.fn(() => {}),
++    manualApproval: false,
++    getPermissionResolver: vi.fn(() => undefined),
++    getPendingInjectCount: vi.fn(() => 0),
++    getIdleTimeoutSec: vi.fn(() => 1800),
++    restoreAndReconnect: vi.fn(async () => {}),
++    markReconnected: vi.fn(async () => {}),
++    flush: vi.fn(async () => {}),
++    snapshotPersistable: vi.fn(() => []),
++    scanOnce: vi.fn(async () => {}),
++  } as unknown as SessionManager;
++}
++
++function buildDaemon(sm: SessionManager | null) {
++  const client = createMockClient();
++  const taskRunner = {
++    runLease: vi.fn(async () => ({
++      success: true,
++      exitCode: 0,
++      status: 'completed',
++      patch: '',
++      filesChanged: 0,
++      insertions: 0,
++      deletions: 0,
++      output: 'ok',
++      error: '',
++      durationMs: 10,
++      sessionId: '',
++      metadata: {},
++    })),
++  };
++  const daemon = new Daemon(mockConfig, client as never, taskRunner as never, {
++    sessionManager: sm,
++    detector: { detectAgents: vi.fn(async () => [] as DetectedAgent[]) },
++  });
++  return { daemon, client };
++}
++
++describe('2026-11-04-turn-activity-watchdog 桥：daemon.onTurnActivityTimeout', () => {
++  it('state 在 → notifyRunResult(status=turn_activity_timeout, is_error=true) 一次', async () => {
++    const { daemon, client } = buildDaemon(createMockSessionManager({}));
++
++    await daemon.onTurnActivityTimeout('sess-1', 'run-hung');
++
++    expect(client.notifyRunResult).toHaveBeenCalledTimes(1);
++    expect(client.notifyRunResult).toHaveBeenCalledWith(
++      'lease-1',
++      'claim-token-1',
++      'run-hung',
++      expect.objectContaining({
++        status: 'turn_activity_timeout',
++        is_error: true,
++      }),
++    );
++    const payload = (client.notifyRunResult as ReturnType<typeof vi.fn>).mock
++      .calls[0][3] as { result_summary: string };
++    expect(payload.result_summary).toContain('重新发送');
++  });
++
++  it('state 缺失（终态清理后迟到触发）→ warn no-op', async () => {
++    const { daemon, client } = buildDaemon(createMockSessionManager(undefined));
++
++    await daemon.onTurnActivityTimeout('sess-gone', 'run-hung');
++
++    expect(client.notifyRunResult).not.toHaveBeenCalled();
++  });
++
++  it('sessionManager 未挂 → warn no-op', async () => {
++    const { daemon, client } = buildDaemon(null);
++
++    await daemon.onTurnActivityTimeout('sess-1', 'run-hung');
++
++    expect(client.notifyRunResult).not.toHaveBeenCalled();
++  });
++
++  it('notifyRunResult 抛错 → warn 不向上抛', async () => {
++    const { daemon, client } = buildDaemon(createMockSessionManager({}));
++    (client.notifyRunResult as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
++      new Error('network down'),
++    );
++
++    await expect(
++      daemon.onTurnActivityTimeout('sess-1', 'run-hung'),
++    ).resolves.toBeUndefined();
++  });
++});
+diff --git a/sillyhub-daemon/tests/interactive/session-manager-lifecycle-turn-anchor-eviction.test.ts b/sillyhub-daemon/tests/interactive/session-manager-lifecycle-turn-anchor-eviction.test.ts
+index 5bb86ee23..c6be13dc1 100644
+--- a/sillyhub-daemon/tests/interactive/session-manager-lifecycle-turn-anchor-eviction.test.ts
++++ b/sillyhub-daemon/tests/interactive/session-manager-lifecycle-turn-anchor-eviction.test.ts
+@@ -32,6 +32,7 @@ interface FakeMgrExtras {
+   destroyUsageLedger: ReturnType<typeof vi.fn>;
+   onSessionEnd: ReturnType<typeof vi.fn>;
+   disarmTurnStartWatchdog: ReturnType<typeof vi.fn>;
++  disarmTurnActivityWatchdog: ReturnType<typeof vi.fn>;
+ }
+ 
+ /** 最小伪造 mgr：只提供 terminateSession 实际触及的成员（10 分钟延迟清理
+@@ -44,6 +45,7 @@ function makeFakeMgr(): { mgr: SessionManagerCore; extras: FakeMgrExtras } {
+     destroyUsageLedger: vi.fn(),
+     onSessionEnd: vi.fn(async () => {}),
+     disarmTurnStartWatchdog: vi.fn(),
++    disarmTurnActivityWatchdog: vi.fn(),
+   };
+   const mgr = {
+     _pendingFirstPrompt: new Map(),
+@@ -52,6 +54,8 @@ function makeFakeMgr(): { mgr: SessionManagerCore; extras: FakeMgrExtras } {
+     _clearBackgroundTasks: extras.clearBackgroundTasks,
+     // 2026-10-21-daemon-zombie-turn FR-01：0b 步撤防轮启动看门狗（core 新成员）。
+     _disarmTurnStartWatchdog: extras.disarmTurnStartWatchdog,
++    // 2026-11-04-turn-activity-watchdog：0b-2 步撤防轮活动看门狗（core 新成员）。
++    _disarmTurnActivityWatchdog: extras.disarmTurnActivityWatchdog,
+     // 2026-10-21-task-wakeup-restore：4b-2 唤醒 debounce 清理触及的注册表。
+     _taskWakeupPending: new Map(),
+     // 2026-10-25-trajectory-source-model task-03/04：4c-2 配置面请求头快照
+diff --git a/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts b/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts
+new file mode 100644
+index 000000000..7b1a709da
+--- /dev/null
++++ b/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts
+@@ -0,0 +1,413 @@
++// tests/interactive/turn-activity-watchdog.test.ts
++// 2026-11-04-turn-activity-watchdog：daemon 轮活动看门狗。
++//
++// 根因场景（腾讯云生产会话 414bc7d5 + 2026-10-21 宿主冻结/2026-10-26 假活同族）：
++// 引擎 turn 中途挂死（已产生过事件后引擎僵死/宿主冻结吞 result）→ daemon 永停
++// running、backend run 永停 running（sweep 档4 只管 pending）→ 会话消息全排队、
++// 满 5 条 409 永久不可发。活动看门狗测「无活动时长」（事件/心跳续防），超窗
++// interrupt 软收敛 + 复位会话态 + 回报该 run 失败。
++//
++// 用例矩阵：
++//   - inject 布防（首轮 + 排队路径均布防/换防，keyed by 新 runId）
++//   - 到点触发：interrupt 尝试 + 复位 active + staleRunResetAt + 清
++//     pendingInjectCount + 保留 currentRunId + onTurnActivityTimeout 回调
++//   - 轮事件/心跳续防：窗口重挂不提前触发
++//   - result / 终态 / stop 撤防
++//   - 假活保护：currentRunId 已切 / status 非 running（启动看门狗先行）静默跳过
++//   - env SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS：0=关闭、非法回落默认、自定义生效
++
++import { describe, it, expect, afterEach, vi } from 'vitest';
++import { SessionManager } from '../../src/interactive/session-manager.js';
++import { InputQueue } from '../../src/interactive/input-queue.js';
++import type { SessionManagerDeps } from '../../src/interactive/types.js';
++import type {
++  InteractiveDriver,
++  InteractiveDriverHandle,
++  InteractiveDriverCallbacks,
++  InteractiveDriverStartOptions,
++  SessionState,
++  SessionStatus,
++} from '../../src/interactive/types.js';
++import { onResult, onMessage } from '../../src/interactive/session-manager/events.js';
++
++/** 活动看门狗 Map 的测试取用口（私有成员 cast，turn-start-watchdog 测试同款）。 */
++function activityWatchdogMap(
++  sm: SessionManager,
++): Map<string, { timer: ReturnType<typeof setTimeout>; runId: string }> {
++  return (sm as unknown as { _turnActivityWatchdogs: Map<string, never> })
++    ._turnActivityWatchdogs as Map<
++    string,
++    { timer: ReturnType<typeof setTimeout>; runId: string }
++  >;
++}
++
++interface Harness {
++  sm: SessionManager;
++  interruptSpy: ReturnType<typeof vi.fn>;
++  consumeCallbacks: { current: InteractiveDriverCallbacks | null };
++}
++
++function createSessionManager(
++  onTurnActivityTimeout?: SessionManagerDeps['onTurnActivityTimeout'],
++): Harness {
++  const interruptSpy = vi.fn(async () => false);
++  const consumeCallbacks: { current: InteractiveDriverCallbacks | null } = {
++    current: null,
++  };
++  const fakeDriver: InteractiveDriver = {
++    provider: 'claude',
++    async start() {
++      return { provider: 'claude' } as unknown as InteractiveDriverHandle;
++    },
++    async consume(_handle, callbacks: InteractiveDriverCallbacks) {
++      consumeCallbacks.current = callbacks;
++      return new Promise<void>(() => {});
++    },
++    async interrupt() {
++      return interruptSpy();
++    },
++  };
++  const deps: SessionManagerDeps = {
++    driver: fakeDriver as never,
++    drivers: { claude: fakeDriver },
++    onTurnResult: vi.fn(),
++    onTurnMessage: vi.fn(),
++    onSessionEnd: vi.fn(),
++    onSessionEvent: vi.fn(),
++    onTurnStartTimeout: vi.fn(async () => {}),
++    onTurnActivityTimeout,
++  };
++  return {
++    sm: new SessionManager(deps),
++    interruptSpy,
++    consumeCallbacks,
++  };
++}
++
++function makeState(sessionId: string, status: SessionStatus): SessionState {
++  return {
++    sessionId,
++    leaseId: `lease-${sessionId}`,
++    claimToken: `ct-${sessionId}`,
++    inputQueue: new InputQueue(),
++    status,
++    lastActiveAt: Date.now(),
++    cwd: '/tmp/test',
++    provider: 'claude',
++    pathToClaudeCodeExecutable: '/usr/bin/claude',
++    subagentDepth: new Map<string, number>(),
++  } as SessionState;
++}
++
++function seed(sm: SessionManager, state: SessionState): void {
++  (sm as unknown as { _store: Map<string, SessionState> })._store.set(
++    state.sessionId,
++    state,
++  );
++}
++
++/** mgr core 桥（onMessage/onResult 模块函数第一参数）。 */
++function core(sm: SessionManager): never {
++  return (sm as unknown as { _core(): never })._core();
++}
++
++describe('2026-11-04-turn-activity-watchdog：轮活动看门狗', () => {
++  afterEach(() => {
++    vi.useRealTimers();
++    delete process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS;
++  });
++
++  it('inject 布防：首轮路径（默认 30min 窗，keyed by 本 runId）', async () => {
++    vi.useFakeTimers();
++    const { sm } = createSessionManager();
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++
++    const w = activityWatchdogMap(sm).get('sess-1');
++    expect(w).toBeDefined();
++    expect(w!.runId).toBe('run-9');
++    // 布防不提前触发（89s < 90s 启动看门狗 < 30min 活动窗，均不触发）。
++    await vi.advanceTimersByTimeAsync(89_999);
++    expect(sm.get('sess-1')!.status).toBe('running');
++  });
++
++  it('inject 布防：排队路径（前轮未 result）换防 keyed by 新 runId', async () => {
++    vi.useFakeTimers();
++    const { sm } = createSessionManager();
++    const state = makeState('sess-1', 'running');
++    state.currentRunId = 'run-old';
++    state.lastActiveAt = Date.now();
++    state.lastTurnEventAt = Date.now();
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'queued', 'run-new');
++
++    const w = activityWatchdogMap(sm).get('sess-1');
++    expect(w).toBeDefined();
++    expect(w!.runId).toBe('run-new');
++  });
++
++  it('到点触发主路径：interrupt 尝试 + 复位 active + staleRunResetAt + 清 pendingInjectCount + 保留 currentRunId + 回调一次', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm, interruptSpy } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-1');
++    // 轮中途挂死形态：先产生过事件（撤启动看门狗），随后彻底静默 30min。
++    await onMessage(core(sm), state, { events: [] });
++    core(sm)._pendingInjectCount.set('sess-1', 2);
++
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++
++    const after = sm.get('sess-1')!;
++    expect(after.status).toBe('active');
++    expect(after.staleRunResetAt).toBeDefined();
++    expect(sm.getPendingInjectCount('sess-1')).toBe(0);
++    // P2 缓解（对齐启动看门狗）：保留旧 runId 作迟到 result 幂等归属锚。
++    expect(after.currentRunId).toBe('run-1');
++    expect(interruptSpy).toHaveBeenCalledTimes(1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledTimes(1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledWith('sess-1', 'run-1');
++    expect(activityWatchdogMap(sm).has('sess-1')).toBe(false);
++  });
++
++  it('轮事件续防：onMessage 到达窗口重挂，事件前静默不计入', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-1');
++    // 首事件撤启动看门狗（t=0），活动窗从此刻起算。
++    await onMessage(core(sm), state, { events: [] });
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    // 29min 静默后一条事件到达：窗口从现在起重挂。
++    await onMessage(core(sm), state, { events: [] });
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    // 再静默满 30min 才触发。
++    await vi.advanceTimersByTimeAsync(60_000 + 1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledTimes(1);
++  });
++
++  it('心跳续防：onHeartbeat 到达窗口重挂（生成期引擎活证据）', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm, consumeCallbacks } = createSessionManager(onTurnActivityTimeout);
++
++    // create 走真 _runConsume：fake driver consume 捕获 callbacks。
++    await sm.create({
++      sessionId: 'sess-hb',
++      leaseId: 'lease-hb',
++      firstPrompt: 'hi',
++      firstRunId: 'run-hb',
++      cwd: '/tmp/test',
++      provider: 'claude',
++      pathToClaudeCodeExecutable: '/usr/bin/claude',
++      stage: 'orchestrator',
++    });
++    expect(consumeCallbacks.current).not.toBeNull();
++
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    consumeCallbacks.current!.onHeartbeat!({
++      kind: 'generating',
++      est_chars: 10,
++      precision: 'estimated',
++      source: 'claude_input_json_delta',
++    });
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    await vi.advanceTimersByTimeAsync(60_000 + 1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledTimes(1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledWith('sess-hb', 'run-hb');
++  });
++
++  it('result 撤防：onResult 到达 → 到点不触发', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    await onResult(core(sm), state, {
++      subtype: 'success',
++      is_error: false,
++    } as never);
++    expect(activityWatchdogMap(sm).has('sess-1')).toBe(false);
++
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++  });
++
++  it('终态撤防：end() 后看门狗移除', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    await sm.end('sess-1');
++    expect(activityWatchdogMap(sm).has('sess-1')).toBe(false);
++
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++  });
++
++  it('stop() 清全部活动看门狗（退出途中不 fire）', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    sm.stop();
++    expect(activityWatchdogMap(sm).size).toBe(0);
++
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++  });
++
++  it('假活保护：currentRunId 已切新轮 → 静默跳过不回调不改状态', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-old');
++    state.currentRunId = 'run-new';
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    expect(sm.get('sess-1')!.currentRunId).toBe('run-new');
++    expect(sm.get('sess-1')!.status).toBe('running');
++  });
++
++  it('与启动看门狗并存：启动看门狗先行触发（status 复位 active）后本看门狗静默跳过', async () => {
++    vi.useFakeTimers();
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const onTurnStartTimeout = vi.fn(async () => {});
++    const interruptSpy = vi.fn(async () => false);
++    const fakeDriver: InteractiveDriver = {
++      provider: 'claude',
++      async start() {
++        return { provider: 'claude' } as unknown as InteractiveDriverHandle;
++      },
++      async consume() {
++        return new Promise<void>(() => {});
++      },
++      async interrupt() {
++        return interruptSpy();
++      },
++    };
++    const sm = new SessionManager({
++      driver: fakeDriver as never,
++      drivers: { claude: fakeDriver },
++      onTurnResult: vi.fn(),
++      onTurnMessage: vi.fn(),
++      onSessionEnd: vi.fn(),
++      onSessionEvent: vi.fn(),
++      onTurnStartTimeout,
++      onTurnActivityTimeout,
++    } as SessionManagerDeps);
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    // 90s：首轮启动看门狗触发（零事件形态），复位 active + 回报 start_timeout。
++    await vi.advanceTimersByTimeAsync(90_000);
++    expect(onTurnStartTimeout).toHaveBeenCalledTimes(1);
++    expect(sm.get('sess-1')!.status).toBe('active');
++
++    // 30min：活动看门狗到点，status 已非 running → 静默跳过，不重复回报。
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++  });
++
++  it('stale-reset 撤防：inject 60s stale 翻 active 后按新 run 重新布防', async () => {
++    vi.useFakeTimers();
++    const { sm } = createSessionManager();
++    const state = makeState('sess-1', 'running');
++    state.currentRunId = 'run-stale';
++    state.lastActiveAt = Date.now() - 120_000;
++    state.lastTurnEventAt = Date.now() - 120_000;
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'fresh', 'run-fresh');
++
++    // stale 翻 active 后本条 inject 重新布防，keyed by 新 run。
++    const w = activityWatchdogMap(sm).get('sess-1');
++    expect(w).toBeDefined();
++    expect(w!.runId).toBe('run-fresh');
++  });
++
++  it('env 0=显式关闭：布防 no-op，到点永不触发', async () => {
++    vi.useFakeTimers();
++    process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS = '0';
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    expect(activityWatchdogMap(sm).size).toBe(0);
++    // 事件撤启动看门狗后长静默：无任何看门狗触碰会话态。
++    await onMessage(core(sm), state, { events: [] });
++
++    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    expect(sm.get('sess-1')!.status).toBe('running');
++  });
++
++  it('env 非法/负数回落默认 30min', async () => {
++    vi.useFakeTimers();
++    process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS = 'abc';
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    const state = makeState('sess-1', 'active');
++    seed(sm, state);
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    // 首事件撤启动看门狗，活动窗（非法 env → 默认 30min）从此起算。
++    await onMessage(core(sm), state, { events: [] });
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    expect(sm.get('sess-1')!.status).toBe('running');
++    // 负数 env 同样回落默认：续防窗口仍为 30min 量级。
++    process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS = '-5';
++    await onMessage(core(sm), state, { events: [] });
++    await vi.advanceTimersByTimeAsync(29 * 60_000);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    await vi.advanceTimersByTimeAsync(60_000 + 1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledTimes(1);
++  });
++
++  it('env 自定义窗口生效', async () => {
++    vi.useFakeTimers();
++    process.env.SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS = '1500';
++    const onTurnActivityTimeout = vi.fn(async () => {});
++    const { sm } = createSessionManager(onTurnActivityTimeout);
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    await vi.advanceTimersByTimeAsync(1_499);
++    expect(onTurnActivityTimeout).not.toHaveBeenCalled();
++    await vi.advanceTimersByTimeAsync(1);
++    expect(onTurnActivityTimeout).toHaveBeenCalledTimes(1);
++  });
++
++  it('回调未注入（旧装配形态）：到点仍 interrupt + 重置本地态、不抛错', async () => {
++    vi.useFakeTimers();
++    const { sm } = createSessionManager(undefined);
++    seed(sm, makeState('sess-1', 'active'));
++
++    await sm.inject('sess-1', 'hello', 'run-9');
++    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1);
++
++    expect(sm.get('sess-1')!.status).toBe('active');
++    expect(sm.get('sess-1')!.currentRunId).toBe('run-9');
++  });
++});
+diff --git a/sillyhub-daemon/tests/turn-phase-report.test.ts b/sillyhub-daemon/tests/turn-phase-report.test.ts
+index 186607764..fff33964e 100644
+--- a/sillyhub-daemon/tests/turn-phase-report.test.ts
++++ b/sillyhub-daemon/tests/turn-phase-report.test.ts
+@@ -248,11 +248,14 @@ function makeLightMgr(deps: Record<string, unknown>, state?: SessionState) {
+     _drivers: {},
+     _resolversBySession: new Map<string, unknown>(),
+     _turnStartWatchdogs: new Map<string, unknown>(),
++    _turnActivityWatchdogs: new Map<string, unknown>(),
+     _pendingInjectCount: new Map<string, number>(),
+     _scheduleFlush: vi.fn(),
+     _flushPendingSessionHeader: vi.fn(),
+     _armTurnStartWatchdog: vi.fn(),
+     _disarmTurnStartWatchdog: vi.fn(),
++    _refreshTurnActivityWatchdog: vi.fn(),
++    _disarmTurnActivityWatchdog: vi.fn(),
+     _liftSessionUsage: vi.fn(),
+   } as never;
+ }

@@ -1287,3 +1287,79 @@
 - 场景：默认场景 — Given `repo://sillyhub/backend/app/modules/daemon/router/__init__.py:55` 的 `from app.modules.daemon.service import (DaemonLeaseNotFound, D；When 异常类定义迁入各子包 execute 阶段以 `grep -rn "from app.modules.daemon.service import"` 全量收集
 全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-05
 最近确认：7db5ab6b3
+
+## FR-daemon-034 running 轮超过窗口（默认 30min，env SILLYHUB_TURN_ACTIVITY_WATCHDOG_MS 可调、0=关闭、非法回落默认）无任何轮事件/心跳时，看门狗触发：会话态复位 active、记录 staleRunResetAt、清 pendingInjectCount、经 deps 桥回报该 run 失败（notifyRunResult is_error=true）
+变更：2026-11-04-turn-activity-watchdog
+状态：active
+摘要：主路径（引擎 turn 中途挂死）
+全文：.sillyspec/changes/archive/2026-11-04-turn-activity-watchdog/requirements.md#FR-01
+最近确认：326f2942a944fbbf347fda2c6dbd20d28843a624
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-turn-activity-watchdog:flow:测试绑定FR-01
+  tests: test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「到点触发：interrupt 尝试 + 复位 active + staleRunResetAt + 清 pendingInjectCount + 保留 currentRunId + onTurnActivityTimeout 回调」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-turn-activity-watchdog
+  status: active
+
+## FR-daemon-035 任意轮事件（_onMessage）或轮内心跳（onHeartbeat）到达即续防（重挂窗口），轮 result 到达/会话终态即撤防
+变更：2026-11-04-turn-activity-watchdog
+状态：active
+摘要：事件续防；result 撤防；env 配置
+全文：.sillyspec/changes/archive/2026-11-04-turn-activity-watchdog/requirements.md#FR-02
+最近确认：326f2942a944fbbf347fda2c6dbd20d28843a624
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-turn-activity-watchdog:flow:测试绑定FR-02
+  tests: test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「轮事件/心跳续防窗口重挂不提前触发；result/终态撤防；env 0=关闭、非法回落默认」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-turn-activity-watchdog
+  status: active
+
+## FR-daemon-036 假活保护：触发时会话非 running 或 currentRunId 已切则静默跳过；首轮启动看门狗先行触发后本看门狗不再动作
+变更：2026-11-04-turn-activity-watchdog
+状态：active
+摘要：假活保护（新 inject 已切换 currentRunId）；与启动看门狗并存
+全文：.sillyspec/changes/archive/2026-11-04-turn-activity-watchdog/requirements.md#FR-03
+最近确认：326f2942a944fbbf347fda2c6dbd20d28843a624
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-turn-activity-watchdog:flow:测试绑定FR-03
+  tests: test/sillyhub-daemon/tests/interactive/turn-activity-watchdog.test.ts「假活保护：currentRunId 已切新轮/非 running 静默跳过不回调；与启动看门狗并存不重复回报」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-turn-activity-watchdog
+  status: active
+
+## FR-daemon-037 有单测覆盖触发/续防/撤防/假活保护/env 解析（0 关闭、非法回落）
+变更：2026-11-04-turn-activity-watchdog
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-turn-activity-watchdog/requirements.md#FR-04
+最近确认：326f2942a944fbbf347fda2c6dbd20d28843a624
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-turn-activity-watchdog:flow:测试绑定FR-04
+  tests: test/sillyhub-daemon/tests/interactive/turn-start-watchdog.test.ts「既有轮启动看门狗用例全量回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-turn-activity-watchdog
+  status: active
