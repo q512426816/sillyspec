@@ -376,7 +376,7 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
   if (all.length === 0) return null
   const byFile = new Map()
   for (const h of all) {
-    if (isParkingFile(h.file)) continue // 停车场文件不参与词片回退（FR-01）
+    if (isParkingFile(h.file)) continue // 停车场文件不参与常规词片回退（FR-01）
     let st = byFile.get(h.file)
     if (!st) { st = { entries: [], texts: [] }; byFile.set(h.file, st) }
     st.entries.push(h)
@@ -594,5 +594,33 @@ export function matchKnowledge(indexDir, taskContext, opts = {}) {
   const r = matchByRouting(indexDir, taskContext, opts)
   if (r.matched) return r
   const fb = fallbackByQueryShingles(indexDir, taskContext)
-  return fb || r
+  if (fb) return fb
+  // 停车场兜底通道（4D 解禁，2026-11-03）：非停车场全部零命中时逐条匹配停车场 rejected/死路
+  // ——cap 3，标记 parking:true（不进 DF 分母、不解禁路由行）；底稿资格门已确保模板不获 deathPath。
+  // 保留 parkingFiltered 披露（tier-denoise FR-01 契约）。
+  const shingles = queryShingles(taskContext)
+  if (shingles.length > 0) {
+    const all = parseDecisionEntries(indexDir)
+    const parkingHits = all.filter(h =>
+      isParkingFile(h.file) && (h.status === 'rejected' || h.deathPath) &&
+      shingles.some(sh => asciiWordHit(sh, `${h.title} ${h.reason || ''}`))
+    ).slice(0, 3)
+    if (parkingHits.length > 0) {
+      const parkingFiles = [...new Set(all.filter(h => isParkingFile(h.file)).map(h => h.file))]
+      return {
+        matched: true,
+        entries: [{
+          category: 'Decisions',
+          keywords: ['parking'],
+          file: 'decisions/unmapped.md',
+          anchor: '',
+          display: `decisions/unmapped.md（停车场兜底命中 ${parkingHits.length} 条 rejected/死路）`,
+        }],
+        report: 'Status: parking-fallback matched',
+        json: { matched: true, entry_count: 1, parking_fallback: true, parking: true, ...(parkingFiles.length > 0 ? { parkingFiltered: parkingFiles } : {}) },
+        decisionHits: parkingHits.map(h => ({ ...h, parking: true })),
+      }
+    }
+  }
+  return r
 }
