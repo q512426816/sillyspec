@@ -46,6 +46,7 @@ created_at: 2026-07-05 02:00:00
 
 ## execute worktree 无 node_modules + 子代理 cwd 需显式 worktree 路径
 
+涉及 src/stages/execute.js。
 - SillySpec execute 的隔离 worktree（`.sillyspec/.runtime/worktrees/<change>`）是 baseline 快照，**不含 node_modules**（gitignore），worktree 内无法直接跑 tsc/vitest/lint。
 - 解法：PowerShell `New-Item -ItemType Junction` 把主仓库 `frontend/node_modules` 链到 `worktree/frontend/node_modules`（junction 免管理员，比 `cmd mklink /J` 引号嵌套更稳）。
 - Agent 子代理 cwd 可能**不随父 session 的 EnterWorktree 切换**（子代理可能把产物写到了主仓库而非 worktree）。解法：子代理 prompt 显式给 worktree 绝对路径前缀；审查用 `git status` + `ls worktree` 确认落点，错位则 `cp` 统一到 worktree + 主仓库 `git checkout` 恢复。
@@ -77,6 +78,7 @@ created_at: 2026-07-05 02:00:00
 
 ## worktree doctor --fix 标记 installed 但 node_modules junction 实际未建
 
+涉及 src/worktree.js。
 sillyspec execute 的 worktree doctor --fix 对 frontend/daemon node_modules 报 depsStatus=installed/re-provisioned 成功，但 worktree 内 frontend/node_modules、sillyhub-daemon/node_modules 实际不存在（ls 报 No such file）——doctor 的 provision 第 2 段 junction 在某些环境下静默失败且状态仍写 installed。规避：doctor --fix 后必须 ls <worktree>/frontend/node_modules/.bin 复核；缺失时手动 `cmd //c mklink /J <worktree>/frontend/node_modules <主仓>/frontend/node_modules`（daemon 同理），再跑一次 .bin 存在性检查。backend .venv 不受影响（worktree 自建）。来源：2026-08-22-team-session-unify Wave1（execute step3）。
 
 ## Git Bash 下修 worktree node_modules junction：cmd mklink 传参必败，用 PowerShell New-Item Junction

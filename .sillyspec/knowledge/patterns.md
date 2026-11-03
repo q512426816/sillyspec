@@ -188,4 +188,6 @@ agent 模块测试跑 SQLite（aiosqlite），FOR UPDATE 语法不被支持（�
 
 ## MCP server 子进程不继承 claude.exe 完整环境：env 必须放 mcpServers[*].env
 
+涉及 src/mcp-server.js。
+
 claude.exe（2.1.x）spawn MCP server 子进程时 env 为「白名单基线（PATH/HOME 等 12 个）+ per-server env 覆盖合并」，不继承完整父环境。给 MCP server 注入自定义变量（如 MCP_SESSION_ID）必须放在 options.mcpServers['<server>'].env（daemon mcp-config.ts 的 server config env 字段），放 SDK 顶层 options.env 无效。证据链：repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:407 透传 → sdk.d.ts 的 McpStdioServerConfig.env（SDK 类型声明在 node_modules 依赖包内，行号随包版本漂移不入锚）→ sdk.mjs --mcp-config 全量序列化 → claude.exe StdioClientTransport.start spawn env 合并。来源：2026-08-22-team-session-unify spike-01。
