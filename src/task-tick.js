@@ -20,6 +20,7 @@
  */
 import { existsSync, readFileSync, appendFileSync } from 'node:fs'
 import { runtimeStatePath } from './runtime-paths.js'
+import { fenceScan } from './md-fence.js'
 import { join } from 'node:path'
 
 /** 任务行（宽容缩进/星号有序标记，与哨兵判集行锚同口径 + 缩进容差）。 */
@@ -31,11 +32,23 @@ export function normalizeTaskId(id) {
   return m ? `task-${String(Number(m[1])).padStart(2, '0')}` : null
 }
 
-/** 任务行清单（行序即文档序）：[{id, checked, desc}]。 */
+/**
+ * 任务行清单（行序即文档序）：[{id, checked, desc}]。
+ * 围栏感知（2026-11-04-fence-aware-task-rows）：代码围栏内的示例任务行不计——
+ * 文档围栏常含 `- [ ] task-N:` 形态示例，逐行正则会把它们当真实任务（幻影行污染
+ * 进度 N/M 与下一任务指针）。按 fenceScan 行标记过滤，围栏语法口径见 md-fence.js。
+ */
 function collectRows(md) {
+  const text = String(md || '')
+  const { inFence } = fenceScan(text)
   const rows = []
-  for (const line of String(md || '').split(/\r?\n/)) {
-    const m = line.match(TASK_ROW_RE)
+  // 行切分口径：split(/\r?\n/) 与 fenceScan 的 split('\n') 行数恒等（\r 只附着前行段），
+  // inFence 行索引直接对齐；行内容去 \r 是硬需求——JS 正则的 . 不匹配 \r，TASK_ROW_RE
+  // 的 (.*)$ 咬不到带 \r 的行尾（CRLF 全漏检）。
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) continue
+    const m = lines[i].match(TASK_ROW_RE)
     if (m) rows.push({ id: `task-${String(Number(m[4])).padStart(2, '0')}`, checked: m[2].toLowerCase() === 'x', desc: (m[5] || '').trim() })
   }
   return rows
@@ -44,19 +57,34 @@ function collectRows(md) {
 /**
  * 纯函数：翻格 + 进度回显材料。
  * @param {{tasksMd:string, taskId:string}} opts
- * @returns {{kind:'ticked'|'already', tasksMd:string, checked:number, total:number, next:{id:string,desc:string}|null}
- *   |{kind:'unknown', available:string[]}}
+ * @returns {{kind:'ticked'|'already', tasksMd:string, checked:number, total:number, next:{id:string,desc:string}|null, unclosedFence:boolean, unclosedFenceLine:number|null}
+ *   |{kind:'unknown', available:string[], unclosedFence:boolean, unclosedFenceLine:number|null}}
+ *   unclosedFence/unclosedFenceLine（2026-11-04-fence-aware-task-rows）：tasks.md 存在未闭合
+ *   代码围栏及其 1 基起始行号——围栏内任务行按开栏即入栏不计，advisory 面（不阻断翻格）。
  */
 export function tickTasksMd({ tasksMd, taskId }) {
   const id = normalizeTaskId(taskId)
-  if (!id) return { kind: 'unknown', available: [] }
+  if (!id) return { kind: 'unknown', available: [], unclosedFence: false, unclosedFenceLine: null }
+  const scanInfo = fenceScan(String(tasksMd || ''))
   const rows = collectRows(tasksMd)
   const target = rows.find((r) => r.id === id)
-  if (!target) return { kind: 'unknown', available: rows.map((r) => r.id) }
+  if (!target) {
+    return { kind: 'unknown', available: rows.map((r) => r.id), unclosedFence: scanInfo.unclosed, unclosedFenceLine: scanInfo.fenceStartLine }
+  }
   let out = String(tasksMd || '')
   if (!target.checked) {
-    const re = new RegExp(`^(\\s*[-*] \\[) (\\] ${id}:)`, 'm')
-    out = out.replace(re, '$1x$2')
+    // 行内替换（围栏感知）：只动目标行 checkbox 态字符，其余字节逐字保留（\r 留在行内，
+    // 按 \n split 重 join 对 LF/CRLF 透明）；围栏内同 id 示例行不命中（inFence 行跳过）。
+    const re = new RegExp(`^(\\s*[-*] \\[) (\\] ${id}:)`)
+    const lines = out.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (scanInfo.inFence[i]) continue
+      if (re.test(lines[i])) {
+        lines[i] = lines[i].replace(re, '$1x$2')
+        break
+      }
+    }
+    out = lines.join('\n')
   }
   const after = collectRows(out)
   const checked = after.filter((r) => r.checked).length
@@ -67,6 +95,8 @@ export function tickTasksMd({ tasksMd, taskId }) {
     checked,
     total: after.length,
     next: pending ? { id: pending.id, desc: pending.desc } : null,
+    unclosedFence: scanInfo.unclosed,
+    unclosedFenceLine: scanInfo.fenceStartLine,
   }
 }
 
@@ -111,6 +141,9 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
     process.exit(2)
   }
   const r = tickTasksMd({ tasksMd: readFileSync(tasksPath, 'utf8'), taskId })
+  if (r.unclosedFence) {
+    console.warn(`⚠️ tasks.md 存在未闭合代码围栏（第 ${r.unclosedFenceLine} 行起）——围栏内任务行不计入任务集（检查围栏开合）`)
+  }
   if (r.kind === 'unknown') {
     const ids = (r.available || []).join('、') || '（tasks.md 无任务行）'
     console.error(`❌ tasks.md 中无 ${taskId}——可选任务：${ids}`)
