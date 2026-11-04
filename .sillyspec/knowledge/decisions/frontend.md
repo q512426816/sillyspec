@@ -665,3 +665,12 @@ supersedes：D-002@v1
 理由：选方案 A。三案对比：A=PC 既有卡组件（ChangeUsageCard/ChangeLastSignal/ScopeAuditCommandCard/ChangeActivityBadge）布局无 lg 依赖可直接挂载，数据层函数与 query key 全部复用，移动壳（筛选抽屉/⋯菜单/折叠卡）沿用本页既有范式；B=每卡重写移动版，违反移动端代码明文约束「数据层 100% 复用桌面（禁止复制第二份实现）」（每份移动页头部注释均载），制造双实现漂移面；C=废弃 /m/ 路由体系改响应式，推翻 2026-08-26-mobile-workspace-page 整个架构决策，牵连 m/layout 钻取路由、MobileWorkspaceHeader、底部 Tab 等全部移动基建。A 是仓库惯例的直接推论，非开放取舍。
 故障面：若某桌面组件在小屏实测溢出（如 ScopeAuditCommandCard 明细表），需就地加移动断点而非重写——执行时验证
 退役判据：若未来移动端整体转向响应式单套页面（方案 C 复活），本决策随之退役
+
+## D-frontend-029@v1 2026-11-04-model-provider-cascade——改 frontend 两处 + 新增一个本地记忆助手：① 新增 `frontend/src/lib/model-memory.ts`（localStorage
+状态：implemented
+变更：2026-11-04-model-provider-cascade
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-model-provider-cascade/design.md
+文件：frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx, frontend/src/components/daemon/session-panel/session-panel-dialog.tsx, frontend/src/components/daemon/session-panel/session-panel-page.tsx, frontend/src/components/sessions/__tests__/session-config-bar.test.tsx, frontend/src/components/sessions/session-config-bar.tsx, frontend/src/lib/__tests__/model-memory.test.ts, frontend/src/lib/model-memory.ts
+最近确认：63d3ff266d8f7974e916f8b12b47705cce6019d0
+理由：改 frontend 两处 + 新增一个本地记忆助手：① 新增 `frontend/src/lib/model-memory.ts`（localStorage `sh:last-model:<providerId>` 读写，容错 SSR 安全）；② SessionConfigBar 级联重做——供应商点选（暂存/预会话/即时）时模型自动解析「记忆（候选集内）→ 候选第一个 → 空串跟随」并经既有通道同步（onStagedSwitch model 键 / setProvisionalModel+onProvisionalModelSwitch / companion.model）；模型下拉在显示层供应商为具体供应商时移除「默认」选项（不指定态维持下拉不渲染）；显式选模型时写记忆并在 provider NULL 场景成对补暂存 engineDefaultProvider.id；快照模型为空时显示值回退自动解析（仅显示不暂存，载荷零变化）；③ panel-page/dialog 五个 inject 失败 catch 点补 notify.error 即时 toast。选「配置条内完成配对」而非改 buildStagedInjectOptions 远端解析的原因：engineDefaultProvider/providers/engine 派生已全部在配置条内（2026-10-28 显示回退同源），载荷语义与显示值天然一致；builder 既有 companion 保留为兜底不动。

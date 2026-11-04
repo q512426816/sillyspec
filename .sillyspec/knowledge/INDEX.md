@@ -224,3 +224,5 @@
 - auto-sillyspec|sillyspec → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)
 - agent → [fr/agent.md](fr/agent.md)
 - ppm → [fr/ppm.md](fr/ppm.md)
+- knowledge → [fr/knowledge.md](fr/knowledge.md)
+- app-sessions-pages → [fr/app-sessions-pages.md](fr/app-sessions-pages.md)

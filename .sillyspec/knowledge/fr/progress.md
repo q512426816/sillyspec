@@ -168,3 +168,41 @@ created_at: 2026-10-13T16:20:31.476Z
   confirmed_at: null
   source_change: 2026-10-21-overview-thin-stage
   status: active
+
+## FR-progress-009 resolvePlatformSpecDir 解析结果与 cwd 分属不同 git 仓时大声告警（含指针路径与修复指引）；同仓/无 git 仓/显式 --spec-dir 覆盖三种形态零告警
+变更：2026-11-04-junction-guard-rename-content
+状态：active
+摘要：junction 错绑（事故形态复现）；三零告警形态
+全文：.sillyspec/changes/archive/2026-11-04-junction-guard-rename-content/requirements.md#FR-01
+最近确认：14e690991ecfdedc8f66c3bfc3590a296f57863f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-junction-guard-rename-content:flow:测试绑定FR-01
+  tests: test/junction-guard-rename-content.test.mjs「T1 跨仓告警/T1b 同仓·无git·显式specDir 三零告警」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-junction-guard-rename-content
+  status: active
+
+## FR-progress-010 computeSpecOps 的 rename op 携带 content（base64，与 add/update 同款），服务端源行缺失可物化目标不再 422
+变更：2026-11-04-junction-guard-rename-content
+状态：active
+摘要：归档 rename（源行缺失形态）；常规归档 rename 零回归
+全文：.sillyspec/changes/archive/2026-11-04-junction-guard-rename-content/requirements.md#FR-02
+最近确认：14e690991ecfdedc8f66c3bfc3590a296f57863f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-junction-guard-rename-content:flow:测试绑定FR-02
+  tests: test/junction-guard-rename-content.test.mjs「T2 rename 携带 base64 content/常规 rename 零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-junction-guard-rename-content
+  status: active
