@@ -35,7 +35,7 @@ export function isDistillAbnormal(res) {
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { modulePathMatches } from './modules.js'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { KNOWLEDGE_STATUSES, KNOWLEDGE_TYPES } from './decision-values.js'
 
 // 入选集=正典单一源派生（2026-10-20-decision-caliber-unify）。历史：五类集漏选 8 条
@@ -444,6 +444,79 @@ function sameDecisionNumber(s, entry) {
   return (s.change || null) === (entry.change || null) && (s.number === entry.number || s.originNumber === entry.number)
 }
 
+// ---------------------------------------------------------------------------
+// 叙事基线条目（2026-11-04-archive-baseline-entry）——事故复盘叙事入知识面
+// ---------------------------------------------------------------------------
+
+/** design.md「做法概述」段提取（剥模板问题行，空段返回 null）。
+ *  段边界 = ##/### 节头（做法概述 起，下一节头止）；问题钉死行（「本变更怎么解决问题…」）
+ *  剥除——答案才是叙事。正文折单行（oneLine 同口径，检索面词面命中吃的是字符序列非段落结构）。 */
+export function parseDesignOverview(changeDir) {
+  let content
+  try { content = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return null }
+  const body = []
+  let inside = false
+  for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+    if (/^#{2,3}\s/.test(line)) {
+      if (inside) break
+      inside = /^#{2,3}\s*做法概述\s*$/.test(line.trim())
+      continue
+    }
+    if (inside) body.push(line.trim())
+  }
+  const text = body.filter(l => l && !/^本变更怎么解决问题/.test(l)).join(' ')
+  return text || null
+}
+
+/** 基线资格与构造：合格返回可直接进 distill batch 的条目对象，否则 null。
+ *  资格四门（FR-01）：做法概述段非平凡（≥50 字）；交付面（剥 .sillyspec/ 内部路径）×
+ *  模块匹配 ≥1 域（docs-only 变更无叙事锚点，跳）；decisions.md 未占用 D-000；标题可派生。
+ *  幂等键 = D-000@v1 + 变更名（与人工条目同机器：sameDecisionNumber 原编号匹配原位更新）。
+ *  锚点 = relative(仓根, changeDir)/design.md——蒸馏时点在归档前则指活跃目录，归档后
+ *  重蒸幂等更新收敛到归档路径（自愈，无需双形态）。 */
+export function buildBaselineEntry(changeDir, knowledgeRoot, parsedEntries, moduleIndex) {
+  const overview = parseDesignOverview(changeDir)
+  if (!overview || overview.length < 50) return null
+  if ((parsedEntries || []).some(e => e.number === 'D-000')) return null
+  let patchFiles = []
+  try {
+    const patchPath = join(changeDir, 'change-patch.json')
+    if (existsSync(patchPath)) {
+      const patch = JSON.parse(readFileSync(patchPath, 'utf8'))
+      patchFiles = (Array.isArray(patch.files) ? patch.files : [])
+        .map(f => String(f).replace(/\\/g, '/')).filter(f => f && !f.startsWith('.sillyspec/'))
+    }
+  } catch { /* 坏 patch 按无交付面处理 */ }
+  if (patchFiles.length === 0) return null
+  const domains = [...new Set(matchImpactsToModules(patchFiles.join(' '), moduleIndex))].map(sanitizeDomain)
+  if (domains.length === 0) return null
+  const changeName = basename(changeDir)
+  let changeTitle = ''
+  try {
+    const fs = readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8')
+    changeTitle = ((fs.match(/^title:\s*(.+)$/m) || [])[1] || '').trim().replace(/^['"]|['"]$/g, '')
+  } catch { /* 无 flow-state 落变更名 */ }
+  const firstSentence = (() => {
+    const m = overview.match(/^[^。]*。/)
+    const s = (m ? m[0] : overview.slice(0, 40)).trim()
+    return s.length > 80 ? s.slice(0, 80) : s
+  })()
+  let anchor = ''
+  try {
+    const repoRoot = dirname(dirname(knowledgeRoot))
+    anchor = relative(repoRoot, changeDir).replace(/\\/g, '/') + '/design.md'
+  } catch { /* 相对化失败按未记录 */ }
+  return {
+    id: 'D-000@v1', number: 'D-000', version: 1,
+    title: `${changeTitle || changeName}——${firstSentence}`,
+    type: 'process', status: 'implemented', selected: 'implemented',
+    answer: overview,
+    domains,
+    files: patchFiles.slice(0, 20),
+    anchor: anchor || undefined,
+  }
+}
+
 function applyEntryToSections(sections, entry, headHash, sectionNumber, originId) {
   const change = entry.change || null
   const sameNumber = sections.filter(s => sameDecisionNumber(s, entry))
@@ -590,13 +663,28 @@ export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
  *   skipped 非空 = 无 decisions.md / 无入选条目（零输出）；needsWait 非空 = 有 rejected 条目
  *   缺否决理由/复潮条件被拦下（该条目未写盘，其余条目照常提炼）。
  */
-export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null) {
+export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null, opts = {}) {
   // 变更名限定（坑 distill-cross-change-supersede）：条目幂等键 = 号+变更。changeDir 末段
   // 即变更名（changes/<name> 与 archive 后的 changes/archive/<name> 同为 <name>）。
   const changeName = basename(changeDir)
   const parsed = parseDecisions(changeDir)
+  const idx = moduleIndex || discoverModuleIndex(knowledgeRoot)
+  // 叙事基线条目（2026-11-04-archive-baseline-entry）：design 做法概述的背景叙事（事故复盘/
+  // 实证取舍）此前只活在归档与代码头注释——蒸馏源面不含该段，症状词查询结构性零命中。
+  // 合格变更机械产出恰好一条 D-000@v1 基线（资格门/字段构造见 buildBaselineEntry），与人工
+  // 条目同机器入库（幂等键 号+原编号+变更）。baselineOnly（存量回放）：只写基线、丢弃人工
+  // 条目面——同变更人工存量「最近确认」等字段零触碰。
+  const baseline = buildBaselineEntry(changeDir, knowledgeRoot, parsed.entries, idx)
+  if (opts.baselineOnly) {
+    if (!baseline) return { written: [], skipped: 'baselineOnly：变更不合格产基线（无做法概述段/无可匹配模块交付面/D-000 被占用），零输出', needsWait: null }
+    parsed.entries = [baseline]
+  } else if (baseline) {
+    parsed.entries.push(baseline)
+  }
   if (parsed.missing) {
-    return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
+    if (!baseline) {
+      return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
+    }
   }
   // 0 条告警（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②）：文件有内容、
   // 正文含 D-xxx 形态却 0 条可解析 = 标题式/扁平列表式两种格式都不匹配——此前静默放行
@@ -681,7 +769,6 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
 
   const decisionsDir = join(knowledgeRoot, 'decisions')
   mkdirSync(decisionsDir, { recursive: true })
-  const idx = moduleIndex || discoverModuleIndex(knowledgeRoot)
 
   // 域文件 store：域 → { preamble, sections, dirty }（按需加载，批量写盘）
   const store = new Map()

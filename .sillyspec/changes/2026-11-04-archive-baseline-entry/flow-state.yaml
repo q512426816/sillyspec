@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  归档叙事基线条目机制与存量回放
+
+
+  动机：事故复盘叙事只存在于归档 design 做法概述（实证：2026-10-21 平台仓 daemon 宿主冻结事故搜「离线」零命中，靠代码考古找到），蒸馏源面不含该段致结构性丢失；已有两种丢失形态实证（decisions
+  空壳、有叙事零字段行被 dispositionOf 静默落选）。子代理评审定稿：单机制双执行点——归档时机械产出叙事基线条目 + 存量重放同代码路径；砍掉 A2 硬门/B 归档检索通道/C changelog
+  词富化（评审与数据实测双重否决）。
+
+
+  成功标准：
+
+  - 归档蒸馏时为每个含做法概述段且交付面可匹配模块的变更机械产出恰好一条 D-000@v1 基线条目（标题=变更标题+首句、正文=做法概述整段、文件=change-patch.json、锚点=归档 design 路径、字段齐全不被
+  dispositionOf 落选）
+
+  - 基线条目幂等（重蒸馏不重复），D-000 已被人工占用时跳基线
+
+  - 检索去重：同文件内基线条目排序不抢人工决策条目之前
+
+  - 存量回放脚本走同一代码路径（不另立条目体系），信号词表为脚本参数非硬编码
+
+  - 平台仓回放落地后搜「冻结」词面命中 2026-10-21-daemon-sync-hardening 基线条目
+autopilot: false
+prestage_ack: false
+baseline_commit: b653dd841d508e2c25bf8b7db37099d13133043a
+updatedAt: '2026-11-04T00:12:45.314Z'
+baseline_sha256: fc01149d1d2277a1b1056473324b26e0f52b710791ec5386dc8cd1ada4938b00
+spec_approved: true
+spec_approved_at: '2026-11-04T00:12:45.313Z'
+spec_approved_by: zcode-archive-baseline
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-archive-baseline
+

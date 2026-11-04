@@ -66,6 +66,9 @@ const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+)
 /** 底稿模板标题特征词（与 4A provenance 分类同源单一口径）：harvestSlot4Decision 产的
  *  process 级流程取舍框架词——不是具体方案否决，deathPath 不应赋予（2026-11-02-series-final-cleanup）。 */
 const TEMPLATE_TITLE_RE = /设计期风险与放弃方案|风险与死路|design\s*槽\s*4\s*收割|底稿/
+// 叙事基线条目识别（2026-11-04-archive-baseline-entry）：原编号 D-000@ 是基线保留号
+// （buildBaselineEntry 恒用 D-000@v1）——排序降位/回放幂等预扫共用此约定。
+const BASELINE_ORIGIN_RE = /^D-000@/
 const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
 // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
@@ -569,7 +572,17 @@ export function matchByRouting(indexDir, taskContext, opts = {}) {
   // 一个 bigram 即得高比率）会压过长理由被稀释的相关条目，实测复现；宁用零分平局先验。
   const contentChars = (s) => String(s || '').replace(/[\d\p{P}\s_]+/gu, ' ')
   const relScore = (h) => frTitleOverlap(contentChars(taskContext), contentChars(`${h.id} ${h.title}`))
-  const byOverlapDesc = (a, b) => (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
+  // 基线降位（2026-11-04-archive-baseline-entry，FR-03）：同文件内叙事基线（原编号 D-000@）
+  // 排在人工条目之后——基线是补充叙事（标题=变更标题+首句，bigram 天然富集，relScore 常
+  // 虚高），人工条目才是检索正主；跨文件保持既有得分序（降位仅在同文件双条目竞争时生效）。
+  const isBaselineEntry = (h) => BASELINE_ORIGIN_RE.test(h.originId || '')
+  const byOverlapDesc = (a, b) => {
+    if (a.file === b.file) {
+      const ab = isBaselineEntry(a), bb = isBaselineEntry(b)
+      if (ab !== bb) return ab ? 1 : -1
+    }
+    return (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
+  }
   const decisionHits = [
     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
