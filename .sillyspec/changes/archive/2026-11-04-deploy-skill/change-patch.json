@@ -1,0 +1,57 @@
+{
+  "change": "2026-11-04-deploy-skill",
+  "baseline": "b9fd150e43cb43295c5d92de1d9f3c603919868b",
+  "head": "5dfc97d629982c4f0a9875c9be08e077959201e2",
+  "files": [
+    ".agents/skills/deploy/SKILL.md"
+  ],
+  "totals": {
+    "files": 1,
+    "additions": 108,
+    "deletions": 0
+  },
+  "savedAt": "2026-11-04T11:22:20.334Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": ".agents/skills/deploy",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "b9fd150e43cb43295c5d92de1d9f3c603919868b",
+    "totals": {
+      "files": 1,
+      "additions": 108,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": ".agents/skills/deploy/SKILL.md",
+        "additions": 108,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "e44845eadc6352b1aed1381bb66ff4444044973912c3f8fbdbd2e50aabd7fbde",
+  "patchStatus": "ok"
+}

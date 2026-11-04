@@ -56,3 +56,29 @@ created_at: 2026-10-21T04:40:00.306Z
 依据决策：D-008@v1
 全文：.sillyspec/changes/archive/2026-07-12-2026-07-12-worker-worktree-isolation/requirements.md#FR-06
 最近确认：af41fac1d
+
+## FR-agent-001 .agents/skills/deploy/SKILL.md 存在且含五步链+坑清单速查表，frontmatter name/description 合规
+变更：2026-11-04-deploy-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-deploy-skill/requirements.md#FR-01
+最近确认：5dfc97d629982c4f0a9875c9be08e077959201e2
+
+## FR-agent-002 不影响交付面（shipped-hygiene 扫描面不含 .agents）与既有测试
+变更：2026-11-04-deploy-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-deploy-skill/requirements.md#FR-02
+最近确认：5dfc97d629982c4f0a9875c9be08e077959201e2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-deploy-skill:flow:测试绑定FR-02
+  tests: test/prompt-golden.test.mjs「stage 提示词金档比对」 | test/shipped-hygiene.test.mjs「交付面无开发物料」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-deploy-skill
+  status: active

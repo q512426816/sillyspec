@@ -1,0 +1,43 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  部署流程 skill 固化入库
+
+  本会话刚走完一次完整 npm 发布（3.34.1：暂存区归属判别清障→版本面 bump+锚点同步→验证门→sillyspec push→npm publish 202 异步核验），流程含多个本仓特有坑（push
+  暂存区门、quick-retired 精确版本锚、202 传播窗口勿重发、反引号提交信息、既有红 stash 归属判别）。已写为 .agents/skills/deploy/SKILL.md（维护者技能，不入
+  .claude/skills 交付面）。
+
+
+  成功标准：
+
+  - .agents/skills/deploy/SKILL.md 存在且含五步链+坑清单速查表，frontmatter name/description 合规
+
+  - 不影响交付面（shipped-hygiene 扫描面不含 .agents）与既有测试
+autopilot: true
+prestage_ack: true
+baseline_commit: b9fd150e43cb43295c5d92de1d9f3c603919868b
+updatedAt: '2026-11-04T11:22:21.558Z'
+baseline_sha256: fe04e0b3eb8db113a600efedb807e92bc0e0d139563740d6630e03e24bd327a0
+spec_approved: true
+spec_approved_at: '2026-11-04T11:21:15.415Z'
+spec_approved_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: skipped 结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261104112140\test-result.json
+  — 跳过原因：变更与测试面零关系（4 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: skipped — 跳过原因：local.yaml 未配置
+  commands.lint（或标记 unavailable）。｜门文件 4 个
+

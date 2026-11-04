@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-deploy-skill",
+  "rows": [
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-deploy-skill:flow:测试绑定FR-02",
+      "tests": [
+        "test/prompt-golden.test.mjs「stage 提示词金档比对」",
+        "test/shipped-hygiene.test.mjs「交付面无开发物料」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-deploy-skill"
+    }
+  ]
+}
