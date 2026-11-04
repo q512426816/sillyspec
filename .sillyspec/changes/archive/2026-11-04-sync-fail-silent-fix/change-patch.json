@@ -1,0 +1,86 @@
+{
+  "change": "2026-11-04-sync-fail-silent-fix",
+  "baseline": "48a3571a903ff3d83f1d6a40f64b143a1d72cef0",
+  "head": "cccdeb844f9bef0c44ac63b81acb1c926433bfdf",
+  "files": [
+    "src/index.js",
+    "src/spec-sync.js",
+    "test/sync-fail-silent.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 87,
+    "deletions": 2
+  },
+  "savedAt": "2026-11-04T02:15:16.450Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "48a3571a903ff3d83f1d6a40f64b143a1d72cef0",
+    "totals": {
+      "files": 3,
+      "additions": 87,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/index.js",
+        "additions": 8,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 10,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/sync-fail-silent.test.mjs",
+        "additions": 69,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1486deae9e40ae3f8a872327386599c0984f0cfca2cb8b6943f0fcce973612fe",
+  "patchStatus": "ok"
+}

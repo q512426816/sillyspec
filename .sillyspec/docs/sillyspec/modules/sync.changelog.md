@@ -18,3 +18,4 @@
 - 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测
 - 2026-10-23-rename-platform-tombstone | rename 落台账推旧名墓碑根治幽灵变更
 - 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿
+- 2026-11-04-sync-fail-silent-fix | platform sync 失败静默与慢链路全量对账修复

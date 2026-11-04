@@ -1087,3 +1087,12 @@ supersedes：D-010@v1
 文件：src/flow-review-pack.js, src/flow-review.js, src/flow.js, test/review-rerun-scope.test.mjs
 最近确认：ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f
 理由：- 风险1：回执过期（ledger 后源码又变）——review 子步在 patch 冻结后、源码面已定；且口径节要求「抽验复核」非盲信回执；可接受。 - 风险2：口径节被派发缩编丢弃——任务书已含「原样复制」纪律行，口径节属于任务书本体；可接受。 - 死路：考虑过让 ledger 直接把回执写进 change 目录（评审员必读面）——放弃：verify-runs 已是既定留档位，复制第二份成双源；材料包注入即可达评审员。
+
+## D-cli-entry-012@v1 2026-11-04-sync-fail-silent-fix——三处小修：① index.js platform sync 全树分支补 `r.ok === false` 判定——失败行+exit 1（既有 warn 已含原因
+状态：implemented
+变更：2026-11-04-sync-fail-silent-fix
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-sync-fail-silent-fix/design.md
+文件：src/index.js, src/spec-sync.js, test/sync-fail-silent.test.mjs
+最近确认：cccdeb844f9bef0c44ac63b81acb1c926433bfdf
+理由：三处小修：① index.js platform sync 全树分支补 `r.ok === false` 判定——失败行+exit 1（既有 warn 已含原因链，此处只补结果语义与退出码）；② spec-sync.js 清单 GET 超时按形态分档——全量（无 since）取 120s、增量维持 10s（对齐 bundle 端点大小超时先例：大响应体独立档，非拍脑袋放大）；③ POST !res.ok 的 detail 提取扩一层——响应体 detail 字段含 op 级文本（path=…）时透传进 warn 行。三处共同根治「失败被成功横幅掩盖」：生产实证缓存漂移+慢链路+422 连坐三因叠加时，用户只见「0 个文件差异」，漏推不可见（2026-11-04 知识索引漏推确诊回执）。

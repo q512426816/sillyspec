@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-sync-fail-silent-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "cccdeb844f9bef0c44ac63b81acb1c926433bfdf",
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P3",
+      "title": "失败行文案「原因见上方 warn」在噪音闸静默窗内可能无对应 warn 可见",
+      "detail": "连接类失败（404/5xx/网络超时）经 syncConnectionWarn 走噪音闸（sync-noise.js 判序 4：先前进程已开静默窗且同行重复 → 静默）——此时本轮 stderr 无该 warn，「见上方 warn」指向不可见输出。仅影响文案指涉精度：结果行 + exit 1 不受影响（FR-01 核心保证成立），4xx 业务态恒打 warn，SILLYSPEC_DEBUG_SYNC=1 可强制输出。既有噪音闸契约（platform-sync-failure-visibility）非本变更引入。",
+      "disposition": "accepted（非阻断，文案层面）"
+    },
+    {
+      "id": "F-02",
+      "severity": "P3",
+      "title": "增量（带 since）拉取理论大 delta 仍 10s——design 已披露且存在收敛通道",
+      "detail": "游标极旧且期间大量变更时增量响应也可能大（>10s@慢链路），仍按 10s 熔断。design 风险节放弃方案②已明确披露（增量 10s 是噪音闸门）；定期对账轮（inc_count>=resolveReconcileEvery()，默认 50）强制不带 since 全量走 120s 档，缓存漂移有收敛通道。",
+      "disposition": "accepted（已披露边界）"
+    },
+    {
+      "id": "F-03",
+      "severity": "P3",
+      "title": "退出码 0→1 边界裁决佐证：与同命令既有先例一致",
+      "detail": "platform sync --change 分支自 2026-10-13-sync-ledger-tombstone 起失败即 exit 1（src/index.js:4502-4505，同为「假成功掩盖」事故驱动）；本变更使全树分支与之对齐，降低脚本化调用方惊讶面。design 声明的「best-effort 可 || true」与 D-001 决策留痕完整。",
+      "disposition": "boundary-acceptable"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "design 答案属实：超时档由请求形态静态决定（cacheUsable 在 fetch 前求值，line 761→766），失败判定消费终态返回值（r.ok），无时序依赖。",
+    "并发": "design 答案属实：diff 仅增失败分支与超时常量，无新写面；manifest 乐观锁/冲突分流/partitionConflictPaths 未动。",
+    "切换": "design 答案属实：GET 失败（785）/倒退对账失败（806）/catch（829）均 return 先于 writeManifestCache；POST 失败（895）不写 lastSyncTs/基线（仅既有 fail-streak 可观测性计数）。中断重入语义未变。",
+    "作用域": "design 答案属实：diff 无仓路径/项目名/平台实例硬编码（规约 00 合规）；失败行与常量均通用文案。"
+  },
+  "checklistResults": {
+    "fr-impl-test-consistency": "PASS——FR-01=index.js:4525-4528（ok===false 判定先于 4529 成功横幅，exit 1；conflict 分支在其前）+ T1；FR-02=spec-sync.js:53/766/798（120s 常量+主 GET 三元+倒退对账同档）+ T2；FR-03=describeErrorBody(84-94) details.path 既有行为 + POST 分支(887-891) detail 拼接 + T3。requirements 测试绑定三行齐全，tasks 三项全勾。变异探针：删 ok 判定→T1 四断言全红；三元改恒 10000→T2 两断言红；删 path 提取→T3 红。三探针均命中、还原后 git status 干净、12/12 复绿。T3 为真行为断言（pathToFileURL 导入实模块实调用），非纯源级。",
+    "blind-dimensions": "PASS——四问逐条对照 diff 均属实（见 dimensionNotes）。",
+    "disclosure-boundaries": "PASS——①退出码 0→1 破坏恒 0 依赖脚本：可接受（失败静默正是事故根因；|| true 显式声明；与 --change 分支 2026-10-13 先例一致）；②best-effort || true：可接受（shell 通例，D-001 留痕）；③422 不自动剔除：可接受（跨工作区污染行系平台侧事务，CLI 自动剔除有误删他端合法行风险；422 现带 path detail 供人工处置）。",
+    "guard-claims": "PASS——ok===false 判定确实先于成功横幅且 exit 1（代码序 + 探针 A 双证）。超时三元仅在无 since 形态放大：cacheUsable=false 全路径枚举——首拉/缓存缺失（readManifestCache null fail-soft）、对账轮（inc_count>=50）、SILLYSPEC_SPEC_SYNC_FULL（manifestCache 置 null）、旧平台缓存清除后的下一轮——fetch URL 均无 ?since（全量清单）走 120s；cacheUsable=true 唯一走 10s 且带 since；倒退对账第二 GET 恒全量走 120s 字面档。POST 维持 30000。",
+    "generated-artifacts": "PASS——变更仅触及 src/index.js、src/spec-sync.js、test/sync-fail-silent.test.mjs 与变更目录文档，无类型/契约/生成物文件，无需同步。",
+    "test-effectiveness": "PASS——三变异探针（A/B/C）分别杀死 T1/T2/T3 对应断言，还原后工作区对两源文件零 diff、HEAD 仍 cccdeb84、测试 12/12 绿。",
+    "project-probes": {
+      "cli-copy-selfsufficient": "PASS——index.js 失败判定仅依赖返回值 r.ok（自足），warn 确由 spec-sync 内部输出（GET 失败 778-783/倒退对账 802/catch 824/POST 889，先于 return ok:false）；噪音闸静默窗边缘见 F-01（P3 文案层）。",
+      "config-absent-zero-regression": "PASS——零新配置键：MANIFEST_FULL_TIMEOUT_MS 为代码常量；引用的 SILLYSPEC_SPEC_SYNC_FULL/SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY 均为 4c301365（2026-10-21-cli-manifest-since-cache）既有键；缺省路径（无 env）形态自判可用。",
+      "crossrepo-path-compat": "N/A 确认——diff 无路径字面量/平台实例绑定，通用同步层文案。"
+    },
+    "rerun": "PASS——node test/sync-fail-silent.test.mjs 12/12；node test/platform-spec-sync-incremental.test.mjs 全绿（EXIT=0）；node test/hub08-spec-sync-conflict.test.mjs 全部通过（失败 0）。未跑全量套件（按纪律）。"
+  },
+  "reviewedAt": "2026-11-04T02:20:37Z"
+}

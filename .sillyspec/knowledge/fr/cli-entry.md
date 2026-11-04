@@ -12122,3 +12122,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-04-knowledge-search-positional
   status: active
+
+## FR-cli-entry-640 syncSpecTreeOnly ok:false 时 platform sync 输出失败信息（含原因）且退出码非零，不再出现成功横幅
+变更：2026-11-04-sync-fail-silent-fix
+状态：active
+摘要：主路径（拉清单超时/POST 422/5xx）
+全文：.sillyspec/changes/archive/2026-11-04-sync-fail-silent-fix/requirements.md#FR-01
+最近确认：cccdeb844f9bef0c44ac63b81acb1c926433bfdf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-fail-silent-fix:flow:测试绑定FR-01
+  tests: test/sync-fail-silent.test.mjs「T1 ok:false 报失败退出非零无成功横幅」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-fail-silent-fix
+  status: active
+
+## FR-cli-entry-641 全量清单拉取（无 since 参数态）超时提升至慢链路可完成（≥60s），增量拉取维持 10s 不变
+变更：2026-11-04-sync-fail-silent-fix
+状态：active
+摘要：慢链路全量对账
+全文：.sillyspec/changes/archive/2026-11-04-sync-fail-silent-fix/requirements.md#FR-02
+最近确认：cccdeb844f9bef0c44ac63b81acb1c926433bfdf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-fail-silent-fix:flow:测试绑定FR-02
+  tests: test/sync-fail-silent.test.mjs「T2 全量清单超时 120s/增量维持 10s（源级断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-fail-silent-fix
+  status: active
+
+## FR-cli-entry-642 POST 422 失败输出含服务端指明的无效 op 路径，不再只报 HTTP 状态码
+变更：2026-11-04-sync-fail-silent-fix
+状态：active
+摘要：SPEC_BUNDLE_INVALID 整批拒收
+全文：.sillyspec/changes/archive/2026-11-04-sync-fail-silent-fix/requirements.md#FR-03
+最近确认：cccdeb844f9bef0c44ac63b81acb1c926433bfdf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-fail-silent-fix:flow:测试绑定FR-03
+  tests: test/sync-fail-silent.test.mjs「T3 422 detail 含无效 op 路径透传」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-fail-silent-fix
+  status: active
