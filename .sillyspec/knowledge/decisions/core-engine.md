@@ -1145,3 +1145,12 @@ supersedes：D-001@v1
 文件：src/cross-repo-reconcile.js, src/flow.js, src/scope-audit.js, test/thin-empty-face-crosscheck.test.mjs
 最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
 理由：最大风险：跨仓 patch 与 totals 的既有读方（平台全屏预览/实时对账卡）看到的文件数变小——这是口径修正（模板本就不该计入交付），非数据丢失；模板改动仍在 git 历史与归档文档。放弃方案：①只过滤 patch 不过滤 rows——会造成 totals 与 patch 文件数不一致（生产 112 vs 110 的既有失真复刻）；②在 filterDeliverableFiles 层过滤——会改变 worktree apply 的交付语义（tool 档是软桶），影响面超出本变更。
+
+## D-core-engine-044@v1 2026-11-04-fence-aware-task-rows——新增 src/md-fence.js 共享 util：`fenceScan(md)` 逐行扫描 ```/~~~ 围栏开合，返回每行 in-fence 标记数组与
+状态：implemented
+变更：2026-11-04-fence-aware-task-rows
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-fence-aware-task-rows/design.md
+文件：src/md-fence.js, src/task-tick.js, test/md-fence-task-rows.test.mjs
+最近确认：f86ad32ff24f9a928673e58da5662b04ad77eb0d
+理由：新增 src/md-fence.js 共享 util：`fenceScan(md)` 逐行扫描 ```/~~~ 围栏开合，返回每行 in-fence 标记数组与未闭合标志/起始行号。task-tick.js 的 collectRows 按标记过滤行；翻格替换由「全文正则 m 标记一把替换」改为「围栏感知定位目标行 → 仅该行替换 checkbox 态字符」——字节级保留靠按 \n split 重 join（\r 留在行内不丢，CRLF 透明）。围栏语法取 CommonMark 实用子集：开栏=行首 ≤3 空格缩进的 ``` 或 ~~~（可带信息串），闭栏=同字符、长度不小于开栏、行内仅空白的栏线。依据：superpowers #2436（task-brief 未闭合围栏把 177 行任务吞成 1159 行五任务简报）；本仓 grep 证实 task 行正则消费方 12+ 处，本变更只接 task-tick（tick/进度回显真源），其余消费方按需收编。

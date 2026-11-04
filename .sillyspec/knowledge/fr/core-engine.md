@@ -5040,3 +5040,60 @@
   confirmed_at: null
   source_change: 2026-11-02-quicklog-inject-retire
   status: active
+
+## FR-core-engine-268 围栏内 task-N: 行不计入任务集（tick/进度/下一任务指针均不受影响），真实行翻格字节级不受损（含 CRLF 保留）
+变更：2026-11-04-fence-aware-task-rows
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-fence-aware-task-rows/requirements.md#FR-01
+最近确认：f86ad32ff24f9a928673e58da5662b04ad77eb0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-fence-aware-task-rows:flow:测试绑定FR-01
+  tests: test/md-fence-task-rows.test.mjs「围栏内任务行不计数且不误翻格」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-fence-aware-task-rows
+  status: active
+
+## FR-core-engine-269 未闭合围栏给出告警且 fail-safe（开栏后不计行），不崩溃不误报
+变更：2026-11-04-fence-aware-task-rows
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-fence-aware-task-rows/requirements.md#FR-02
+最近确认：f86ad32ff24f9a928673e58da5662b04ad77eb0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-fence-aware-task-rows:flow:测试绑定FR-02
+  tests: test/md-fence-task-rows.test.mjs「未闭合围栏 fail-safe 告警与行号」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-fence-aware-task-rows
+  status: active
+
+## FR-core-engine-270 新增单测覆盖上述边界，既有回归面全绿
+变更：2026-11-04-fence-aware-task-rows
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-fence-aware-task-rows/requirements.md#FR-03
+最近确认：f86ad32ff24f9a928673e58da5662b04ad77eb0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-fence-aware-task-rows:flow:测试绑定FR-03
+  tests: test/md-fence-task-rows.test.mjs「CRLF 字节级保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-fence-aware-task-rows
+  status: active

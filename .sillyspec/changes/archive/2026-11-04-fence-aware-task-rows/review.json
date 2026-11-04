@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-fence-aware-task-rows",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "f86ad32ff24f9a928673e58da5662b04ad77eb0d",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "tasks.md 行解析其余 11+ 消费方（哨兵/ceremony-tier/blast-surface 等）未同步围栏感知",
+      "evidence": "本变更只接 task-tick（tick/进度回显真源）；哨兵判集等消费方仍是逐行正则，tasks.md 含围栏示例行时可能多计（拒收方向 fail-safe 不假绿，非回归）。design 已留按需收编指针，follow-up 变更处理。",
+      "location": "src/md-fence.js:1"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "行切分对齐依赖 split(/\\r?\\n/) 与 split('\\n') 行数恒等不变量",
+      "evidence": "两者都恰在 \\n 位置切分、\\r 只附着前行段，行数恒等（含混合换行/孤 \\r 退化形态）；注释已写明不变量，CRLF 字节级测试锁定。若未来有人把 collectRows 行切分改回其它口径，索引错位会立刻被测试 ⑦CRLF 用例暴露。",
+      "location": "src/task-tick.js:44"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a（纯函数解析静态文本，无事件时序面）",
+    "并发": "ok（fenceScan 无共享态；翻格仍走 writeAtomicSync 原子写，中断半态不落盘）",
+    "切换": "ok（解析幂等，重入重解析结果一致；tickTasksMd 纯函数新增字段向后兼容）",
+    "作用域": "ok（util 无全局态，各仓各变更独立解析；module-map 已登记 src/md-fence.js→core-engine，FR 蒸馏不落伪域）"
+  },
+  "reviewedAt": "2026-11-04T07:22:00.000Z"
+}

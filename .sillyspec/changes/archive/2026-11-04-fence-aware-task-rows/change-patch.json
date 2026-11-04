@@ -1,0 +1,79 @@
+{
+  "change": "2026-11-04-fence-aware-task-rows",
+  "baseline": "725e125b2a85bc2d2a1630bd41162ba35f40078b",
+  "head": "f86ad32ff24f9a928673e58da5662b04ad77eb0d",
+  "files": [
+    "src/md-fence.js",
+    "src/task-tick.js",
+    "test/md-fence-task-rows.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 206,
+    "deletions": 9
+  },
+  "savedAt": "2026-11-04T07:21:11.194Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "725e125b2a85bc2d2a1630bd41162ba35f40078b",
+    "totals": {
+      "files": 3,
+      "additions": 206,
+      "deletions": 9
+    },
+    "rows": [
+      {
+        "path": "src/md-fence.js",
+        "additions": 64,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 42,
+        "deletions": 9,
+        "kind": "modified"
+      },
+      {
+        "path": "test/md-fence-task-rows.test.mjs",
+        "additions": 100,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7153faecfe6509744058a6ac85c2303202e6fb915d7ca9657a6a1cf6deb01ac6",
+  "patchStatus": "ok"
+}

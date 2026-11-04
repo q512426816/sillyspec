@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-fence-aware-task-rows",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-fence-aware-task-rows:flow:测试绑定FR-01",
+      "tests": [
+        "test/md-fence-task-rows.test.mjs「围栏内任务行不计数且不误翻格」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-fence-aware-task-rows"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-fence-aware-task-rows:flow:测试绑定FR-02",
+      "tests": [
+        "test/md-fence-task-rows.test.mjs「未闭合围栏 fail-safe 告警与行号」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-fence-aware-task-rows"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-fence-aware-task-rows:flow:测试绑定FR-03",
+      "tests": [
+        "test/md-fence-task-rows.test.mjs「CRLF 字节级保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-fence-aware-task-rows"
+    }
+  ]
+}
