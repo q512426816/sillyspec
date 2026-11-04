@@ -22,3 +22,4 @@ ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段
 | 2026-10-21 | 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测 |
 | 2026-10-23 | 2026-10-23-rename-platform-tombstone | rename 落台账推旧名墓碑根治幽灵变更 |
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
+| 2026-11-04 | 2026-11-04-junction-guard-rename-content | 跨仓错绑告警与 rename op 带内容两护栏 |

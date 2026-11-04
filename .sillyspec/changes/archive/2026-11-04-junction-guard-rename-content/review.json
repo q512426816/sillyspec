@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-junction-guard-rename-content",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "14e690991ecfdedc8f66c3bfc3590a296f57863f",
+  "findings": [
+    {
+      "id": "F-01",
+      "kind": "issue",
+      "severity": "P3",
+      "title": "gitRootOf 比对为大小写敏感字符串相等——Windows 盘符大小写形态不一致时同仓可误告警",
+      "detail": "path.resolve('C:\\Users') !== path.resolve('c:\\Users')（本机 node 24 实测）。若 daemon 写入的 pointer specRoot 盘符大小写与 process.cwd() 呈现不一致，同仓解析会产生 cwdRoot !== specRootGit 的假阳性告警。缓解面：Node 24 realpathSync 保留盘符大小写（实测 realpathSync('C:\\Users')→'C:\\Users'），同机主路径两源通常同形，T1 同仓用例本机实测零告警；且与同函数既有 temp 检查（startsWith 大小写敏感比对）同一比较习语；告警不阻断，误报代价是一行提示。不改不阻断验收。",
+      "location": "src/progress.js:179 (cwdRoot === specRootGit)",
+      "ruling": "accepted-as-is"
+    },
+    {
+      "id": "F-02",
+      "kind": "issue",
+      "severity": "P3",
+      "title": "T1 断言面窄于 FR-01 文案面：未断言告警含两仓路径与 pointer 文件路径",
+      "detail": "FR-01 要求告警含两仓路径、pointer 文件路径、修复指引；实现三者齐备（src/progress.js:180-185 实读核验），但测试仅断言触发词（'不同 git 仓'）与指引关键词（'junction'、'pointer --cleanup'），路径回显无断言。路径回显回归（如变量漏拼）不会红。属测试面收窄非实现缺失。",
+      "location": "test/junction-guard-rename-content.test.mjs:57-58",
+      "ruling": "accepted-as-is"
+    },
+    {
+      "id": "F-03",
+      "kind": "issue",
+      "severity": "P3",
+      "title": "嵌套仓形态（specRoot 在 cwd 仓内子目录且该子目录含 .git）会告警",
+      "detail": "gitRootOf 自 specRoot 向上首遇 .git 即返回：specRoot=cwd/sub/.sillyspec 且 cwd/sub/.git 存在时 specRootGit=cwd/sub ≠ cwd（外层仓）→ 告警。该形态字面即「分属不同 git 仓」，且合法平台 specRoot 均居 daemon 目录（~/.sillyhub/daemon/specs/，在 cwd 外），cwd 仓内嵌套子仓指向本身即值得提示的非常规形态；告警不阻断。可接受。",
+      "location": "src/progress.js:159-167,179",
+      "ruling": "accepted-as-is"
+    },
+    {
+      "id": "F-04",
+      "kind": "verification",
+      "severity": "P3",
+      "title": "检查单逐条核验记录",
+      "detail": "1) FR↔实现↔测试三方一致：FR-01 四形态（跨仓告警/同仓/裸快照/显式 specDir）实现于 progress.js:174-186,263 且 T1 六断言逐一对应；FR-02 rename content（base64、余字段不变、add/update 不动）实现于 spec-sync.js:271-284 且 T2 五断言+源行缺失 add 用例对应；requirements.md:43-44 测试绑定行齐备。2) 盲维四答 vs diff 属实（见 dimensionNotes）。3) 三条披露边界均可接受：告警不阻断（D-001 用户原话留痕，根因在机器态，阻断误伤临时跨仓只读；与本函数既有 temp 告警同为非阻断习语）；rename 不拆 delete+add（服务端 422 文案明示期望补法，拆 op 改变服务端移动语义/软删备份链）；双侧 .git 才比对（裸快照零误报，T1 实测）。4) 防护核验：gitRootOf 盘符根终止实测（dirname('C:\\')==='C:\\' → 返回 null；POSIX '/' 同理）；null 即跳过比对；rename buf 回退链正确——真实管线 renames 候选恒来自 localMap 且 hashFiles 无条件随行 buf，`localEntry?.absPath ?? join('.', r.newPath)` 回退与 add/update 同习语（spec-sync.js:291,314）；显式 specDir 早返回（progress.js:189）先于告警调用点（:263），结构上不可能经告警，T1 断言佐证。5) 生成物同步：本仓纯 JS 无类型/契约文件，本变更仅动 src 2 文件+测试 1 文件+变更目录文档，确认无需同步。6) 变异探针：删 warnIfCrossRepoSpecRoot 调用行 T1 红（2 断言败，exit 1）；删 rename content 行 T2 红（Buffer.from(undefined) TypeError，exit 1）；两探针后 git restore 自 14e69099 blob 还原，diff 为空、porcelain 干净、复跑 12/12 绿。",
+      "ruling": "verified"
+    },
+    {
+      "id": "F-05",
+      "kind": "verification",
+      "severity": "P3",
+      "title": "项目探针与复跑结果",
+      "detail": "cli-copy-selfsufficient：告警文案提及的 ~/.sillyhub/daemon/specs/ 于 src/progress.js 与 src/run/shared.js 真实存在，`platform pointer --cleanup` 子命令在 src/index.js 等 9 文件实存——指引非虚构（规约 00 兼容：该路径是本产品自身平台架构概念而非开放世界项目枚举）。config-absent-zero-regression：diff 零新配置键（仅 fs/path/console 面），确认。crossrepo-path-compat：gitRootOf 用 path.resolve/join/dirname（平台原生实现），Windows 盘符根与 POSIX 根终止均实测通过；盘符大小写敏感面见 F-01。复跑（C:\\Users\\qinyi\\IdeaProjects\\sillyspec 下）：node test/junction-guard-rename-content.test.mjs → 12 passed 0 failed（exit 0）；node test/platform-spec-sync-incremental.test.mjs → 全绿（exit 0）；node test/platform-init-pointer.test.mjs → 15 passed 0 failed（exit 0）。未跑全量套件（按复跑口径纪律）。tasks.md 两任务全勾，task-ticks.jsonl 与之一致。",
+      "ruling": "verified"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "design 答称告警是同函数调用时点的纯只读比对、rename content 与 add/update 同读取口径——diff 属实：gitRootOf 两值均在 warnIfCrossRepoSpecRoot 单次调用内取值；content 主源 buf 为 hashFiles 时点（与 update/add 完全同一 buf），回退 readFileSync 为 op 构建时点（习语相同、真实管线不触达）。无乱序假设。真实。",
+    "并发": "design 答称告警零写面、content 与批 E-① buf 同源——diff 属实：warnIfCrossRepoSpecRoot 仅 console.warn 无任何写；rename content 取 localEntry.buf（hashFiles 已读）或 readFileSync 回退，与 spec-sync.js:291/314 的 update/add 完全同并发语义。真实。",
+    "切换": "design 答称两者无状态残留——diff 属实：新增代码零模块级可变状态（gitRootOf/warnIfCrossRepoSpecRoot 均局部变量；content 随 op 对象在 POST 载荷内生灭）。真实。",
+    "作用域": "design 答称告警本身就是跨仓串台探测器、路径均来自解析结果与 cwd 无硬编码——diff 属实：比对原语为 gitRootOf(cwd) vs gitRootOf(realpath(specRoot))，文案中 ~/.sillyhub/daemon/specs/ 为本产品自身平台概念（代码库实存）非开放世界枚举；content 为本地文件字节无仓特定逻辑。真实。"
+  },
+  "reviewedAt": "2026-11-04T05:26:43.436Z"
+}
