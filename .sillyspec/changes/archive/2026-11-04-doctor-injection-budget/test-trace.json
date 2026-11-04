@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-doctor-injection-budget",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-doctor-injection-budget:flow:测试绑定FR-01",
+      "tests": [
+        "test/doctor-injection-budget.test.mjs「超线 SKILL.md 报 WARNING 附瘦身指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-doctor-injection-budget"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-doctor-injection-budget:flow:测试绑定FR-02",
+      "tests": [
+        "test/doctor-injection-budget.test.mjs「预算内回显最大面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-doctor-injection-budget"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-doctor-injection-budget:flow:测试绑定FR-03",
+      "tests": [
+        "test/doctor-injection-budget.test.mjs「本仓实跑全预算内」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-doctor-injection-budget"
+    }
+  ]
+}

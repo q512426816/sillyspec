@@ -1,0 +1,165 @@
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index 849aaa6e..fe7f97b9 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -813,6 +813,59 @@ export function detectDocBloat(specRoot) {
+ }
+ // ══ 2026-09-09-doctor-noai：净增三类探测器（只读 fail-soft，skipped 带内降级）══
+ 
++// ── 常驻注入面体积预算（2026-11-04-doctor-injection-budget）──────────────────
++// Claude Code 系 harness 压缩后将已装载技能截断到 20,000 字符（superpowers #2481 实证：
++// SDD 技能截断丢五轮修复上限，单任务跑 18 轮修复）；AGENTS/CLAUDE.md 类常驻指引超线同样
++// 吃全局预算。WARN 制不改收口通过性——阈值先对齐压缩截断线，待真实截断事故校准后再升格。
++const INJECTION_BUDGET_BYTES = 20000;
++
++/**
++ * 常驻注入面体积预算（WARN 只读）：逐文件 statSync 扫描仓根 AGENTS.md / CLAUDE.md /
++ * SKILL.md、templates/agents-instruction.md（模板源，本仓开发面）与 .claude/skills 下
++ * 各技能的 SKILL.md。
++ * 预算内回显最大面（体积可观测）；无任何注入面（非 init 仓）跳过不误报。
++ */
++export function detectInjectionBudget(cwd) {
++  const dim = { name: 'injection_budget', label: '常驻注入面体积预算（压缩生存）', safe_actions: [] };
++  const oversized = [];
++  let scanned = 0;
++  let maxSeen = null;
++  const consider = (abs, rel) => {
++    try {
++      const size = statSync(abs).size;
++      scanned += 1;
++      if (!maxSeen || size > maxSeen.size) maxSeen = { rel, size };
++      if (size > INJECTION_BUDGET_BYTES) oversized.push(`${rel}（${(size / 1024).toFixed(1)}KB）`);
++    } catch { /* 单文件 stat 失败跳过（fail-soft 同 detectDocBloat 口径） */ }
++  };
++  for (const f of ['AGENTS.md', 'CLAUDE.md', 'SKILL.md', join('templates', 'agents-instruction.md')]) {
++    const abs = join(cwd, f);
++    if (existsSync(abs)) consider(abs, f.split('\\').join('/'));
++  }
++  try {
++    const skillsDir = join(cwd, '.claude', 'skills');
++    if (existsSync(skillsDir)) {
++      for (const e of readdirSync(skillsDir, { withFileTypes: true })) {
++        if (!e.isDirectory()) continue;
++        const skillMd = join(skillsDir, e.name, 'SKILL.md');
++        if (existsSync(skillMd)) consider(skillMd, `.claude/skills/${e.name}/SKILL.md`);
++      }
++    }
++  } catch { /* skills 目录不可读跳过 */ }
++  if (scanned === 0) {
++    return { ...dim, pass: true, severity: null, findings: ['无 AGENTS/CLAUDE/SKILL.md 注入面（非 init 仓或未安装，跳过）'] };
++  }
++  if (oversized.length > 0) {
++    dim.safe_actions.push({ action: '按 superpowers references/ 拆分模式瘦身：SKILL.md 只留全程骨架，步骤局部内容拆 references/ 到步现读（压缩后截断线内自洽）', risk: 'low' });
++  }
++  dim.findings = oversized.length > 0
++    ? [`超 ${INJECTION_BUDGET_BYTES} 字节压缩截断线（超线内容压缩后对 agent 不可见，纪律静默丢失）：${oversized.join('、')}`]
++    : [`常驻注入面在预算内（扫描 ${scanned} 个面，最大 ${maxSeen.rel} ${(maxSeen.size / 1024).toFixed(1)}KB / 预算 20KB）`];
++  return oversized.length === 0
++    ? { ...dim, pass: true, severity: CHECK_SEVERITY.PASSED }
++    : { ...dim, pass: false, severity: CHECK_SEVERITY.WARNING };
++}
++
+ /**
+  * worktree 健康（FR-02）：复用 WorktreeManager.doctor()（薄适配不重复探测——设计审查附加
+  * gap 修正）+ sillyspec/* 残留分支对账（vs changes/ 活跃目录）。锚定主仓根
+@@ -1654,6 +1707,8 @@ export async function runDoctorDiagnostics({ cwd }) {
+   const authDb = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
+   const executeMismatch = detectExecuteProgressPlanMismatch(authoritySpecDir, authDb);
+   const docBloat = detectDocBloat(authoritySpecDir);
++  // 常驻注入面体积预算（2026-11-04-doctor-injection-budget，WARN 只读可观测）
++  const injectionBudget = detectInjectionBudget(cwd);
+   const repoNativeChain = detectRepoNativeChain(cwd, pointer);
+   // P2-2-②：file-lifecycle 文档欠账（git behind 事实计算，治「改了生命周期代码忘同步文档」）
+   const lifecycleDoc = detectLifecycleDocStaleness(cwd);
+@@ -1689,7 +1744,7 @@ export async function runDoctorDiagnostics({ cwd }) {
+   // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
+   // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
+   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
+-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
++  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
+ 
+   return {
+     dimensions,
+diff --git a/test/doctor-injection-budget.test.mjs b/test/doctor-injection-budget.test.mjs
+new file mode 100644
+index 00000000..af704ada
+--- /dev/null
++++ b/test/doctor-injection-budget.test.mjs
+@@ -0,0 +1,77 @@
++/**
++ * doctor-injection-budget.test.mjs — doctor 常驻注入面体积预算（2026-11-04-doctor-injection-budget）
++ *
++ * 依据：Claude Code 系 harness 压缩后把已装载技能截断到 20,000 字符（superpowers #2481：
++ * SDD 技能截断丢五轮修复上限跑 18 轮）；常驻指引超线同样吃全局预算。doctor WARN 制
++ * （不 FAIL 收口），阈值待真实截断事故校准。三态：超线 WARN / 预算内 PASS / 无注入面跳过。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { detectInjectionBudget } from '../src/doctor-diagnostics.js'
++import { CHECK_SEVERITY } from '../src/constants.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++function makeRepo() {
++  const cwd = join(tmpdir(), `dib-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
++  mkdirSync(cwd, { recursive: true })
++  return cwd
++}
++
++test('超线 SKILL.md 报 WARNING 附瘦身指引（不 FAIL 语义：pass=false 但 severity=WARNING）', () => {
++  const cwd = makeRepo()
++  try {
++    mkdirSync(join(cwd, '.claude', 'skills', 'big-skill'), { recursive: true })
++    writeFileSync(join(cwd, '.claude', 'skills', 'big-skill', 'SKILL.md'), 'x'.repeat(21000))
++    writeFileSync(join(cwd, 'AGENTS.md'), 'x'.repeat(5000))
++    const d = detectInjectionBudget(cwd)
++    assert.equal(d.name, 'injection_budget')
++    assert.equal(d.pass, false)
++    assert.equal(d.severity, CHECK_SEVERITY.WARNING)
++    assert.match(d.findings.join('\n'), /big-skill\/SKILL\.md（20\.5KB）/)
++    assert.match(d.findings.join('\n'), /20000 字节/)
++    assert.match(String(d.safe_actions?.[0]?.action || ''), /references/)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('预算内回显扫描面数与最大面（可观测）', () => {
++  const cwd = makeRepo()
++  try {
++    writeFileSync(join(cwd, 'AGENTS.md'), 'x'.repeat(3000))
++    const d = detectInjectionBudget(cwd)
++    assert.equal(d.pass, true)
++    assert.match(d.findings.join('\n'), /扫描 1 个面/)
++    assert.match(d.findings.join('\n'), /AGENTS\.md 2\.9KB/)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('空仓（无任何注入面）跳过不误报', () => {
++  const cwd = makeRepo()
++  try {
++    const d = detectInjectionBudget(cwd)
++    assert.equal(d.pass, true)
++    assert.equal(d.severity, null)
++    assert.match(d.findings.join('\n'), /无.*注入面|跳过/)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('本仓实跑：全部注入面在预算内（当前实态护栏）', () => {
++  const d = detectInjectionBudget(ROOT)
++  assert.deepEqual(
++    d.findings,
++    d.findings.filter((f) => !/超 20000 字节/.test(f)),
++    `本仓出现超线注入面：${d.findings.join('；')}`
++  )
++  assert.equal(d.pass, true, `本仓注入面应全预算内：${d.findings.join('；')}`)
++})

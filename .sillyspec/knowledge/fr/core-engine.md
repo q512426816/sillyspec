@@ -5097,3 +5097,60 @@
   confirmed_at: null
   source_change: 2026-11-04-fence-aware-task-rows
   status: active
+
+## FR-core-engine-271 doctor 新增 injection_budget 维度：扫描 AGENTS/CLAUDE/根 SKILL.md 与 .claude/skills/*/SKILL.md 及模板源，任一超 20000 字节 WARN 并给瘦身指引（超线不 FAIL 收口）
+变更：2026-11-04-doctor-injection-budget
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-doctor-injection-budget/requirements.md#FR-01
+最近确认：cdcce4ca0a02678854dced87f7bb66f7335250a4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-doctor-injection-budget:flow:测试绑定FR-01
+  tests: test/doctor-injection-budget.test.mjs「超线 SKILL.md 报 WARNING 附瘦身指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-doctor-injection-budget
+  status: active
+
+## FR-core-engine-272 预算内回显最大面与预算（可观测）；非 init 仓跳过不误报
+变更：2026-11-04-doctor-injection-budget
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-doctor-injection-budget/requirements.md#FR-02
+最近确认：cdcce4ca0a02678854dced87f7bb66f7335250a4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-doctor-injection-budget:flow:测试绑定FR-02
+  tests: test/doctor-injection-budget.test.mjs「预算内回显最大面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-doctor-injection-budget
+  status: active
+
+## FR-core-engine-273 新增单测覆盖超线/预算内/跳过三态，既有回归面零破坏
+变更：2026-11-04-doctor-injection-budget
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-doctor-injection-budget/requirements.md#FR-03
+最近确认：cdcce4ca0a02678854dced87f7bb66f7335250a4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-doctor-injection-budget:flow:测试绑定FR-03
+  tests: test/doctor-injection-budget.test.mjs「本仓实跑全预算内」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-doctor-injection-budget
+  status: active

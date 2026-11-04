@@ -1154,3 +1154,12 @@ supersedes：D-001@v1
 文件：src/md-fence.js, src/task-tick.js, test/md-fence-task-rows.test.mjs
 最近确认：f86ad32ff24f9a928673e58da5662b04ad77eb0d
 理由：新增 src/md-fence.js 共享 util：`fenceScan(md)` 逐行扫描 ```/~~~ 围栏开合，返回每行 in-fence 标记数组与未闭合标志/起始行号。task-tick.js 的 collectRows 按标记过滤行；翻格替换由「全文正则 m 标记一把替换」改为「围栏感知定位目标行 → 仅该行替换 checkbox 态字符」——字节级保留靠按 \n split 重 join（\r 留在行内不丢，CRLF 透明）。围栏语法取 CommonMark 实用子集：开栏=行首 ≤3 空格缩进的 ``` 或 ~~~（可带信息串），闭栏=同字符、长度不小于开栏、行内仅空白的栏线。依据：superpowers #2436（task-brief 未闭合围栏把 177 行任务吞成 1159 行五任务简报）；本仓 grep 证实 task 行正则消费方 12+ 处，本变更只接 task-tick（tick/进度回显真源），其余消费方按需收编。
+
+## D-core-engine-045@v1 2026-11-04-doctor-injection-budget——src/doctor-diagnostics.js 新增 detectInjectionBudget(cwd) 探测器（detectDocBloat 同款形态：
+状态：implemented
+变更：2026-11-04-doctor-injection-budget
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-doctor-injection-budget/design.md
+文件：src/doctor-diagnostics.js, test/doctor-injection-budget.test.mjs
+最近确认：cdcce4ca0a02678854dced87f7bb66f7335250a4
+理由：src/doctor-diagnostics.js 新增 detectInjectionBudget(cwd) 探测器（detectDocBloat 同款形态：软限→WARNING 不 FAIL、fail-soft 跳过），挂入 runDoctorDiagnostics 的 dimensions 数组，renderDoctorSummary/formatDoctorJson 走既有通用渲染零改动。扫描面：仓根 AGENTS.md/CLAUDE.md/SKILL.md、templates/agents-instruction.md（模板源，sillyspec 本仓开发面）、.claude/skills/*/SKILL.md 逐文件 statSync 字节量，预算 20000 字节——对齐 Claude Code 系 harness 压缩截断线（superpowers #2481：截断后超线内容对 agent 不可见，SDD 技能丢五轮修复上限跑 18 轮）。选 WARN 制而非测试硬门：① silyspec-execute SKILL.md 实况 18.9KB 已贴线，硬门上线即红且阈值无事故校准依据；② 阈值待首次真实截断事故校准后再考虑升格（doctor WARN 即校准数据源）。

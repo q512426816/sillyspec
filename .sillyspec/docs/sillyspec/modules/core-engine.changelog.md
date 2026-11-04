@@ -112,3 +112,4 @@
 | 2026-11-02 | 2026-11-02-slot4-harvest-retire | 槽4 底稿收割源头下线 |
 | 2026-11-04 | 2026-11-04-archive-baseline-entry | 归档叙事基线条目机制与存量回放 |
 | 2026-11-04 | 2026-11-04-fence-aware-task-rows | 任务行解析围栏感知守卫防幻影任务 |
+| 2026-11-04 | 2026-11-04-doctor-injection-budget | doctor 常驻注入面体积预算告警 |

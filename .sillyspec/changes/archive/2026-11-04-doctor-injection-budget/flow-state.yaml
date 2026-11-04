@@ -1,0 +1,45 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  doctor 常驻注入面体积预算告警
+
+  常驻注入面（AGENTS/CLAUDE/SKILL.md）超 20000 字节压缩截断线后超线内容压缩即不可见，agent 丢纪律无感知（superpowers #2481 实证：SDD 技能丢五轮上限跑 18 轮修复）；仓内
+  silyspec-execute SKILL.md 已 18.9KB 贴线，无护栏必然破线。
+
+
+  成功标准：
+
+  - doctor 新增 injection_budget 维度：扫描 AGENTS/CLAUDE/根 SKILL.md 与 .claude/skills/*/SKILL.md 及模板源，任一超 20000 字节 WARN
+  并给瘦身指引（超线不 FAIL 收口）
+
+  - 预算内回显最大面与预算（可观测）；非 init 仓跳过不误报
+
+  - 新增单测覆盖超线/预算内/跳过三态，既有回归面零破坏
+autopilot: true
+prestage_ack: true
+baseline_commit: 65c4e3b0d13ae4deca8d80d760f84f46421bd932
+updatedAt: '2026-11-04T07:35:42.507Z'
+baseline_sha256: 00433dc0a93bba605e4adf1d35e80aaf6503002a706f3d8bd0aa41564a479720
+spec_approved: true
+spec_approved_at: '2026-11-04T07:30:58.851Z'
+spec_approved_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js17)（13.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261104073535\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+
