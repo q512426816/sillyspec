@@ -155,6 +155,36 @@ export function resolveSessionIdentity({ flagSession = null, quickChangeName = n
  *
  *   无 pointer = 纯本地项目（从未平台 scan），正常走本地解析，不受影响。
  */
+/** 向上找 .git 所在目录（无 git 返回 null）——跨仓错绑告警的比对原语。 */
+function gitRootOf(startPath) {
+  let cur = resolve(startPath)
+  for (;;) {
+    if (existsSync(join(cur, '.git'))) return cur
+    const parent = dirname(cur)
+    if (parent === cur) return null
+    cur = parent
+  }
+}
+
+/** 跨仓错绑告警（2026-11-04-junction-guard-rename-content FR-01）：cwd 与解析出的
+ *  specRoot 分属不同 git 仓 = workspace junction/指针错绑形态（2026-11-04 跨工作区污染
+ *  事故实证：平台 workspace junction 指向 sillyspec 仓，CLI 忠实跟随零提示，sillyspec
+ *  内容经平台 token 推进平台 workspace）。双侧都有 .git 才比对（裸快照目录不误报）；
+ *  只告警不阻断（错绑下临时跨仓只读操作仍可用，由人裁决）。 */
+function warnIfCrossRepoSpecRoot(cwd, specRoot, pointerPath) {
+  let cwdRoot = null
+  let specRootGit = null
+  try { cwdRoot = gitRootOf(cwd) } catch { /* 比对失败静默（告警 fail-open） */ }
+  try { specRootGit = gitRootOf(specRoot) } catch { /* 同上 */ }
+  if (!cwdRoot || !specRootGit || cwdRoot === specRootGit) return
+  console.warn(
+    `⚠️ 平台 spec 根与当前目录分属不同 git 仓——workspace junction/指针疑似错绑（跨工作区污染事故形态）。\n` +
+    `   cwd 仓：${cwdRoot}\n` +
+    `   specRoot 仓：${specRootGit}\n` +
+    `   检查 ${pointerPath} 的 specRoot 与 ~/.sillyhub/daemon/specs/ 下对应 workspace 的 junction 绑定；或 sillyspec platform pointer --cleanup 后重扫。命令继续执行，请人工裁决。`
+  )
+}
+
 export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
   if (explicitSpecDir) return resolve(explicitSpecDir);
   const pointerPath = join(resolve(cwd), '.sillyspec-platform.json');
@@ -225,11 +255,13 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
   // 偶发锚到 daemon junction 副本」）：daemon 写入的 pointer specRoot 可能是通向真实 spec 根的
   // junction/symlink 路径——经 junction 读写与真实路径同文件（无害）但路径呈现与比对漂移、
   // junction 随 daemon 生命周期可能蒸发。realpath 坍缩为真实路径（失败回退原值，保守不干预）。
+  let resolvedSpecRoot = ptr.specRoot
   try {
     const canonical = realpathSync(ptr.specRoot)
-    if (canonical && canonical !== ptr.specRoot) return canonical
+    if (canonical && canonical !== ptr.specRoot) resolvedSpecRoot = canonical
   } catch { /* realpath 失败（权限/竞态删除）→ 原值（上方已过存在性检查） */ }
-  return ptr.specRoot;
+  warnIfCrossRepoSpecRoot(cwd, resolvedSpecRoot, pointerPath)
+  return resolvedSpecRoot;
 }
 
 /**

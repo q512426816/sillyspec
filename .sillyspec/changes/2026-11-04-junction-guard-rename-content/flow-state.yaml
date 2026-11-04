@@ -1,0 +1,30 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  跨仓错绑告警与 rename op 带内容两护栏
+
+
+  动机：2026-11-04 跨工作区污染事故根因为本机 daemon junction 错绑（平台 workspace→sillyspec 仓），CLI 忠实跟随错绑指针无任何告警；且归档 rename op 不带内容，服务端源行缺失时
+  422 拒收整批（文件树同步 5 连败、40MB 积压近因）。用户指令（2026-11-04）：两护栏下个 session 一并做。
+
+
+  成功标准：
+
+  - resolvePlatformSpecDir 解析结果与 cwd 分属不同 git 仓时大声告警（含指针路径与修复指引）；同仓/无 git 仓/显式 --spec-dir 覆盖三种形态零告警
+
+  - computeSpecOps 的 rename op 携带 content（base64，与 add/update 同款），服务端源行缺失可物化目标不再 422
+autopilot: false
+prestage_ack: true
+baseline_commit: 544393a35ef5592ab7ef982859e2d3096a974138
+updatedAt: '2026-11-04T05:14:54.825Z'
+baseline_sha256: 6186e767e4c4f42217299bf20644a9ac22836ba2a3cb38bfb9d0ac3803a9ebea
+spec_approved: true
+spec_approved_at: '2026-11-04T05:14:54.825Z'
+spec_approved_by: zcode-junction-guard
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-junction-guard
+

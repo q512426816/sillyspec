@@ -269,11 +269,17 @@ export function computeSpecOps(serverManifest, localFiles) {
   const ops = [];
 
   for (const r of renames) {
+    const localEntry = localMap.get(r.newPath);
     ops.push({
       op: 'rename',
       path: r.oldPath,
       new_path: r.newPath,
       base_version: server[r.oldPath].version,
+      // 内容随行（2026-11-04-junction-guard-rename-content FR-02）：服务端源行缺失（跨工作区
+      // 错绑/对端已清行）时无内容 rename 必被 422「源文件缺失的重命名操作必须携带文件内容」
+      // 拒收整批（生产实证文件树同步 5 连败卡死）；带 content 后服务端可直接物化目标路径，
+      // 源行在则照常移动语义。编码与 add/update 同款 base64。
+      content: (localEntry?.buf ?? readFileSync(localEntry?.absPath ?? join('.', r.newPath))).toString('base64'),
     });
   }
 
