@@ -52,6 +52,60 @@ function toPosix(p) {
 // 小响应维持 10s 噪音闸门不变。
 const MANIFEST_FULL_TIMEOUT_MS = 120_000;
 
+// 推送分批（2026-11-04-sync-push-chunking）：大积压单批 POST 在单请求预算内必死——
+// 生产实证 multi-agent-platform 工作区 15 天积压 2436 ops/45.7MB（base64 后 ~60MB），
+// 上传+服务端 apply 双超（客户端 30s 掐线、服务器 16-34s 处理后 400/中断），37 连败
+// 零落地。切块顺序推送：每块独立提交，已落地块推进服务器清单，失败即停由下轮 diff
+// 断点续传（锚点刷新后已落地路径自动出 diff）。env 仅调优，缺省零回归（小批量一块直发）。
+const PUSH_TIMEOUT_DEFAULT_MS = 30_000;
+const CHUNK_OPS_DEFAULT = 128;
+const CHUNK_BYTES_DEFAULT = 2 * 1024 * 1024;
+
+function resolvePushTimeoutMs() {
+  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS);
+  if (Number.isFinite(raw) && raw >= 1000) return Math.floor(raw);
+  return PUSH_TIMEOUT_DEFAULT_MS;
+}
+
+function resolveChunkOps() {
+  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS);
+  if (Number.isInteger(raw) && raw >= 1) return raw;
+  return CHUNK_OPS_DEFAULT;
+}
+
+function resolveChunkBytes() {
+  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_CHUNK_BYTES);
+  if (Number.isFinite(raw) && raw >= 1024) return Math.floor(raw);
+  return CHUNK_BYTES_DEFAULT;
+}
+
+/**
+ * 按 op 数与 base64 字节数双约束切块（顺序保序；单 op 超任一上限独占一块——
+ * 4.7MB 级 change.patch 单文件不切不丢弃）。行宽为粗估（content + path×2 + 包裹），
+ * 只为分块比例，无需精确。
+ */
+export function chunkOpsForPush(ops, opts = {}) {
+  const maxOps = opts.maxOps ?? resolveChunkOps();
+  const maxBytes = opts.maxBytes ?? resolveChunkBytes();
+  if (!Array.isArray(ops) || ops.length === 0) return [];
+  if (maxOps < 1 || maxBytes < 1) return [ops.slice()];
+  const chunks = [];
+  let cur = [];
+  let curBytes = 0;
+  for (const op of ops) {
+    const size = (op.content ? op.content.length : 0) + op.path.length * 2 + 96;
+    if (cur.length > 0 && (cur.length >= maxOps || curBytes + size > maxBytes)) {
+      chunks.push(cur);
+      cur = [];
+      curBytes = 0;
+    }
+    cur.push(op);
+    curBytes += size;
+  }
+  if (cur.length > 0) chunks.push(cur);
+  return chunks;
+}
+
 function debugLog(msg) {
   if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg);
 }
@@ -68,7 +122,7 @@ export function describeSyncError(err) {
     return '平台响应慢，本轮同步被总预算熔断让路（best-effort，下一条命令自动重试）';
   }
   if (err && err.name === 'TimeoutError') {
-    return '单请求超时（清单 10s / 推送 30s 口径，best-effort，下次自动重试）';
+    return '单请求超时（清单增量 10s/全量 120s；推送默认 30s，SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS 可调；分批尺寸 SILLYSPEC_SPEC_SYNC_CHUNK_*；best-effort，下次自动重试）';
   }
   return err && err.message ? err.message : String(err);
 }
@@ -877,30 +931,47 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
     return { synced: 0, ok: true };
   }
 
-  // 3. POST ops
+  // 3. POST ops（2026-11-04-sync-push-chunking：分批顺序推送——单批大积压在单请求
+  //    预算内上传+服务端 apply 双超零落地；切块后每块独立提交，失败即停下轮续传）
   try {
-    const res = await fetch(syncUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${platform.token}`,
-      },
-      body: JSON.stringify({ ops }),
-      signal: withSignal(30000),
-    });
-    if (!res.ok) {
-      const raw = await res.text().catch(() => '');
-      const detail = describeErrorBody(res.status, raw);
-      const failCount = bumpFailStreak(specRoot, logLabel, detail);
-      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
-      if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
-      else console.warn(line);
-      if (failCount >= FAIL_STREAK_ESCALATE_AT) {
-        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
-      }
-      return { synced: 0, ok: false };
+    const chunks = chunkOpsForPush(ops);
+    if (chunks.length > 1) {
+      console.log(`[spec-sync] 推送分批：${ops.length} ops 切 ${chunks.length} 块顺序提交（块上限 ${resolveChunkOps()} ops / ${Math.round(resolveChunkBytes() / 1024)}KB 估算）: ${logLabel}`);
     }
-    const body = await res.json().catch(() => ({}));
+    let landedChunks = 0;
+    const body = { conflict: false, server_versions: {}, platform_deleted: [] };
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const res = await fetch(syncUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${platform.token}`,
+        },
+        body: JSON.stringify({ ops: chunks[ci] }),
+        signal: withSignal(resolvePushTimeoutMs()),
+      });
+      if (!res.ok) {
+        const raw = await res.text().catch(() => '');
+        const detail = describeErrorBody(res.status, raw);
+        const failCount = bumpFailStreak(specRoot, logLabel, detail);
+        const landedNote = landedChunks > 0 ? `（前 ${landedChunks}/${chunks.length} 块已落地，下轮自动续传未落地部分）` : '';
+        const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）${landedNote}: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
+        if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+        else console.warn(line);
+        if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+        }
+        return { synced: 0, ok: false };
+      }
+      const chunkBody = await res.json().catch(() => ({}));
+      landedChunks += 1;
+      // 块响应合并成单批等价形状：conflict 任一块命中即真；server_versions /
+      // platform_deleted 逐块累积（块间路径互斥——computeSpecOps 每 path 至多一 op）。
+      if (chunkBody.conflict) body.conflict = true;
+      Object.assign(body.server_versions, chunkBody.server_versions || {});
+      if (Array.isArray(chunkBody.platform_deleted)) body.platform_deleted.push(...chunkBody.platform_deleted);
+      if (chunks.length > 1) debugLog(`[spec-sync] 分批 ${ci + 1}/${chunks.length} 落地（${chunks[ci].length} ops）`);
+    }
     if (body.conflict) {
       // HUB-08 冲突闭环：落 spec-sync-conflict-<change>.json（与进度 sync-conflict-* 同目录），
       // 供 platform status 列出 + platform resolve 三态处置。此前只 warn 返回，下次 sync 用
@@ -1037,5 +1108,6 @@ export default {
   filterStaleUpdates,
   dropFollowServerUpdates,
   partitionConflictPaths,
+  chunkOpsForPush,
   syncSpecTree,
 };

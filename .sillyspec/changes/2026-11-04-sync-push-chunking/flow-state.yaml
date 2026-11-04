@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  spec 同步推送分批化根治大积压超时
+
+  生产实证：multi-agent-platform 工作区 spec 文件树同步自 2026-10-20 起 15 天零落地（spec_version 冻结 6469），根因是单批 POST 全量 ops（今日积压 2436
+  ops/45.7MB，base64 后 ~60MB）在客户端单请求预算（清单 10s/推送 30s 写死）内上传+服务端 apply 双双超时，best-effort 重试永不收敛；服务器侧 8 小时 37 连败（16-34s 后
+  400/中断）。
+
+
+  成功标准：
+
+  - ops 超过阈值时自动按 op 数与 base64 字节数双约束切块顺序推送，逐块独立提交，全部块落地后行为与单批等价（冲突/墓碑/成功语义不变）
+
+  - 推送单请求预算可通过 SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS 调整（默认 30s 不变）；块大小可经 SILLYSPEC_SPEC_SYNC_CHUNK_OPS /
+  SILLYSPEC_SPEC_SYNC_CHUNK_BYTES 调整
+
+  - 中途某块失败时已落地块保留（不回滚），下轮同步 diff 自动只含未落地部分（断点续传），失败提示标注已落地块数
+
+  - 分批纯逻辑函数有判别性单测（边界：超限单 op 独占一块、恰好等于阈值、双约束同时生效）
+
+  - 既有测试套件全绿
+autopilot: false
+prestage_ack: true
+baseline_commit: 70628d8bf16cf8c45a774508c441565e516e6d6c
+updatedAt: '2026-11-04T13:54:41.032Z'
+baseline_sha256: a4fba32135d5ed13a686873fb8ce4d000bae52929e5c5e597171cfe149f942cc
+spec_approved: true
+spec_approved_at: '2026-11-04T13:54:19.435Z'
+spec_approved_by: zcode-specsync-chunking
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-specsync-chunking
+
