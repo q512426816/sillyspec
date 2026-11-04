@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-archive-baseline-entry",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8664008791f4f457425593045ccc2416ca3ff9aa",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "基线入批翻转单决策变更的文件字段自动填充策略（design 未披露的交互）",
+      "evidence": "首评（e341f4a2）：distillIntoKnowledge 的自动填充启发式以 batch.length===1 判定「单决策变更←全部交付面」（2026-11-03-decision-files-autofill）；基线合格时进 batch，恰含一条人工决策的合格变更落「多决策信号匹配」分支，人工条目文件字段从全部交付文件降为正文实际提及者（可为空）。复跑 T2 实证：withManual fixture 输出「⚠️ 1 条决策无代码关联」。修复（8664008791f4f457425593045ccc2416ca3ff9aa）：单决策判定改 manualCount = batch.filter(e => e.number !== 'D-000').length（src/decision-distill.js:768-769），基线不计入判定；同提交修正测试段选取（split 首段是 preamble，首版 find 恒取 preamble 致「人工段落逐字不变」断言恒真——首评 T2b 隔离证据部分空真，已由 filter(/^D-/) 修复恢复可杀性）并新增断言「恰一条人工决策时 autofill 仍走全量交付面」。增量复审验证：①复跑 archive-baseline-entry 41/0 绿（原「⚠️ 无代码关联」翻转为「📎 单决策变更 ← 交付面 4 个文件」）；②decision-files-autofill 回归 4/0 绿；③探针（临时还原 batch.length===1）该新断言必红（40 passed 1 failed，exit 1），断言真实杀旧 bug 非空真。残留边界（不另立 finding）：manualCount 以 number!=='D-000' 排除，人工 D-000 罕例仍会被误判多决策——属首评 P3「人工 D-000 同形边界」已裁定接受的同族罕例。",
+      "location": "src/decision-distill.js:768-769（修复 86640087；基线入批于 692-698）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "applyBaselineReplay 不归因 planned→applied 间的资格门落差",
+      "evidence": "plan 侧 skipped 有 noOverview/gated/already 计数；apply 侧对 distill 返回 written 空的变更（坏 change-patch.json、D-000 被占用等门控拦下）既不计 applied 也无 failed 记录，单变更留痕仅覆盖抛异常面——调用方只能 planned−applied−failed.length 相减感知落差。可接受：聚合量可见（planned/applied/failed 三值齐返），缺的是逐变更归因粒度。",
+      "location": "src/archive-baseline-replay.js:84-92"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "概述段识别绑当前模板标题形态，旧格式变体零基线且量级数字不在 spec 面",
+      "evidence": "parseDesignOverview 仅认 `^#{2,3}\\s*做法概述\\s*$` 精确标题——#### 级、无空格、带后缀变体静默不中（按无概述段处理）。design 风险节仅披露 436/821 概述段在场率，评审核对时所述「254 旧格式盲区」量级属前置轮跨仓数据、未落本仓 spec 面。可接受：旧格式=变更前现状零回归，缺口是增量覆盖不完整而非破坏；标题锚定当前模板是可维护的显式契约。",
+      "location": "src/decision-distill.js:462-465"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "人工 D-000 与基线标记同形（原编号：D-000@）的双边界",
+      "evidence": "①排序降位按 originId 前缀 D-000@ 识别，人工 D-000 条目（epoch 路径同样渲染 原编号：D-000@v1）在同名域文件会被误降位——编号惯例自 D-001 起（decisions 模板与本仓存量实证），罕例且仅影响序位无丢失；②回放预扫把人工 D-000 段视作已有基线跳过——与资格门「D-000 占用即跳基线」结局一致，无行为差。可接受：影响有界、两侧结局自洽。修复 86640087 后新增残留同族罕例：manualCount 排除 D-000 编号使人工 D-000 单决策变更误判多决策，同属本条已接受边界。",
+      "location": "src/knowledge-match.js:71 / src/archive-baseline-replay.js:30"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "盲维答2「号固定 D-000 复用路径不新发号撞车」表述与实现偏差",
+      "evidence": "基线幂等识别确固定 D-000（原编号行），但首写仍经 mintFor 发域段号（D-<域>-NNN，见 sectionNumber= reuse?reuse.number:mintFor）——「不新发号」字面不成立。实质结论不变：每变更恒一条、与人工条目共用同一发号面与 mintMax 批内缓解，未结构性扩大并发窗口；属文档精度瑕疵非风险面误判。",
+      "location": "src/decision-distill.js:841 / design.md 边界与并发答2"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "「资格四门」第四门（标题可派生）为虚门",
+      "evidence": "buildBaselineEntry 标题取 flow-state.yaml title、缺省 basename(changeDir) 兜底，恒可派生永不拒——decisions.md D-001 与函数 docstring 的「四门」口径中第四门不构成实际资格条件。requirements.md 的三条件口径与代码一致，属文档冗余非行为差。",
+      "location": "src/decision-distill.js:479,508-513"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-04T01:06:58Z"
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-archive-baseline-entry",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-archive-baseline-entry:flow:测试绑定FR-01",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs「T1 合格变更产出基线（字段齐全）/T1b 四种不合格形态零产出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-archive-baseline-entry"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-archive-baseline-entry:flow:测试绑定FR-02",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs「T2 幂等重蒸不重复/T2b baselineOnly 不触碰人工存量」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-archive-baseline-entry"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-archive-baseline-entry:flow:测试绑定FR-03",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs「T3 同文件基线排在人工条目后」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-archive-baseline-entry"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-archive-baseline-entry:flow:测试绑定FR-04",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs「T4 回放词表参数化+已含基线幂等跳过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-archive-baseline-entry"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-04-archive-baseline-entry:flow:测试绑定FR-05",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs「T5 查询「冻结」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-archive-baseline-entry"
+    }
+  ]
+}

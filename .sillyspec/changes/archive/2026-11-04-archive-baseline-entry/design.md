@@ -15,6 +15,8 @@ created_at: 2026-11-04T00:08:40.461Z
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
 - `distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex, opts)` 增第五参 `{ baselineOnly?: boolean }`（缺省 undefined=既有行为+基线注入）；基线注入本身是新增输出（合格变更多一条 D-000 条目）。
+- 域归属：基线不扇出多域——交付面逐文件模块计票取 argmax 主域单落（平台仓首放实证：227 条×均值 3 域=703 块扇出既重复占据各域文件、又灌满文件挤掉词片回退「≤5% 条目复现上限」，症状词查询反被挤出——首放已回滚后修正）。
+- 概述解析剥 HTML 注释（`<!-- MACHINE-DRAFT:… -->` 草稿溯源标记整行/行内剥除——平台仓归档 design 概述段首行常态为该标记，不剥即污染标题首句）。
 - 新导出 `buildBaselineEntry(changeDir, knowledgeRoot, parsedEntries, moduleIndex)`（decision-distill.js，供测试/回放复用）与 `parseDesignOverview(changeDir)`。
 - 新模块 `src/archive-baseline-replay.js`：`planBaselineReplay(archiveRoot, knowledgeRoot, { signals })`（纯读规划）+ `applyBaselineReplay(archiveRoot, knowledgeRoot, { signals, headHashOf })`（写盘执行，逐变更调 baselineOnly 蒸馏）。
 - `matchByRouting` 内 scoredHuman 比较器增同文件基线降位（消费侧行为变化：同文件基线排在人工条目后；跨文件序不变）。

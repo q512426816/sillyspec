@@ -1833,3 +1833,98 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-21-brainstorm-proto-worktree
   status: active
+
+## FR-docs-consistency-085 归档蒸馏为合格变更机械产出恰好一条叙事基线决策条目
+变更：2026-11-04-archive-baseline-entry
+状态：active
+摘要：主路径（事故叙事保全）；不合格形态零产出
+全文：.sillyspec/changes/archive/2026-11-04-archive-baseline-entry/requirements.md#FR-01
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-archive-baseline-entry:flow:测试绑定FR-01
+  tests: test/archive-baseline-entry.test.mjs「T1 合格变更产出基线（字段齐全）/T1b 四种不合格形态零产出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-archive-baseline-entry
+  status: active
+
+## FR-docs-consistency-086 基线条目幂等且重放不触碰人工存量
+变更：2026-11-04-archive-baseline-entry
+状态：active
+摘要：幂等重蒸；baselineOnly 不碰存量
+全文：.sillyspec/changes/archive/2026-11-04-archive-baseline-entry/requirements.md#FR-02
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-archive-baseline-entry:flow:测试绑定FR-02
+  tests: test/archive-baseline-entry.test.mjs「T2 幂等重蒸不重复/T2b baselineOnly 不触碰人工存量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-archive-baseline-entry
+  status: active
+
+## FR-docs-consistency-087 检索排序中同文件内基线不抢人工条目之前
+变更：2026-11-04-archive-baseline-entry
+状态：active
+摘要：同文件双条目
+全文：.sillyspec/changes/archive/2026-11-04-archive-baseline-entry/requirements.md#FR-03
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-archive-baseline-entry:flow:测试绑定FR-03
+  tests: test/archive-baseline-entry.test.mjs「T3 同文件基线排在人工条目后」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-archive-baseline-entry
+  status: active
+
+## FR-docs-consistency-088 存量回放走同一代码路径，信号词表为参数
+变更：2026-11-04-archive-baseline-entry
+状态：active
+摘要：词表参数化
+全文：.sillyspec/changes/archive/2026-11-04-archive-baseline-entry/requirements.md#FR-04
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-archive-baseline-entry:flow:测试绑定FR-04
+  tests: test/archive-baseline-entry.test.mjs「T4 回放词表参数化+已含基线幂等跳过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-archive-baseline-entry
+  status: active
+
+## FR-docs-consistency-089 事故查询经基线条目命中（反馈场景验收）
+变更：2026-11-04-archive-baseline-entry
+状态：active
+摘要：反馈原场景
+全文：.sillyspec/changes/archive/2026-11-04-archive-baseline-entry/requirements.md#FR-05
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-archive-baseline-entry:flow:测试绑定FR-05
+  tests: test/archive-baseline-entry.test.mjs「T5 查询「冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-archive-baseline-entry
+  status: active

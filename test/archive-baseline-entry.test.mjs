@@ -23,7 +23,7 @@ const OVERVIEW_NARRATIVE = '2026-10-21 腾讯云会话实测 daemon 宿主冻结
 
 /** 造仓 fixture：.sillyspec/{knowledge, docs/demo/modules/_module-map.yaml, changes/archive/<change>} */
 function buildRepo(tag, { overview = OVERVIEW_NARRATIVE, decisionStub = '# 决策记录\n\n## D-001@v1 单写者优先 CLI\n',
-  patchFiles = ['sillyhub-daemon/src/event-loop-watch.ts', '.sillyspec/changes/x/design.md'],
+  patchFiles = ['sillyhub-daemon/src/event-loop-watch.ts', 'sillyhub-daemon/src/daemon.ts', 'backend/app/main.py', '.sillyspec/changes/x/design.md'],
   title = 'daemon 同步加固与观测', change = '2026-10-21-daemon-sync-hardening', withManual = false } = {}) {
   const repo = join(tmpdir(), `abe-${tag}`)
   rmSync(repo, { recursive: true, force: true })
@@ -31,11 +31,13 @@ function buildRepo(tag, { overview = OVERVIEW_NARRATIVE, decisionStub = '# 决�
   mkdirSync(kr, { recursive: true })
   mkdirSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
   writeFileSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'), [
-    'modules:', '  daemon:', '    paths:', '      - sillyhub-daemon/src', '',
+    'modules:', '  daemon:', '    paths:', '      - sillyhub-daemon/src',
+    '  backend:', '    paths:', '      - backend/app', '',
   ].join('\n'))
   const changeDir = join(repo, '.sillyspec', 'changes', 'archive', change)
   mkdirSync(changeDir, { recursive: true })
   const designLines = ['# 设计记录 — demo', '', '## 做法概述', '',
+    '<!-- MACHINE-DRAFT:design-approach:4fa550e9abc -->', '',
     '本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。', '',
     ...(overview ? [overview, ''] : []), '## 接口契约', '', '无', '']
   writeFileSync(join(changeDir, 'design.md'), designLines.join('\n'))
@@ -59,6 +61,8 @@ console.log('\n=== T1: 合格变更产出基线条目 ===')
     ok(/原编号：D-000@v1/.test(text), '原编号 D-000@v1（基线保留号）')
     ok(new RegExp(`变更：${change}`).test(text), '变更行携带变更名（幂等键）')
     ok(text.includes('daemon 同步加固与观测——2026-10-21'), '标题=变更标题＋概述首句')
+    ok(!text.includes('MACHINE-DRAFT'), '草稿注释不污染标题/理由')
+    ok(!existsSync(join(kr, 'decisions', 'backend.md')), '主域单落：backend 域不扇出建段（daemon 2 票 vs backend 1 票）')
     ok(/状态：implemented[\s\S]*?类型/.test(text) || /状态：implemented/.test(text), '状态 implemented（dispositionOf 不落选）')
     ok(text.includes('锚点：.sillyspec/changes/archive/2026-10-21-daemon-sync-hardening/design.md'), '锚点指归档 design.md')
     ok(text.includes('文件：sillyhub-daemon/src/event-loop-watch.ts'), '文件行=剥 .sillyspec 后交付面')
@@ -114,12 +118,17 @@ console.log('\n=== T2: 幂等与 baselineOnly 隔离 ===')
     ok((second.match(/^## D-/gm) || []).length === 2, '重复蒸馏零重复段')
     ok(r2.written.every(w => w.action !== 'append'), `第二次全为原位更新（实得 ${JSON.stringify(r2.written.map(w => w.action))}）`)
 
-    // baselineOnly 重放：人工段落逐字不变（含「最近确认」）
-    const manualSegBefore = second.split(/^## /m).find(s => !/原编号：D-000@/.test(s))
+    // baselineOnly 重放：人工段落逐字不变（含「最近确认」）；段选取排除 preamble（split 首段
+    // 是文件头非条目段——首版 find 取到 preamble 致断言恒真，评审变异探针同病根）
+    const manualSeg = (t) => t.split(/^## /m).filter(s => /^D-/.test(s)).find(s => !/原编号：D-000@/.test(s))
+    const manualSegBefore = manualSeg(second)
     distillIntoKnowledge(changeDir, kr, 'REPLAY', null, { baselineOnly: true })
     const third = readFileSync(file, 'utf8')
-    const manualSegAfter = third.split(/^## /m).find(s => !/原编号：D-000@/.test(s))
+    const manualSegAfter = manualSeg(third)
     ok(manualSegBefore === manualSegAfter, 'baselineOnly 后人工段落逐字不变')
+    // 评审 P2 修正断言：恰一条人工决策+基线 → 单决策口径不变（人工条目吃全量交付面而非信号匹配）
+    ok(/文件：sillyhub-daemon\/src\/event-loop-watch\.ts/.test(manualSegAfter) && /文件：[\s\S]*backend\/app\/main\.py/.test(manualSegAfter),
+      '恰一条人工决策时 autofill 仍走全量交付面（基线不计入单决策判定）')
     const baselineSeg = third.split(/^## /m).find(s => /原编号：D-000@/.test(s))
     ok(baselineSeg.includes('最近确认：REPLAY'), 'baselineOnly 更新基线自身（headHash 透传）')
     ok((third.match(/^## D-/gm) || []).length === 2, 'baselineOnly 不追加新段')

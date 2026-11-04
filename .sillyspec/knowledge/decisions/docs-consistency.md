@@ -272,3 +272,12 @@ supersedes：D-003@v1
 锚点：src/decision-values.js
 最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
 理由：正典集取并集（type 8 值=status quo 蒸馏 7 类加 scope；status 7 值照旧）且 implemented 计入蒸馏入选：蒸馏 7 类集是修 feasibility 漏选事故的既定意图、scope 排除是文档明载刻意设计；知识库入选输出值本叫「状态：implemented」，输入声明 implemented 却永不入选是遗留缺陷，纳入才写读闭合。单一源 src/decision-values.js，brainstorm 提示清单改常量插值（源头不可漂移）
+
+## D-docs-consistency-016@v1 2026-11-04-archive-baseline-entry——在 src/decision-distill.js 的 distillIntoKnowledge 注入「叙事基线条目」：parseDecisions 后构造 b
+状态：implemented
+变更：2026-11-04-archive-baseline-entry
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-archive-baseline-entry/design.md
+文件：src/archive-baseline-replay.js, src/decision-distill.js, src/knowledge-match.js, test/archive-baseline-entry.test.mjs
+最近确认：8664008791f4f457425593045ccc2416ca3ff9aa
+理由：在 src/decision-distill.js 的 distillIntoKnowledge 注入「叙事基线条目」：parseDecisions 后构造 buildBaselineEntry（读 design 做法概述段、flow-state 标题、change-patch 交付面，模块匹配派生域），合格即以 D-000@v1 人工条目同构形态进 batch，走既有 入选/幂等/发号/写入 机器（零新写入路径）。存量回放经同一函数的 baselineOnly 参数只写基线不碰人工存量（src/archive-baseline-replay.js 编排扫描/门控/幂等预扫，词表参数化）。排序去重挂 src/knowledge-match.js 的 scoredHuman 比较器（同文件内原编号 D-000 者降位）。选此方案而非复活槽4 收割/归档检索通道的原因：槽4 已于 2026-11-02-slot4-harvest-retire 下线（产物全模板底稿致停车场膨胀，刚治理完）；检索通道（B）被评审与数据实测双重否决（D-002 边界治理成本/双通道维护/与蒸馏重复）。

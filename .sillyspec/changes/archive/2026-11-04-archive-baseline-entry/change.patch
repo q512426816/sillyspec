@@ -1,0 +1,527 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 1cac2ecd..60da0620 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -174,6 +174,7 @@ modules:
+       - src/mcp-server.js
+       - src/design-facts.js
+       - src/archive-delta.js
++      - src/archive-baseline-replay.js
+ 
+   worktree:
+     status: active
+diff --git a/src/archive-baseline-replay.js b/src/archive-baseline-replay.js
+new file mode 100644
+index 00000000..e14b1ec4
+--- /dev/null
++++ b/src/archive-baseline-replay.js
+@@ -0,0 +1,94 @@
++/**
++ * 存量归档叙事基线回放（2026-11-04-archive-baseline-entry）——单机制双执行点的回放侧。
++ *
++ * 机制侧（decision-distill.distillIntoKnowledge baselineOnly）在归档时为未来变更产出基线；
++ * 本模块对存量归档重放同一条代码路径（FR-04：不另立条目体系）。规约 00 纪律：信号词表
++ * 一律经 {@link opts.signals} 参数传入——本文件零内置词表常量（缺省空表 = 全量有做法概述
++ * 段的变更），调用方（各仓 .runtime 一次性脚本）自持词表。
++ *
++ * 幂等：写盘前预扫 knowledge/decisions/*.md 已有基线（原编号 D-000@ 行的 变更： 归属），
++ * 已含者跳过——中断重入零重复。
++ */
++
++import { existsSync, readdirSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { distillIntoKnowledge, parseDesignOverview } from './decision-distill.js'
++
++const BASELINE_ORIGIN_LINE = /^原编号\s*[：:]\s*D-000@/m
++const CHANGE_LINE = /^变更\s*[：:]\s*(\S+)/m
++
++/** knowledge/decisions 下已有基线的变更名集合（幂等预扫，逐文件一次读取）。 */
++function existingBaselineChanges(knowledgeRoot) {
++  const dir = join(knowledgeRoot, 'decisions')
++  const names = new Set()
++  let files = []
++  try { files = readdirSync(dir).filter(f => f.endsWith('.md')) } catch { return names }
++  for (const f of files) {
++    let content
++    try { content = readFileSync(join(dir, f), 'utf8') } catch { continue }
++    // 基线段判定：原编号 D-000@ 行 + 段内变更行（逐段扫描——同文件多变更共存常态）
++    for (const block of content.split(/^## /m).slice(1)) {
++      if (!BASELINE_ORIGIN_LINE.test(block)) continue
++      const m = block.match(CHANGE_LINE)
++      if (m) names.add(m[1])
++    }
++  }
++  return names
++}
++
++/**
++ * 纯读规划：归档集 → 回放候选/跳过归因。
++ * @param {string} archiveRoot 归档根（.sillyspec/changes/archive）
++ * @param {string} knowledgeRoot 知识根（<repo>/.sillyspec/knowledge）
++ * @param {{signals?: string[]}} [opts] signals 非空时仅概述段命中任一词者入选
++ * @returns {{planned: Array<{change: string, dir: string}>, skipped: {noOverview: number,
++ *   gated: number, already: number, badDir: number}}
++ */
++export function planBaselineReplay(archiveRoot, knowledgeRoot, opts = {}) {
++  const signals = (opts.signals || []).map(s => String(s).toLowerCase()).filter(Boolean)
++  const already = existingBaselineChanges(knowledgeRoot)
++  const planned = []
++  const skipped = { noOverview: 0, gated: 0, already: already.size, badDir: 0 }
++  let dirs = []
++  try { dirs = readdirSync(archiveRoot) } catch { return { planned, skipped } }
++  for (const name of dirs.sort()) {
++    const dir = join(archiveRoot, name)
++    let isDir = false
++    try { isDir = existsSync(join(dir, 'design.md')) } catch { /* 不可读按跳过 */ }
++    if (!isDir) { skipped.badDir++; continue }
++    if (already.has(name)) continue
++    const overview = parseDesignOverview(dir)
++    if (!overview) { skipped.noOverview++; continue }
++    if (signals.length > 0) {
++      const lower = overview.toLowerCase()
++      if (!signals.some(s => lower.includes(s))) { skipped.gated++; continue }
++    }
++    planned.push({ change: name, dir })
++  }
++  return { planned, skipped }
++}
++
++/**
++ * 执行回放：逐变更 baselineOnly 蒸馏（单变更失败留痕 continue，不阻断批次）。
++ * @param {string} archiveRoot 归档根
++ * @param {string} knowledgeRoot 知识根
++ * @param {{signals?: string[], headHashOf?: (change: string) => string}} [opts]
++ *   headHashOf 缺省恒 未记录（回放条目的「最近确认」为溯源占位，不冒充归档时 HEAD）
++ * @returns {{applied: number, failed: Array<{change: string, error: string}>,
++ *   planned: number, skipped: object}}
++ */
++export function applyBaselineReplay(archiveRoot, knowledgeRoot, opts = {}) {
++  const { planned, skipped } = planBaselineReplay(archiveRoot, knowledgeRoot, opts)
++  const applied = []
++  const failed = []
++  for (const { change, dir } of planned) {
++    try {
++      const headHash = (opts.headHashOf && opts.headHashOf(change)) || '未记录'
++      const r = distillIntoKnowledge(dir, knowledgeRoot, headHash, null, { baselineOnly: true })
++      if (r.written && r.written.length > 0) applied.push(change)
++    } catch (e) {
++      failed.push({ change, error: String((e && e.message) || e) })
++    }
++  }
++  return { applied: applied.length, appliedChanges: applied, failed, planned: planned.length, skipped }
++}
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 3ae7eaee..35b396e2 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -35,7 +35,7 @@ export function isDistillAbnormal(res) {
+  */
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+ import { modulePathMatches } from './modules.js'
+-import { basename, dirname, join } from 'node:path'
++import { basename, dirname, join, relative } from 'node:path'
+ import { KNOWLEDGE_STATUSES, KNOWLEDGE_TYPES } from './decision-values.js'
+ 
+ // 入选集=正典单一源派生（2026-10-20-decision-caliber-unify）。历史：五类集漏选 8 条
+@@ -444,6 +444,94 @@ function sameDecisionNumber(s, entry) {
+   return (s.change || null) === (entry.change || null) && (s.number === entry.number || s.originNumber === entry.number)
+ }
+ 
++// ---------------------------------------------------------------------------
++// 叙事基线条目（2026-11-04-archive-baseline-entry）——事故复盘叙事入知识面
++// ---------------------------------------------------------------------------
++
++/** design.md「做法概述」段提取（剥模板问题行与机器草稿注释，空段返回 null）。
++ *  段边界 = ##/### 节头（做法概述 起，下一节头止）；问题钉死行（「本变更怎么解决问题…」）
++ *  剥除——答案才是叙事；HTML 注释（`<!-- MACHINE-DRAFT:… -->` 草稿溯源标记等）整行剥除、
++ *  行内片段剥除（平台仓实证：归档 design 概述段首行常为草稿标记，混入即污染标题首句）。
++ *  正文折单行（oneLine 同口径，检索面词面命中吃的是字符序列非段落结构）。 */
++export function parseDesignOverview(changeDir) {
++  let content
++  try { content = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return null }
++  const body = []
++  let inside = false
++  for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
++    if (/^#{2,3}\s/.test(line)) {
++      if (inside) break
++      inside = /^#{2,3}\s*做法概述\s*$/.test(line.trim())
++      continue
++    }
++    if (inside) body.push(line.trim())
++  }
++  const text = body
++    .filter(l => l && !/^本变更怎么解决问题/.test(l) && !/^<!--.*-->$/.test(l))
++    .map(l => l.replace(/<!--.*?-->/g, '').trim())
++    .filter(Boolean)
++    .join(' ')
++  return text || null
++}
++
++/** 基线资格与构造：合格返回可直接进 distill batch 的条目对象，否则 null。
++ *  资格四门（FR-01）：做法概述段非平凡（≥50 字）；交付面（剥 .sillyspec/ 内部路径）×
++ *  模块匹配 ≥1 域（docs-only 变更无叙事锚点，跳）；decisions.md 未占用 D-000；标题可派生。
++ *  幂等键 = D-000@v1 + 变更名（与人工条目同机器：sameDecisionNumber 原编号匹配原位更新）。
++ *  锚点 = relative(仓根, changeDir)/design.md——蒸馏时点在归档前则指活跃目录，归档后
++ *  重蒸幂等更新收敛到归档路径（自愈，无需双形态）。 */
++export function buildBaselineEntry(changeDir, knowledgeRoot, parsedEntries, moduleIndex) {
++  const overview = parseDesignOverview(changeDir)
++  if (!overview || overview.length < 50) return null
++  if ((parsedEntries || []).some(e => e.number === 'D-000')) return null
++  let patchFiles = []
++  try {
++    const patchPath = join(changeDir, 'change-patch.json')
++    if (existsSync(patchPath)) {
++      const patch = JSON.parse(readFileSync(patchPath, 'utf8'))
++      patchFiles = (Array.isArray(patch.files) ? patch.files : [])
++        .map(f => String(f).replace(/\\/g, '/')).filter(f => f && !f.startsWith('.sillyspec/'))
++    }
++  } catch { /* 坏 patch 按无交付面处理 */ }
++  if (patchFiles.length === 0) return null
++  // 主域单落（不做多域扇出）：交付面逐文件模块计票取 argmax（平票取首遇）。理由：基线是
++  // 叙事补充而非域裁决——跨模块交付面扇出会让同一条基线重复占据各域文件（平台仓首放实证
++  // 227 条×均值 3 域=703 块），且长叙事灌满多文件后挤占词片回退的「≤5% 条目复现上限」，
++  // 反而把症状词查询挤出命中面。主域由多数交付文件的归属决定，语义即「这个变更主要动哪」。
++  const tally = new Map()
++  for (const f of patchFiles) {
++    for (const id of matchImpactsToModules(f, moduleIndex)) tally.set(id, (tally.get(id) || 0) + 1)
++  }
++  const primary = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
++  if (!primary) return null
++  const domains = [sanitizeDomain(primary[0])]
++  const changeName = basename(changeDir)
++  let changeTitle = ''
++  try {
++    const fs = readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8')
++    changeTitle = ((fs.match(/^title:\s*(.+)$/m) || [])[1] || '').trim().replace(/^['"]|['"]$/g, '')
++  } catch { /* 无 flow-state 落变更名 */ }
++  const firstSentence = (() => {
++    const m = overview.match(/^[^。]*。/)
++    const s = (m ? m[0] : overview.slice(0, 40)).trim()
++    return s.length > 80 ? s.slice(0, 80) : s
++  })()
++  let anchor = ''
++  try {
++    const repoRoot = dirname(dirname(knowledgeRoot))
++    anchor = relative(repoRoot, changeDir).replace(/\\/g, '/') + '/design.md'
++  } catch { /* 相对化失败按未记录 */ }
++  return {
++    id: 'D-000@v1', number: 'D-000', version: 1,
++    title: `${changeTitle || changeName}——${firstSentence}`,
++    type: 'process', status: 'implemented', selected: 'implemented',
++    answer: overview,
++    domains,
++    files: patchFiles.slice(0, 20),
++    anchor: anchor || undefined,
++  }
++}
++
+ function applyEntryToSections(sections, entry, headHash, sectionNumber, originId) {
+   const change = entry.change || null
+   const sameNumber = sections.filter(s => sameDecisionNumber(s, entry))
+@@ -590,13 +678,28 @@ export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
+  *   skipped 非空 = 无 decisions.md / 无入选条目（零输出）；needsWait 非空 = 有 rejected 条目
+  *   缺否决理由/复潮条件被拦下（该条目未写盘，其余条目照常提炼）。
+  */
+-export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null) {
++export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null, opts = {}) {
+   // 变更名限定（坑 distill-cross-change-supersede）：条目幂等键 = 号+变更。changeDir 末段
+   // 即变更名（changes/<name> 与 archive 后的 changes/archive/<name> 同为 <name>）。
+   const changeName = basename(changeDir)
+   const parsed = parseDecisions(changeDir)
++  const idx = moduleIndex || discoverModuleIndex(knowledgeRoot)
++  // 叙事基线条目（2026-11-04-archive-baseline-entry）：design 做法概述的背景叙事（事故复盘/
++  // 实证取舍）此前只活在归档与代码头注释——蒸馏源面不含该段，症状词查询结构性零命中。
++  // 合格变更机械产出恰好一条 D-000@v1 基线（资格门/字段构造见 buildBaselineEntry），与人工
++  // 条目同机器入库（幂等键 号+原编号+变更）。baselineOnly（存量回放）：只写基线、丢弃人工
++  // 条目面——同变更人工存量「最近确认」等字段零触碰。
++  const baseline = buildBaselineEntry(changeDir, knowledgeRoot, parsed.entries, idx)
++  if (opts.baselineOnly) {
++    if (!baseline) return { written: [], skipped: 'baselineOnly：变更不合格产基线（无做法概述段/无可匹配模块交付面/D-000 被占用），零输出', needsWait: null }
++    parsed.entries = [baseline]
++  } else if (baseline) {
++    parsed.entries.push(baseline)
++  }
+   if (parsed.missing) {
+-    return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
++    if (!baseline) {
++      return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
++    }
+   }
+   // 0 条告警（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②）：文件有内容、
+   // 正文含 D-xxx 形态却 0 条可解析 = 标题式/扁平列表式两种格式都不匹配——此前静默放行
+@@ -659,7 +762,11 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
+     !(e.anchor && e.anchor.trim() && e.anchor.trim() !== NOT_RECORDED)
+   )
+   if (deliverableFiles.length > 0 && noAssociation.length > 0) {
+-    if (batch.length === 1) {
++    // 单决策判定按非基线计数（评审 P2 修正，2026-11-04-archive-baseline-entry）：基线恒在批内，
++    // batch.length===1 会被恰一条人工决策+基线的变更误判成多决策——人工条目文件填充从全量
++    // 交付面降级为正文信号匹配。基线自身恒有 files，不进 noAssociation，计数只看人工条目。
++    const manualCount = batch.filter(e => e.number !== 'D-000').length
++    if (manualCount === 1) {
+       // 单决策：全部交付文件
+       noAssociation[0].files = deliverableFiles.slice(0, 20)
+       console.log(`  📎 文件字段自动填充：单决策变更 ← 交付面 ${deliverableFiles.length} 个文件`)
+@@ -681,7 +788,6 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
+ 
+   const decisionsDir = join(knowledgeRoot, 'decisions')
+   mkdirSync(decisionsDir, { recursive: true })
+-  const idx = moduleIndex || discoverModuleIndex(knowledgeRoot)
+ 
+   // 域文件 store：域 → { preamble, sections, dirty }（按需加载，批量写盘）
+   const store = new Map()
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index ab8b11c8..487b8ce2 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -66,6 +66,9 @@ const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+)
+ /** 底稿模板标题特征词（与 4A provenance 分类同源单一口径）：harvestSlot4Decision 产的
+  *  process 级流程取舍框架词——不是具体方案否决，deathPath 不应赋予（2026-11-02-series-final-cleanup）。 */
+ const TEMPLATE_TITLE_RE = /设计期风险与放弃方案|风险与死路|design\s*槽\s*4\s*收割|底稿/
++// 叙事基线条目识别（2026-11-04-archive-baseline-entry）：原编号 D-000@ 是基线保留号
++// （buildBaselineEntry 恒用 D-000@v1）——排序降位/回放幂等预扫共用此约定。
++const BASELINE_ORIGIN_RE = /^D-000@/
+ const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
+ // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
+ // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
+@@ -569,7 +572,17 @@ export function matchByRouting(indexDir, taskContext, opts = {}) {
+   // 一个 bigram 即得高比率）会压过长理由被稀释的相关条目，实测复现；宁用零分平局先验。
+   const contentChars = (s) => String(s || '').replace(/[\d\p{P}\s_]+/gu, ' ')
+   const relScore = (h) => frTitleOverlap(contentChars(taskContext), contentChars(`${h.id} ${h.title}`))
+-  const byOverlapDesc = (a, b) => (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
++  // 基线降位（2026-11-04-archive-baseline-entry，FR-03）：同文件内叙事基线（原编号 D-000@）
++  // 排在人工条目之后——基线是补充叙事（标题=变更标题+首句，bigram 天然富集，relScore 常
++  // 虚高），人工条目才是检索正主；跨文件保持既有得分序（降位仅在同文件双条目竞争时生效）。
++  const isBaselineEntry = (h) => BASELINE_ORIGIN_RE.test(h.originId || '')
++  const byOverlapDesc = (a, b) => {
++    if (a.file === b.file) {
++      const ab = isBaselineEntry(a), bb = isBaselineEntry(b)
++      if (ab !== bb) return ab ? 1 : -1
++    }
++    return (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
++  }
+   const decisionHits = [
+     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
+     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
+diff --git a/test/archive-baseline-entry.test.mjs b/test/archive-baseline-entry.test.mjs
+new file mode 100644
+index 00000000..79d595b3
+--- /dev/null
++++ b/test/archive-baseline-entry.test.mjs
+@@ -0,0 +1,216 @@
++// 2026-11-04-archive-baseline-entry——归档叙事基线条目：机制（FR-01/02）、排序去重（FR-03）、
++// 回放参数化（FR-04）、事故查询命中（FR-05）。背景：事故复盘叙事只活在归档 design 做法概述
++// 与代码头注释（2026-10-21 宿主冻结事故搜「离线/冻结」零命中实证），蒸馏源面结构性不含该段。
++
++import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { pathToFileURL, fileURLToPath } from 'node:url'
++import assert from 'node:assert/strict'
++
++const root = join(fileURLToPath(import.meta.url), '..', '..')
++const { distillIntoKnowledge, parseDesignOverview } = await import(pathToFileURL(join(root, 'src', 'decision-distill.js')).href)
++const { matchKnowledge } = await import(pathToFileURL(join(root, 'src', 'knowledge-match.js')).href)
++const { planBaselineReplay, applyBaselineReplay } = await import(pathToFileURL(join(root, 'src', 'archive-baseline-replay.js')).href)
++
++let passed = 0, failed = 0
++function ok(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++const OVERVIEW_NARRATIVE = '2026-10-21 腾讯云会话实测 daemon 宿主冻结约 5 分钟——假活回收迟至 stale 388s、日志 6 分钟零输出，事件循环整体停摆却无任何本端观测面，事后只能靠时间戳反推。'
++
++/** 造仓 fixture：.sillyspec/{knowledge, docs/demo/modules/_module-map.yaml, changes/archive/<change>} */
++function buildRepo(tag, { overview = OVERVIEW_NARRATIVE, decisionStub = '# 决策记录\n\n## D-001@v1 单写者优先 CLI\n',
++  patchFiles = ['sillyhub-daemon/src/event-loop-watch.ts', 'sillyhub-daemon/src/daemon.ts', 'backend/app/main.py', '.sillyspec/changes/x/design.md'],
++  title = 'daemon 同步加固与观测', change = '2026-10-21-daemon-sync-hardening', withManual = false } = {}) {
++  const repo = join(tmpdir(), `abe-${tag}`)
++  rmSync(repo, { recursive: true, force: true })
++  const kr = join(repo, '.sillyspec', 'knowledge')
++  mkdirSync(kr, { recursive: true })
++  mkdirSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
++  writeFileSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'), [
++    'modules:', '  daemon:', '    paths:', '      - sillyhub-daemon/src',
++    '  backend:', '    paths:', '      - backend/app', '',
++  ].join('\n'))
++  const changeDir = join(repo, '.sillyspec', 'changes', 'archive', change)
++  mkdirSync(changeDir, { recursive: true })
++  const designLines = ['# 设计记录 — demo', '', '## 做法概述', '',
++    '<!-- MACHINE-DRAFT:design-approach:4fa550e9abc -->', '',
++    '本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。', '',
++    ...(overview ? [overview, ''] : []), '## 接口契约', '', '无', '']
++  writeFileSync(join(changeDir, 'design.md'), designLines.join('\n'))
++  writeFileSync(join(changeDir, 'decisions.md'), decisionStub + (withManual
++    ? '\n## D-002@v1 人工决策示例\n- 类型：process\n- 状态：implemented\n- 模块域：daemon\n- 答案：手工书写的取舍叙事\n' : ''))
++  writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({ files: patchFiles }))
++  writeFileSync(join(changeDir, 'flow-state.yaml'), `title: ${title}\nstage: execute\n`)
++  return { repo, kr, changeDir, change }
++}
++
++// ── FR-01：合格变更产出基线（字段齐全） ──
++console.log('\n=== T1: 合格变更产出基线条目 ===')
++{
++  const { kr, changeDir, change } = buildRepo('t1')
++  try {
++    const r = distillIntoKnowledge(changeDir, kr, 'abc123def')
++    const file = join(kr, 'decisions', 'daemon.md')
++    ok(existsSync(file), '基线落 daemon 域文件（交付面×模块匹配）')
++    ok(r.written.some(w => w.file === 'decisions/daemon.md'), `written 含基线（实得 ${JSON.stringify(r.written)}）`)
++    const text = readFileSync(file, 'utf8')
++    ok(/原编号：D-000@v1/.test(text), '原编号 D-000@v1（基线保留号）')
++    ok(new RegExp(`变更：${change}`).test(text), '变更行携带变更名（幂等键）')
++    ok(text.includes('daemon 同步加固与观测——2026-10-21'), '标题=变更标题＋概述首句')
++    ok(!text.includes('MACHINE-DRAFT'), '草稿注释不污染标题/理由')
++    ok(!existsSync(join(kr, 'decisions', 'backend.md')), '主域单落：backend 域不扇出建段（daemon 2 票 vs backend 1 票）')
++    ok(/状态：implemented[\s\S]*?类型/.test(text) || /状态：implemented/.test(text), '状态 implemented（dispositionOf 不落选）')
++    ok(text.includes('锚点：.sillyspec/changes/archive/2026-10-21-daemon-sync-hardening/design.md'), '锚点指归档 design.md')
++    ok(text.includes('文件：sillyhub-daemon/src/event-loop-watch.ts'), '文件行=剥 .sillyspec 后交付面')
++    ok(!text.includes('.sillyspec/changes/x/design.md'), '文件行不含 .sillyspec 内部路径')
++    ok(/理由：[\s\S]*冻结/.test(text), '理由含冻结叙事（症状词词面命中面）')
++    // 空壳 D-001 不入选（无字段），只有基线一条
++    ok((text.match(/^## D-/gm) || []).length === 1, '仅基线一段（空壳 D-001 无字段不入选）')
++  } finally { rmSync(join(tmpdir(), 'abe-t1'), { recursive: true, force: true }) }
++}
++
++// ── FR-01b：四种不合格形态零产出 ──
++console.log('\n=== T1b: 不合格形态零产出 ===')
++{
++  const cases = [
++    ['无做法概述段', buildRepo('t1b1', { overview: null })],
++    ['概述过短(<50字)', buildRepo('t1b2', { overview: '短概述不足五十字。' })],
++    ['交付面仅 .sillyspec 路径', buildRepo('t1b3', { patchFiles: ['.sillyspec/changes/x/design.md'] })],
++    ['D-000 被人工占用', buildRepo('t1b4', { decisionStub: '# 决策记录\n\n## D-000@v1 人工占号\n- 类型：process\n- 状态：implemented\n- 答案：占号\n' })],
++  ]
++  try {
++    for (const [label, { kr, changeDir }] of cases) {
++      const r = distillIntoKnowledge(changeDir, kr, 'abc')
++      if (label === 'D-000 被人工占用') {
++        // 人工 D-000 自身照常蒸馏（基线让位不压制人工条目；无模块域落 unmapped 属既有语义）
++        const total = (r.written || []).length
++        ok(total === 1, `人工 D-000 正常入库恰一段（${label}）：written=${total}`)
++        const target = join(kr, 'decisions', `${(r.written[0].file || '').replace('decisions/', '').replace('.md', '')}.md`)
++        const segs = (readFileSync(target, 'utf8').match(/^## D-/gm) || []).length
++        ok(segs === 1, `基线让位不叠加（${label}）：文件内恰一段（实得 ${segs}）`)
++      } else {
++        ok(!existsSync(join(kr, 'decisions')), `零产出（${label}）：不建 decisions 目录`)
++        ok((r.written || []).length === 0, `零产出（${label}）：written 空`)
++      }
++    }
++  } finally {
++    for (const t of ['t1b1', 't1b2', 't1b3', 't1b4']) rmSync(join(tmpdir(), `abe-${t}`), { recursive: true, force: true })
++  }
++}
++
++// ── FR-02：幂等重蒸 / baselineOnly 不触碰人工存量 ──
++console.log('\n=== T2: 幂等与 baselineOnly 隔离 ===')
++{
++  const { kr, changeDir } = buildRepo('t2', { withManual: true })
++  try {
++    distillIntoKnowledge(changeDir, kr, 'hash1')
++    const file = join(kr, 'decisions', 'daemon.md')
++    const first = readFileSync(file, 'utf8')
++    const segCount = (first.match(/^## D-/gm) || []).length
++    ok(segCount === 2, `基线+人工恰两段（实得 ${segCount}）`)
++
++    const r2 = distillIntoKnowledge(changeDir, kr, 'hash1')
++    const second = readFileSync(file, 'utf8')
++    ok((second.match(/^## D-/gm) || []).length === 2, '重复蒸馏零重复段')
++    ok(r2.written.every(w => w.action !== 'append'), `第二次全为原位更新（实得 ${JSON.stringify(r2.written.map(w => w.action))}）`)
++
++    // baselineOnly 重放：人工段落逐字不变（含「最近确认」）；段选取排除 preamble（split 首段
++    // 是文件头非条目段——首版 find 取到 preamble 致断言恒真，评审变异探针同病根）
++    const manualSeg = (t) => t.split(/^## /m).filter(s => /^D-/.test(s)).find(s => !/原编号：D-000@/.test(s))
++    const manualSegBefore = manualSeg(second)
++    distillIntoKnowledge(changeDir, kr, 'REPLAY', null, { baselineOnly: true })
++    const third = readFileSync(file, 'utf8')
++    const manualSegAfter = manualSeg(third)
++    ok(manualSegBefore === manualSegAfter, 'baselineOnly 后人工段落逐字不变')
++    // 评审 P2 修正断言：恰一条人工决策+基线 → 单决策口径不变（人工条目吃全量交付面而非信号匹配）
++    ok(/文件：sillyhub-daemon\/src\/event-loop-watch\.ts/.test(manualSegAfter) && /文件：[\s\S]*backend\/app\/main\.py/.test(manualSegAfter),
++      '恰一条人工决策时 autofill 仍走全量交付面（基线不计入单决策判定）')
++    const baselineSeg = third.split(/^## /m).find(s => /原编号：D-000@/.test(s))
++    ok(baselineSeg.includes('最近确认：REPLAY'), 'baselineOnly 更新基线自身（headHash 透传）')
++    ok((third.match(/^## D-/gm) || []).length === 2, 'baselineOnly 不追加新段')
++  } finally { rmSync(join(tmpdir(), 'abe-t2'), { recursive: true, force: true }) }
++}
++
++// ── FR-03：同文件基线排在人工条目后 ──
++console.log('\n=== T3: 排序降位 ===')
++{
++  const { kr, changeDir } = buildRepo('t3', { withManual: true })
++  try {
++    distillIntoKnowledge(changeDir, kr, 'h')
++    const r = matchKnowledge(kr, 'daemon 冻结观测')
++    ok(r.matched === true, '路由命中（daemon 关键词）')
++    const hits = r.decisionHits || []
++    ok(hits.length >= 2, `decisionHits 含基线+人工（实得 ${hits.length}）`)
++    const bi = hits.findIndex(h => /^D-000@/.test(h.originId || ''))
++    const mi = hits.findIndex(h => !/^D-000@/.test(h.originId || '') && h.originId)
++    ok(bi >= 0 && mi >= 0, `两类条目都在（基线 idx=${bi} 人工 idx=${mi}）`)
++    ok(mi < bi, '人工条目序位先于基线（同文件降位）')
++  } finally { rmSync(join(tmpdir(), 'abe-t3'), { recursive: true, force: true }) }
++}
++
++// ── FR-04：回放词表参数化 + 幂等跳过 ──
++console.log('\n=== T4: 回放规划与执行 ===')
++{
++  const repo = join(tmpdir(), 'abe-t4')
++  rmSync(repo, { recursive: true, force: true })
++  const kr = join(repo, '.sillyspec', 'knowledge')
++  mkdirSync(kr, { recursive: true })
++  mkdirSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
++  writeFileSync(join(repo, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'), 'modules:\n  daemon:\n    paths:\n      - sillyhub-daemon/src\n')
++  const arc = join(repo, '.sillyspec', 'changes', 'archive')
++  const mk = (name, overview) => {
++    const d = join(arc, name)
++    mkdirSync(d, { recursive: true })
++    writeFileSync(join(d, 'design.md'), `# D\n\n## 做法概述\n\n本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。\n\n${overview}\n\n## 接口契约\n\n无\n`)
++    writeFileSync(join(d, 'decisions.md'), '# 决策记录\n')
++    writeFileSync(join(d, 'change-patch.json'), JSON.stringify({ files: ['sillyhub-daemon/src/a.ts'] }))
++    writeFileSync(join(d, 'flow-state.yaml'), `title: ${name}\n`)
++  }
++  mk('2026-10-01-en-outage', 'Production outage postmortem: event loop froze for five minutes on the cloud host, recovered only after stale eviction.')
++  mk('2026-10-02-cn-freeze', '腾讯云实测宿主冻结五分钟，假活回收迟至 stale 388s，事后只能靠时间戳反推。')
++  mk('2026-10-03-routine', '')
++  try {
++    const p1 = planBaselineReplay(arc, kr, { signals: ['outage'] })
++    ok(p1.planned.length === 1 && p1.planned[0].change === '2026-10-01-en-outage', `英文词表命中英文叙事（planned=${p1.planned.map(x => x.change).join(',')}）`)
++    ok(p1.skipped.gated === 1, `中文叙事被词表正确排除（gated=${p1.skipped.gated}）`)
++
++    const p2 = planBaselineReplay(arc, kr, {})
++    ok(p2.planned.length === 2, `空词表=全量有概述段者（planned=${p2.planned.length}）`)
++
++    const r1 = applyBaselineReplay(arc, kr, { signals: ['outage'] })
++    ok(r1.applied === 1, `回放写入 1 条（applied=${r1.applied}）`)
++    const daemonFile = readFileSync(join(kr, 'decisions', 'daemon.md'), 'utf8')
++    ok(daemonFile.includes('outage postmortem'), '英文叙事基线落库')
++
++    const p3 = planBaselineReplay(arc, kr, { signals: ['outage'] })
++    ok(p3.planned.length === 0 && p3.skipped.already === 1, `已含基线幂等跳过（already=${p3.skipped.already}）`)
++
++    // 机制源码无内置词表（规约 00：词表只经参数）
++    const src = readFileSync(join(root, 'src', 'archive-baseline-replay.js'), 'utf8')
++    ok(!/signals\s*(?::|=)\s*\[[^\]]/.test(src), '机制代码零内置词表常量')
++  } finally { rmSync(repo, { recursive: true, force: true }) }
++}
++
++// ── FR-05：事故查询经词片回退命中基线（反馈原场景） ──
++console.log('\n=== T5: 查询「冻结」命中基线 ===')
++{
++  const { kr, changeDir } = buildRepo('t5')
++  try {
++    distillIntoKnowledge(changeDir, kr, 'h')
++    // INDEX 路由关键词不含「冻结」→ 路由零命中 → 词片回退：冻结 bigram ×2（标题+理由）
++    const idx = join(kr, 'INDEX.md')
++    const idxText = readFileSync(idx, 'utf8').replace(/\|[^|]*→/g, '|daemon-sync-hw →')
++    writeFileSync(idx, idxText) // 路由行关键词剥净症状词，逼走词片回退
++    const r = matchKnowledge(kr, '冻结')
++    ok(r.matched === true, `「冻结」经词片回退命中（matched=${r.matched}）`)
++    ok((r.entries || []).some(e => String(e.file).replace(/\\/g, '/') === 'decisions/daemon.md'),
++      `命中文件=基线所在 daemon.md（entries=${JSON.stringify((r.entries || []).map(e => e.file))}）`)
++  } finally { rmSync(join(tmpdir(), 'abe-t5'), { recursive: true, force: true }) }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)

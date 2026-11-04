@@ -448,9 +448,11 @@ function sameDecisionNumber(s, entry) {
 // 叙事基线条目（2026-11-04-archive-baseline-entry）——事故复盘叙事入知识面
 // ---------------------------------------------------------------------------
 
-/** design.md「做法概述」段提取（剥模板问题行，空段返回 null）。
+/** design.md「做法概述」段提取（剥模板问题行与机器草稿注释，空段返回 null）。
  *  段边界 = ##/### 节头（做法概述 起，下一节头止）；问题钉死行（「本变更怎么解决问题…」）
- *  剥除——答案才是叙事。正文折单行（oneLine 同口径，检索面词面命中吃的是字符序列非段落结构）。 */
+ *  剥除——答案才是叙事；HTML 注释（`<!-- MACHINE-DRAFT:… -->` 草稿溯源标记等）整行剥除、
+ *  行内片段剥除（平台仓实证：归档 design 概述段首行常为草稿标记，混入即污染标题首句）。
+ *  正文折单行（oneLine 同口径，检索面词面命中吃的是字符序列非段落结构）。 */
 export function parseDesignOverview(changeDir) {
   let content
   try { content = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return null }
@@ -464,7 +466,11 @@ export function parseDesignOverview(changeDir) {
     }
     if (inside) body.push(line.trim())
   }
-  const text = body.filter(l => l && !/^本变更怎么解决问题/.test(l)).join(' ')
+  const text = body
+    .filter(l => l && !/^本变更怎么解决问题/.test(l) && !/^<!--.*-->$/.test(l))
+    .map(l => l.replace(/<!--.*?-->/g, '').trim())
+    .filter(Boolean)
+    .join(' ')
   return text || null
 }
 
@@ -488,8 +494,17 @@ export function buildBaselineEntry(changeDir, knowledgeRoot, parsedEntries, modu
     }
   } catch { /* 坏 patch 按无交付面处理 */ }
   if (patchFiles.length === 0) return null
-  const domains = [...new Set(matchImpactsToModules(patchFiles.join(' '), moduleIndex))].map(sanitizeDomain)
-  if (domains.length === 0) return null
+  // 主域单落（不做多域扇出）：交付面逐文件模块计票取 argmax（平票取首遇）。理由：基线是
+  // 叙事补充而非域裁决——跨模块交付面扇出会让同一条基线重复占据各域文件（平台仓首放实证
+  // 227 条×均值 3 域=703 块），且长叙事灌满多文件后挤占词片回退的「≤5% 条目复现上限」，
+  // 反而把症状词查询挤出命中面。主域由多数交付文件的归属决定，语义即「这个变更主要动哪」。
+  const tally = new Map()
+  for (const f of patchFiles) {
+    for (const id of matchImpactsToModules(f, moduleIndex)) tally.set(id, (tally.get(id) || 0) + 1)
+  }
+  const primary = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (!primary) return null
+  const domains = [sanitizeDomain(primary[0])]
   const changeName = basename(changeDir)
   let changeTitle = ''
   try {
@@ -747,7 +762,11 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     !(e.anchor && e.anchor.trim() && e.anchor.trim() !== NOT_RECORDED)
   )
   if (deliverableFiles.length > 0 && noAssociation.length > 0) {
-    if (batch.length === 1) {
+    // 单决策判定按非基线计数（评审 P2 修正，2026-11-04-archive-baseline-entry）：基线恒在批内，
+    // batch.length===1 会被恰一条人工决策+基线的变更误判成多决策——人工条目文件填充从全量
+    // 交付面降级为正文信号匹配。基线自身恒有 files，不进 noAssociation，计数只看人工条目。
+    const manualCount = batch.filter(e => e.number !== 'D-000').length
+    if (manualCount === 1) {
       // 单决策：全部交付文件
       noAssociation[0].files = deliverableFiles.slice(0, 20)
       console.log(`  📎 文件字段自动填充：单决策变更 ← 交付面 ${deliverableFiles.length} 个文件`)

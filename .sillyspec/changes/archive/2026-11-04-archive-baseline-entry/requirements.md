@@ -8,13 +8,13 @@ created_at: 2026-11-04T00:08:40.461Z
 
 ### FR-01: 归档蒸馏为合格变更机械产出恰好一条叙事基线决策条目
 
-- 必须：distillIntoKnowledge 对满足以下全部条件的变更产出一条 D-000@v1 基线条目（type=process、状态=implemented、字段齐全不被 dispositionOf 落选）：design.md 含非平凡「做法概述」段（剥模板问题行后 ≥50 字）；change-patch.json 交付面（剥 `.sillyspec/` 内部路径）能匹配至少一个模块域；变更 decisions.md 未占用 D-000 号。条目字段：标题=变更标题（flow-state.yaml title，缺省变更名）＋做法概述首句；理由=做法概述整段（保留症状词词面命中）；文件=剥 `.sillyspec/` 后的交付面（cap 20）；锚点=该变更 design.md 的仓相对路径；域=交付面×模块匹配（非 unmapped）。
+- 必须：distillIntoKnowledge 对满足以下全部条件的变更产出一条 D-000@v1 基线条目（type=process、状态=implemented、字段齐全不被 dispositionOf 落选）：design.md 含非平凡「做法概述」段（剥模板问题行与机器草稿 HTML 注释后 ≥50 字）；change-patch.json 交付面（剥 `.sillyspec/` 内部路径）能匹配至少一个模块域；变更 decisions.md 未占用 D-000 号。条目字段：标题=变更标题（flow-state.yaml title，缺省变更名）＋做法概述首句（注释不污染）；理由=做法概述整段（保留症状词词面命中）；文件=剥 `.sillyspec/` 后的交付面（cap 20）；锚点=该变更 design.md 的仓相对路径；域=交付面逐文件模块计票的主域（argmax，非 unmapped、不扇出多域）。
 
 #### 场景：主路径（事故叙事保全）
 
-- Given 变更含做法概述段（腾讯云宿主冻结 5 分钟叙事）、空壳 decisions.md、交付面含 daemon 模块文件
+- Given 变更含做法概述段（首行为 `<!-- MACHINE-DRAFT:… -->` 草稿标记 + 腾讯云宿主冻结 5 分钟叙事）、空壳 decisions.md、交付面多数文件属 daemon 模块（个别属 backend）
 - When 归档蒸馏
-- Then decisions/<daemon 域>.md 新增基线条目：标题含变更标题与首句、理由含冻结叙事、原编号 D-000@v1、锚点指归档 design.md
+- Then decisions/<daemon 域>.md 新增恰一段基线条目：标题含变更标题与首句（无注释残留）、理由含冻结叙事、原编号 D-000@v1、锚点指归档 design.md；backend 域文件不被扇出建段
 
 #### 场景：不合格形态零产出
 

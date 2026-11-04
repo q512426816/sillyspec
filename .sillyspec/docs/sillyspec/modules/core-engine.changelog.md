@@ -110,3 +110,4 @@
 | 2026-11-02 | 2026-11-02-quicklog-inject-retire | quicklog 检索注入面下线 |
 | 2026-11-02 | 2026-11-02-series-final-cleanup | 全系列终审修复：底稿资格门+存量红+决策补录 |
 | 2026-11-02 | 2026-11-02-slot4-harvest-retire | 槽4 底稿收割源头下线 |
+| 2026-11-04 | 2026-11-04-archive-baseline-entry | 归档叙事基线条目机制与存量回放 |
