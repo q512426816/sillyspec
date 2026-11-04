@@ -1,0 +1,44 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  提问分型与子代理豁免两处提示词修正
+
+  头脑风暴提问规则一刀切（多选题优于开放式问题）会锚定用户意图表达，与 superpowers 7.0.2 盲测结论相悖（意图类给选项会诱导用户）；AGENTS.md
+  缺子代理豁免条款，被派发子代理可能自作主张跑流程命令（superpowers #2536 同型实证）。
+
+
+  成功标准：
+
+  - brainstorm.js 提问规则分型：意图/动机类开放式不附选项，决策类具名选项+必带推荐，原一刀切措辞移除
+
+  - 仓库 AGENTS.md 与 templates/agents-instruction.md 同步含子代理豁免条款（子代理不跑流程命令，状态归主会话）
+
+  - 既有测试面全绿
+autopilot: true
+prestage_ack: false
+baseline_commit: c5bebd40f695586aeac3e159a436420612b11666
+updatedAt: '2026-11-04T07:03:03.448Z'
+baseline_sha256: abbbeb69c5c832d4b18d6706d2b6253dfe259a6e4b3e124f9bd006d6c9e86789
+spec_approved: true
+spec_approved_at: '2026-11-04T06:58:20.862Z'
+spec_approved_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js18)（8.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261104070221\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 7 个
+

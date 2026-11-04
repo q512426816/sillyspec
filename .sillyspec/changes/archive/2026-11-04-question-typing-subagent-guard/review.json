@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-question-typing-subagent-guard",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "eee2f97f69f775103193108f30eb32529c9511bf",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "分型限定词依赖 agent 自判「可命名取舍」，无机械判据",
+      "evidence": "规则为提示词文本，意图类/决策类的归类由执行 agent 判断；superpowers 同形态（规则+Red Flags）亦无机械判据，靠盲测校准措辞。可接受：行为面有新增测试锁文本不回退，行为漂移由 eval 体系覆盖（后续 B′ 定向回放道）。",
+      "location": "src/stages/brainstorm.js:114"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a（纯静态提示词文本，无时序面）",
+    "并发": "ok（AGENTS.md 双份在同一提交 eee2f97f 内同步，无漂移窗口；staged 面核对只含本变更 4 文件，未夹带并行会话条目）",
+    "切换": "ok（文本常驻无状态，会话中断重读即恢复）",
+    "作用域": "ok（模板随 init 传播仅影响新 init 仓，存量仓不受影响；本仓 AGENTS.md 即时生效）"
+  },
+  "reviewedAt": "2026-11-04T07:05:30.000Z"
+}

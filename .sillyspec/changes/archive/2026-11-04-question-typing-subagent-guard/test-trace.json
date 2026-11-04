@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-question-typing-subagent-guard",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-prompt-discipline.test.mjs「提问分型规则文本断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-question-typing-subagent-guard"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-prompt-discipline.test.mjs「子代理豁免条款双文件同步断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-question-typing-subagent-guard"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-03",
+      "tests": [
+        "test/brainstorm-prompt-discipline.test.mjs「新增面自证」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-question-typing-subagent-guard"
+    }
+  ]
+}

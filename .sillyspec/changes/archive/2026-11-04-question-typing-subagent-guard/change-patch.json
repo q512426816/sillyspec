@@ -1,0 +1,93 @@
+{
+  "change": "2026-11-04-question-typing-subagent-guard",
+  "baseline": "c5bebd40f695586aeac3e159a436420612b11666",
+  "head": "eee2f97f69f775103193108f30eb32529c9511bf",
+  "files": [
+    "AGENTS.md",
+    "src/stages/brainstorm.js",
+    "templates/agents-instruction.md",
+    "test/brainstorm-prompt-discipline.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 56,
+    "deletions": 1
+  },
+  "savedAt": "2026-11-04T07:02:25.665Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c5bebd40f695586aeac3e159a436420612b11666",
+    "totals": {
+      "files": 4,
+      "additions": 56,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "AGENTS.md",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/brainstorm-prompt-discipline.test.mjs",
+        "additions": 49,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "eee220b0ca713a318237fb929b15a761886a4e9f4092c9990292b236dc6a792d",
+  "patchStatus": "ok"
+}

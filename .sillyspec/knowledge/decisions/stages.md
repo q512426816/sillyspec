@@ -219,3 +219,12 @@ supersedes：D-001@v1 的「落点 validateCrossTaskContracts 预检」条目；
 锚点：src/stages/brainstorm.js
 最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
 理由：最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。
+
+## D-stages-009@v1 2026-11-04-question-typing-subagent-guard——两处一行级文本修正。
+状态：implemented
+变更：2026-11-04-question-typing-subagent-guard
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-question-typing-subagent-guard/design.md
+文件：AGENTS.md, src/stages/brainstorm.js, templates/agents-instruction.md, test/brainstorm-prompt-discipline.test.mjs
+最近确认：eee2f97f69f775103193108f30eb32529c9511bf
+理由：两处一行级文本修正。①src/stages/brainstorm.js B 节第 7 条「多选题优于开放式问题」一刀切通则改写为「意图问开放、决策给选项」分型规则——依据：superpowers 7.0.2 盲测实证（Ctrl+K 冲突场景裸问 which one 8/8 → 具名选项+推荐 8/8；意图类给选项会锚定用户，superpowers brainstorming SKILL.md Red Flags「Options steer」），保留原条目尾句（被问「你觉得呢」给具体方案标「我的判断」）。②templates/agents-instruction.md（init 复制源）与仓库根 AGENTS.md 在「项目说明」节后插入「子代理豁免」节——依据：superpowers using-superpowers SKILL.md SUBAGENT-STOP 标记与其 RELEASE-NOTES #2536 实证（子代理拿到主会话引导后先加载技能不干活）；本仓 grep 证实 AGENTS.md/flow prompt 均无子代理豁免行。两份文件同步改、同一提交交付，避免窗口期漂移。

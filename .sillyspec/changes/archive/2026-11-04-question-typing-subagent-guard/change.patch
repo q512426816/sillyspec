@@ -1,0 +1,96 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 4bba92d8..921cdad4 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -4,6 +4,9 @@
+ ## 项目说明
+ 本项目使用 **SillySpec** 管理变更，采用文档驱动开发。SillySpec 是给 Agent 调用的 CLI 流程控制器：你通过 CLI 告诉它"我在哪"，它告诉你"下一步做什么"；你执行步骤，它校验产出、推进状态，人类只在关键决策点介入审批。要考虑多 agent 同时操作代码，代码随时可能变化。所有变更以稳定、可用、可维护为目标，按生产级标准处理。
+ 
++## 子代理豁免
++被派发/派生的子代理（subagent）不执行本流程：不运行 sillyspec 流程命令（立项/批准/收口/归档/推送等），只完成派单任务并回传结果——变更状态所有权归派单的主会话。子代理发现流程前提不满足时在回传中报告，由主会话处理。
++
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 6a1f0fce..4f10b02a 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -111,7 +111,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准
+ 5. **先挖为什么**：不只问「要什么」，要问出「为什么现在做、不做会怎样」（动机是后续替你补全没提的那一百个决定的依据）；到本步出口仍说不清动机 → 不许进入「提出 2-3 种方案」，先把动机问出来
+ 6. **实现方式的选择权归谁**：技术栈/平台/语言/库/存储介质这类「怎么做」的选择，问清哪些是用户有强意见要谈的、哪些是交给你选的；你选的按决策记录规则落盘并把 answer 标注「我的判断」（不是用户同意过的）
+-7. 多选题优于开放式问题；被问「你觉得呢/先猜一个」时给一个具体方案并标「我的判断」，不要空转追问
++7. 提问分型（意图问开放、决策给选项）：意图/动机类问题（用户想要什么、为什么、成功什么样）必须开放式提出，不附任何示例选项——用户自己的措辞携带选项装不下的意图，给选项会锚定用户；存在可命名取舍的决策类问题才给具名选项，每个选项附一句代价，必带推荐与理由，禁止裸问「选哪个」。被问「你觉得呢/先猜一个」时给一个具体方案并标「我的判断」，不要空转追问
+ 8. YAGNI — 砍掉不需要的功能
+ 
+ ### B2. 分块回放（Playback——边理解边复述，与追问交替）
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 2f47d233..ad9b8d25 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -3,6 +3,9 @@
+ ## 项目说明
+ 本项目使用 **SillySpec** 管理变更，采用文档驱动开发。SillySpec 是给 Agent 调用的 CLI 流程控制器：你通过 CLI 告诉它"我在哪"，它告诉你"下一步做什么"；你执行步骤，它校验产出、推进状态，人类只在关键决策点介入审批。要考虑多 agent 同时操作代码，代码随时可能变化。所有变更以稳定、可用、可维护为目标，按生产级标准处理。
+ 
++## 子代理豁免
++被派发/派生的子代理（subagent）不执行本流程：不运行 sillyspec 流程命令（立项/批准/收口/归档/推送等），只完成派单任务并回传结果——变更状态所有权归派单的主会话。子代理发现流程前提不满足时在回传中报告，由主会话处理。
++
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+diff --git a/test/brainstorm-prompt-discipline.test.mjs b/test/brainstorm-prompt-discipline.test.mjs
+new file mode 100644
+index 00000000..13628d70
+--- /dev/null
++++ b/test/brainstorm-prompt-discipline.test.mjs
+@@ -0,0 +1,49 @@
++/**
++ * 提问分型与子代理豁免条款（2026-11-04-question-typing-subagent-guard）
++ *
++ * ①头脑风暴提问规则不得保留「多选题优于开放式问题」一刀切通则——意图/动机类
++ *   问题必须开放式且不附选项（选项会锚定用户自己的措辞，superpowers 7.0.2 盲测
++ *   实证：意图类给选项诱导用户，决策类具名选项+推荐把「裸问 which one」8/8 收敛）；
++ * ②子代理豁免条款必须在模板源与仓库 AGENTS.md 双份一致（子代理不跑流程命令，
++ *   状态归主会话——superpowers #2536 同型实证）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++
++/** 截取 `## 标题` 节全文（到下一个 `\n## ` 为止），无该节返回 null。 */
++function extractSection(text, heading) {
++  const start = text.indexOf(heading)
++  if (start === -1) return null
++  const end = text.indexOf('\n## ', start + heading.length)
++  return text.slice(start, end === -1 ? text.length : end)
++}
++
++test('提问分型规则文本断言：一刀切通则移除，意图开放式/决策具名+推荐就位', () => {
++  const src = readFileSync(join(ROOT, '..', 'src', 'stages', 'brainstorm.js'), 'utf8')
++  assert.equal(
++    src.includes('多选题优于开放式问题'),
++    false,
++    '「多选题优于开放式问题」一刀切通则必须移除（意图类给选项会锚定用户）'
++  )
++  assert.match(src, /意图\/动机类问题[^`]*?必须开放式提出[^`]*?不附任何示例选项/, '意图/动机类：开放式且不附示例选项')
++  assert.match(src, /决策类问题[^`]*?具名选项[^`]*?必带推荐/, '决策类：具名选项+必带推荐')
++  assert.match(src, /禁止裸问「选哪个」/, '决策类禁止裸问「选哪个」')
++  assert.match(src, /被问「你觉得呢\/先猜一个」时给一个具体方案并标「我的判断」/, '原尾句保留：被问你觉得呢给具体方案标我的判断')
++})
++
++test('子代理豁免条款双文件同步断言', () => {
++  const tpl = readFileSync(join(ROOT, '..', 'templates', 'agents-instruction.md'), 'utf8')
++  const repoAgents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')
++  const tplSection = extractSection(tpl, '## 子代理豁免')
++  const repoSection = extractSection(repoAgents, '## 子代理豁免')
++  assert.ok(tplSection, '模板源必须含「## 子代理豁免」节')
++  assert.ok(repoSection, '仓库 AGENTS.md 必须含「## 子代理豁免」节')
++  assert.equal(tplSection, repoSection, '两份豁免节文本必须逐字一致（防双份漂移）')
++  assert.match(tplSection, /禁止运行[^`]*?sillyspec 流程命令|不运行[^`]*?流程命令/, '豁免语义：子代理不跑流程命令')
++  assert.match(tplSection, /主会话/, '状态所有权归主会话')
++})

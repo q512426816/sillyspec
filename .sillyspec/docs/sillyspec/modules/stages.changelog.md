@@ -76,3 +76,4 @@
 | 2026-11-02 | 2026-11-02-knowledge-engine-tail | 检索引擎遗留收尾：向量融合与图卫生 |
 | 2026-11-02 | 2026-11-02-quicklog-inject-retire | quicklog 检索注入面下线 |
 | 2026-11-03 | 2026-11-04-knowledge-search-positional | knowledge search 支持位置参数形态 |
+| 2026-11-04 | 2026-11-04-question-typing-subagent-guard | 提问分型与子代理豁免两处提示词修正 |

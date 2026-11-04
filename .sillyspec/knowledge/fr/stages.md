@@ -202,3 +202,60 @@ created_at: 2026-09-20T15:18:10.810Z
   confirmed_at: null
   source_change: 2026-10-09-explore-arsenal-map
   status: active
+
+## FR-stages-018 brainstorm.js 提问规则分型：意图/动机类开放式不附选项，决策类具名选项+必带推荐，原一刀切措辞移除
+变更：2026-11-04-question-typing-subagent-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-question-typing-subagent-guard/requirements.md#FR-01
+最近确认：eee2f97f69f775103193108f30eb32529c9511bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-01
+  tests: test/brainstorm-prompt-discipline.test.mjs「提问分型规则文本断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-question-typing-subagent-guard
+  status: active
+
+## FR-stages-019 仓库 AGENTS.md 与 templates/agents-instruction.md 同步含子代理豁免条款（子代理不跑流程命令，状态归主会话）
+变更：2026-11-04-question-typing-subagent-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-question-typing-subagent-guard/requirements.md#FR-02
+最近确认：eee2f97f69f775103193108f30eb32529c9511bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-02
+  tests: test/brainstorm-prompt-discipline.test.mjs「子代理豁免条款双文件同步断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-question-typing-subagent-guard
+  status: active
+
+## FR-stages-020 既有测试面全绿
+变更：2026-11-04-question-typing-subagent-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-question-typing-subagent-guard/requirements.md#FR-03
+最近确认：eee2f97f69f775103193108f30eb32529c9511bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-question-typing-subagent-guard:flow:测试绑定FR-03
+  tests: test/brainstorm-prompt-discipline.test.mjs「新增面自证」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-question-typing-subagent-guard
+  status: active
