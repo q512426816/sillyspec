@@ -4518,6 +4518,14 @@ SillySpec platform — SillyHub 平台同步
               console.error(`⚠️ 全树同步检测到冲突（${(r.serverVersions && Object.keys(r.serverVersions).length) || 0} 个文件待裁决），处理：sillyspec platform status 查看 / platform resolve <变更名> 处置`);
               process.exit(1);
             }
+            // ok:false 失败可见（2026-11-04-sync-fail-silent-fix FR-01）：拉清单超时/POST 422、
+            // 5xx 等失败此前照打成功横幅退出 0——生产实证缓存漂移+慢链路+422 连坐叠加时用户
+            // 只见「0 个文件差异」，228 条知识漏推全程不可见。失败原因链已由 spec-sync 内部
+            // warn 输出，此处补结果语义与退出码。
+            if (r && r.ok === false) {
+              console.error('❌ 全树 spec 同步失败（原因见上方 warn；文件树本次未同步，下次自动重试）');
+              process.exit(1);
+            }
             console.log(`✅ 全树 spec 同步完成（${r ? r.synced : 0} 个文件差异）`);
           }
           break;

@@ -45,6 +45,13 @@ function toPosix(p) {
   return p.replace(/\\/g, '/');
 }
 
+// 全量清单拉取超时（2026-11-04-sync-fail-silent-fix FR-02）：全量清单是唯一稳定大响应
+// （生产实测 2.7MB；~1Mbps 入口链路需 ~25s），10s 硬编码使首拉/对账轮/倒退对账在慢链路
+// 恒熔断——缓存漂移后无收敛通道（228 条知识漏推事故的叠加因之二）。对齐 bundle 端点
+// 大超时档（sync.js PULL_BUNDLE_TIMEOUT_MS 同思路：大响应体独立口径）；增量（带 since）
+// 小响应维持 10s 噪音闸门不变。
+const MANIFEST_FULL_TIMEOUT_MS = 120_000;
+
 function debugLog(msg) {
   if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg);
 }
@@ -755,7 +762,8 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
   try {
     const res = await fetch(cacheUsable ? `${manifestUrl}?since=${manifestCache.spec_version}` : manifestUrl, {
       headers: { Authorization: `Bearer ${platform.token}` },
-      signal: withSignal(10000),
+      // 超时分档（FR-02）：增量（带 since）小响应 10s；全量大响应 120s（慢链路全量对账可达）
+      signal: withSignal(cacheUsable ? 10000 : MANIFEST_FULL_TIMEOUT_MS),
     });
     if (!res.ok) {
       // ql-20260818-008：debugLog → console.warn。树同步失败原本完全静默（要
@@ -787,7 +795,7 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
       debugLog(`[spec-sync] spec_version 倒退（${manifestCache.spec_version} → ${body.spec_version}，服务端重建？）——回退全量清单对账`);
       const full = await fetch(manifestUrl, {
         headers: { Authorization: `Bearer ${platform.token}` },
-        signal: withSignal(10000),
+        signal: withSignal(MANIFEST_FULL_TIMEOUT_MS), // 倒退对账=全量大响应（FR-02 同档）
       });
       if (!full.ok) {
         const failCount = bumpFailStreak(specRoot, logLabel, `倒退对账全量 HTTP ${full.status}`);
