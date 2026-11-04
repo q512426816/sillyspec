@@ -221,3 +221,60 @@ created_at: 2026-10-20T01:19:37.412Z
 - 场景：不适用留痕 — Given AGENTS.md 规则「纯配置/文档不写测试」；When spec 填写；Then 测试绑定记「不适用：理由」
 全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-06
 最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+## FR-auto-sillyspec-045 新增测试保证 templates/ 与 .claude/skills/ 无开发物料文件（CREATION-LOG/压力场景/测试脚本类命名）
+变更：2026-11-04-shipped-hygiene-prompt-golden
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-shipped-hygiene-prompt-golden/requirements.md#FR-01
+最近确认：06006e608647b6358658904dc77d4fc2d1b032e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-01
+  tests: test/shipped-hygiene.test.mjs「交付面无开发物料（含负例夹具）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-shipped-hygiene-prompt-golden
+  status: active
+
+## FR-auto-sillyspec-046 新增测试对 10 个 stage definition 的步骤提示词序列做 sha256 金档比对，意外漂移红、显式再生成通道留痕
+变更：2026-11-04-shipped-hygiene-prompt-golden
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-shipped-hygiene-prompt-golden/requirements.md#FR-02
+最近确认：06006e608647b6358658904dc77d4fc2d1b032e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-02
+  tests: test/prompt-golden.test.mjs「stage 提示词金档哈希比对（含篡改负例与再生成通道）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-shipped-hygiene-prompt-golden
+  status: active
+
+## FR-auto-sillyspec-047 新增测试全绿，既有回归面零破坏
+变更：2026-11-04-shipped-hygiene-prompt-golden
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-04-shipped-hygiene-prompt-golden/requirements.md#FR-03
+最近确认：06006e608647b6358658904dc77d4fc2d1b032e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-03
+  tests: test/prompt-golden.test.mjs | test/shipped-hygiene.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-shipped-hygiene-prompt-golden
+  status: active

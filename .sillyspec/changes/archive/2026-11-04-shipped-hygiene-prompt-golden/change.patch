@@ -1,0 +1,207 @@
+diff --git a/test/prompt-golden.json b/test/prompt-golden.json
+new file mode 100644
+index 00000000..a751b32c
+--- /dev/null
++++ b/test/prompt-golden.json
+@@ -0,0 +1,52 @@
++{
++  "brainstorm.js": {
++    "hash": "692120ccf4c344e1cdbac3d6e18f7556035226c5c2f5a7748ac99adbfbbf9864",
++    "steps": 8,
++    "bytes": 62396
++  },
++  "plan.js": {
++    "hash": "e37f9b783d63859589e564d2ad9893d5cc4747e833ff159882c28d3f663d20ad",
++    "steps": 0,
++    "bytes": 26
++  },
++  "execute.js": {
++    "hash": "dff59fbaa14548897aab3815e6bbe7d40db807d0c79afc417934a8d9c62b99a2",
++    "steps": 0,
++    "bytes": 29
++  },
++  "verify.js": {
++    "hash": "842caa71e971ca74cd293dcfbc4ba49d14ea68f7c5ed82dfe0ab30d231efa7c1",
++    "steps": 7,
++    "bytes": 19959
++  },
++  "archive.js": {
++    "hash": "4d0f1d63b461db1ef4c6634336b8bd377aa77caa36e6875776ce92208c20b75a",
++    "steps": 3,
++    "bytes": 5996
++  },
++  "explore.js": {
++    "hash": "70da064450524327821524442bb0dd8cb83e3495668ad0cf5b0bbeae31b37b21",
++    "steps": 1,
++    "bytes": 3069
++  },
++  "quick.js": {
++    "hash": "73cc6500fcbd34b191be3f984f592f5aacd3c86aae6b1b13109d9aa67126e6f5",
++    "steps": 3,
++    "bytes": 16299
++  },
++  "scan.js": {
++    "hash": "4bf1d0ce689b6778db6bbc0b145cba53d06a40741b30f365e8d501df602dd7f1",
++    "steps": 11,
++    "bytes": 23475
++  },
++  "status.js": {
++    "hash": "65d6674e62e2620da85fa95f3e822d9ffb8f6f75d2ad27b4f107fbff9f4ef727",
++    "steps": 3,
++    "bytes": 1287
++  },
++  "doctor.js": {
++    "hash": "7bdf212adc06e6bfaef65f40826ae122eb681653531add5f083217be878fe672",
++    "steps": 3,
++    "bytes": 2591
++  }
++}
+diff --git a/test/prompt-golden.test.mjs b/test/prompt-golden.test.mjs
+new file mode 100644
+index 00000000..03fa11ec
+--- /dev/null
++++ b/test/prompt-golden.test.mjs
+@@ -0,0 +1,76 @@
++/**
++ * prompt-golden.test.mjs — stage 提示词金档哈希锁（2026-11-04-shipped-hygiene-prompt-golden）
++ *
++ * 动机：src/stages/* 的巨型内嵌提示词频繁返工（各文件日期注释实证），意外漂移（误改、
++ * 合并踩踏、剪切粘贴事故）此前零防护。本测试对每阶段 definition 的步骤（name+prompt）
++ * 序列做 sha256，与仓内基线比对——有意修改提示词后用
++ *   SILLYSPEC_REGEN_PROMPT_GOLDEN=1 node --test test/prompt-golden.test.mjs
++ * 显式再生成（漂移经 git diff 在评审可见）；无 env 时基线只读。
++ *
++ * 哈希输入只含仓内常量（已核实 10 个阶段模块无 process.env 装载期插值）——跨机稳定。
++ * bytes 字段仅体积可观测，不入判定。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, writeFileSync, existsSync } from 'node:fs'
++import { createHash } from 'node:crypto'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const BASELINE_PATH = join(ROOT, 'test', 'prompt-golden.json')
++
++const STAGE_FILES = [
++  'brainstorm.js', 'plan.js', 'execute.js', 'verify.js', 'archive.js',
++  'explore.js', 'quick.js', 'scan.js', 'status.js', 'doctor.js',
++]
++
++async function loadDefinitions() {
++  const out = {}
++  for (const f of STAGE_FILES) {
++    const mod = await import(`../src/stages/${f}`)
++    assert.ok(mod.definition, `src/stages/${f} 缺 definition 导出——金档清单需同步维护`)
++    out[f] = mod.definition
++  }
++  return out
++}
++
++function fingerprint(def) {
++  const steps = (def.steps || []).map((s) => ({ name: s.name || '', prompt: s.prompt || '' }))
++  const payload = JSON.stringify({ name: def.name, steps })
++  return {
++    hash: createHash('sha256').update(payload, 'utf8').digest('hex'),
++    steps: steps.length,
++    bytes: Buffer.byteLength(payload, 'utf8'),
++  }
++}
++
++test('stage 提示词金档哈希比对（意外漂移红，有意修改走再生成通道）', async () => {
++  const defs = await loadDefinitions()
++  const current = {}
++  for (const f of STAGE_FILES) current[f] = fingerprint(defs[f])
++
++  if (process.env.SILLYSPEC_REGEN_PROMPT_GOLDEN === '1') {
++    writeFileSync(BASELINE_PATH, JSON.stringify(current, null, 2) + '\n', 'utf8')
++    console.log('📸 金档已再生成：test/prompt-golden.json（请随本次提示词改动同一提交入库，让漂移在 diff 可见）')
++    return
++  }
++
++  assert.ok(existsSync(BASELINE_PATH), '缺 test/prompt-golden.json 基线——运行 SILLYSPEC_REGEN_PROMPT_GOLDEN=1 node --test test/prompt-golden.test.mjs 生成')
++  const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
++
++  const drifted = []
++  for (const f of STAGE_FILES) {
++    const base = baseline[f]
++    assert.ok(base && base.hash, `基线缺阶段 ${f}——运行 SILLYSPEC_REGEN_PROMPT_GOLDEN=1 node --test test/prompt-golden.test.mjs 再生成`)
++    if (base.hash !== current[f].hash) {
++      drifted.push(`${f}（基线 ${base.hash.slice(0, 8)} → 现值 ${current[f].hash.slice(0, 8)}，${base.steps}→${current[f].steps} 步）`)
++    }
++  }
++  assert.deepEqual(
++    drifted,
++    [],
++    `stage 提示词与金档基线不一致（意外漂移？合并踩踏？）：\n${drifted.join('\n')}\n` +
++    '确属有意修改：SILLYSPEC_REGEN_PROMPT_GOLDEN=1 node --test test/prompt-golden.test.mjs 再生成基线并随同一提交入库'
++  )
++})
+diff --git a/test/shipped-hygiene.test.mjs b/test/shipped-hygiene.test.mjs
+new file mode 100644
+index 00000000..ec10907c
+--- /dev/null
++++ b/test/shipped-hygiene.test.mjs
+@@ -0,0 +1,61 @@
++/**
++ * shipped-hygiene.test.mjs — 交付面无开发物料（2026-11-04-shipped-hygiene-prompt-golden）
++ *
++ * 依据：superpowers #2277——压力测试场景（"This is a real scenario. You must choose and
++ * act" 开头）装在技能目录里，会被工作态 agent grep 到并当活指令执行。templates/ 与
++ * .claude/skills/ 是随 init 复制给用户仓的交付面，必须只含交付物料；本测试是
++ * asset-audit-2026-09-20 手动审计的自动化接替。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readdirSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { join, dirname, relative } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++/** 开发物料命名黑名单（文件名级）：开发日志/测试脚本/压力场景。 */
++const DEV_MATERIAL_RE = /(^|\/)(CREATION-LOG[^/]*|[^/]*\.test\.[cm]?js|test-[^/]*\.mjs|[^/]*pressure[^/]*)$/
++
++function listFilesRecursively(dir) {
++  const out = []
++  if (!existsSync(dir)) return out
++  for (const entry of readdirSync(dir, { withFileTypes: true })) {
++    const full = join(dir, entry.name)
++    if (entry.isDirectory()) out.push(...listFilesRecursively(full))
++    else out.push(full)
++  }
++  return out
++}
++
++test('交付面无开发物料：templates/ 与 .claude/skills/ 文件名黑名单扫描', () => {
++  const hits = []
++  for (const base of ['templates', join('.claude', 'skills')]) {
++    for (const f of listFilesRecursively(join(ROOT, base))) {
++      const rel = relative(ROOT, f).split('\\').join('/')
++      if (DEV_MATERIAL_RE.test(rel)) hits.push(rel)
++    }
++  }
++  assert.deepEqual(hits, [], `交付面出现开发物料（会随 init 进用户仓并被工作态 agent 当活指令）：\n${hits.join('\n')}`)
++})
++
++test('负例自证：夹具开发物料能被判红（临时目录自建自清）', () => {
++  const tmp = join(ROOT, 'test', '.hygiene-fixture-tmp')
++  try {
++    mkdirSync(join(tmp, 'skills', 'some-skill'), { recursive: true })
++    mkdirSync(join(tmp, 'prompts'), { recursive: true })
++    writeFileSync(join(tmp, 'skills', 'some-skill', 'CREATION-LOG.md'), 'x\n')
++    writeFileSync(join(tmp, 'skills', 'some-skill', 'foo-pressure-scenario.md'), 'x\n')
++    writeFileSync(join(tmp, 'skills', 'some-skill', 'SKILL.md'), 'x\n')
++    writeFileSync(join(tmp, 'prompts', 'testcase-design.md'), 'x\n')
++    const files = listFilesRecursively(tmp)
++    const flagged = files.filter((f) => DEV_MATERIAL_RE.test(relative(tmp, f).split('\\').join('/')))
++    assert.deepEqual(
++      flagged.map((f) => relative(tmp, f).split('\\').join('/')).sort(),
++      ['skills/some-skill/CREATION-LOG.md', 'skills/some-skill/foo-pressure-scenario.md'],
++      '必须恰好判红两件开发物料；testcase-design.md（交付提示词）不得误伤'
++    )
++  } finally {
++    rmSync(tmp, { recursive: true, force: true })
++  }
++})

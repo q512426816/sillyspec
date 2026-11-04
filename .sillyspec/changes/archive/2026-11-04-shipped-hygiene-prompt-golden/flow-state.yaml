@@ -1,0 +1,44 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  交付面卫生与提示词金档哈希锁
+
+  templates 与 .claude skills 无开发物料防入护栏（agent 会 grep 技能目录，压力测试场景会被当活指令执行——superpowers #2277 实证）；stage
+  提示词频繁返工却无防意外漂移面（哈希锁封闭面零语义，顺带产出体积可观测）。
+
+
+  成功标准：
+
+  - 新增测试保证 templates/ 与 .claude/skills/ 无开发物料文件（CREATION-LOG/压力场景/测试脚本类命名）
+
+  - 新增测试对 10 个 stage definition 的步骤提示词序列做 sha256 金档比对，意外漂移红、显式再生成通道留痕
+
+  - 新增测试全绿，既有回归面零破坏
+autopilot: true
+prestage_ack: true
+baseline_commit: 3789251acc567c72596dbbd21d75bcf0d185cc31
+updatedAt: '2026-11-04T07:27:06.247Z'
+baseline_sha256: 252851ec67ba0da485a5bd044d9378a09169125c3a74f96010dbe1f4b1cf0068
+spec_approved: true
+spec_approved_at: '2026-11-04T07:25:12.632Z'
+spec_approved_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-superpowers-improvements@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js2)（0.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261104072703\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+

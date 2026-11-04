@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-shipped-hygiene-prompt-golden",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-01",
+      "tests": [
+        "test/shipped-hygiene.test.mjs「交付面无开发物料（含负例夹具）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-shipped-hygiene-prompt-golden"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-02",
+      "tests": [
+        "test/prompt-golden.test.mjs「stage 提示词金档哈希比对（含篡改负例与再生成通道）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-shipped-hygiene-prompt-golden"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-shipped-hygiene-prompt-golden:flow:测试绑定FR-03",
+      "tests": [
+        "test/prompt-golden.test.mjs",
+        "test/shipped-hygiene.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-shipped-hygiene-prompt-golden"
+    }
+  ]
+}
