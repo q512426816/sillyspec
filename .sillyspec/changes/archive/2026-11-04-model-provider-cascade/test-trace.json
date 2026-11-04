@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-model-provider-cascade",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-model-provider-cascade:flow:测试绑定FR-01",
+      "tests": [
+        "test/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx「暂存选供应商自动带上次模型/无记忆取第一个/记忆越界回退第一个」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-model-provider-cascade"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-model-provider-cascade:flow:测试绑定FR-02",
+      "tests": [
+        "test/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx「具体供应商下模型下拉不含默认选项；快照模型空时显示自动解析值」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-model-provider-cascade"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-model-provider-cascade:flow:测试绑定FR-03",
+      "tests": [
+        "test/frontend/src/lib/__tests__/model-memory.test.ts「remember/get 读写、坏 JSON 容错、缺键 null」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-model-provider-cascade"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-model-provider-cascade:flow:测试绑定FR-04",
+      "tests": [
+        "test/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx「provider NULL 点模型成对暂存 engineDefaultProvider；已有供应商暂存时不覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-model-provider-cascade"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-04-model-provider-cascade:flow:测试绑定FR-05",
+      "tests": [
+        "test/frontend/src/components/daemon/session-panel/__tests__/page.test.tsx「发送失败 notify.error 即时可见（横幅照旧）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-model-provider-cascade"
+    }
+  ]
+}

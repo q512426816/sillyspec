@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-model-provider-cascade",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "63d3ff266d8f7974e916f8b12b47705cce6019d0",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-05 测试绑定路径错位：requirements/design 登记的测试文件路径与实际不符",
+      "evidence": "requirements.md 测试绑定 FR-05 与 design.md 文件变更清单均写 frontend/src/components/daemon/session-panel/__tests__/page.test.tsx；实际 FR-05 用例「inject 失败 → notify.error 即时弹出后端 message；占位轮回退照旧」落在 frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx（新增于 HEAD）。session-panel/__tests__/ 目录下无 page.test.tsx、grep notify 无 toast 断言。测试本体有效且绿，属治理工件登记路径错误，建议归档前修正 requirements.md/design.md 的路径。",
+      "location": "sillyspec/.sillyspec/changes/2026-11-04-model-provider-cascade/requirements.md（测试绑定 FR-05 行）、design.md（文件变更清单末行）；实际 frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx:1594"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-02 场景二「仅显示不暂存、载荷零变化」缺负向断言（零回归主张无直接测试锚）",
+      "evidence": "FR-02 快照空显示回退用例经 renderBar（不记录 patches）仅正向断言 select.value === \"m2\"，未断言「无 onStagedSwitch 上抛/无 inject 载荷变化」。结构性安全成立：autoModelForDisplay 仅进 currentModel 显示值，组件对该路径无任何写暂存/发请求代码路径；但「载荷零变化」主张在测试面无负向锚点（renderBarControlled 可低成本补 patches 数组为空断言）。",
+      "location": "frontend/src/components/sessions/__tests__/session-config-bar.test.tsx（FR-02 快照模型空 + 记忆命中用例）；frontend/src/components/sessions/session-config-bar.tsx autoModelForDisplay/currentModel"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "盲维 d 属实：provisional 模式「显式不指定」暂存可被模型点选 pairing 覆写为引擎默认供应商",
+      "evidence": "预会话先显式选「不指定」（onProvisionalSwitch(\"llm_provider_id\", \"\") → preProviderId=\"\"）→ llmProviderId prop 为 null → 模型下拉因显示层回退引擎默认供应商仍渲染 → 此时点模型，判支 `!llmProviderId && engineDefaultProvider` 不区分「显式空串暂存」与「未选 null」，onProvisionalSwitch 把 preProviderId 由 \"\" 覆写为 engineDefault.id，首句 createSession 从「不带 provider」变为「显式带引擎默认」。后果良性等价（引擎默认链注入同一家供应商/模型），且旧代码同场景为 model+\"\" 422 死路；FR-04 需求未对此场景 carve out，实现与 FR 字面一致。裁决：可接受，建议后续变更在判定中排除显式空串暂存（需把 preProviderId \"\" 与 null 的语义传入组件）。",
+      "location": "frontend/src/components/sessions/session-config-bar.tsx provisional 分支（model 点选：effectiveProviderId/pairing 判支）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "零候选供应商的暂存空串显示退化：旧「默认」项退役后空串无对应 option",
+      "evidence": "FR-01「无候选空串跟随」在暂存模式写 staged.model=\"\"，currentModel=\"\" 时 modelOptions 兜底条件 `currentModel && ...` 为假、候选为空 → select 渲染为无 option 空下拉（旧实现有 value=\"\" 的「默认」项可显示）。载荷跟随语义保留（model=\"\" 随供应商成对上送、面板归一），仅显示层退化；「供应商零模型」属罕见数据态。可接受。",
+      "location": "frontend/src/components/sessions/session-config-bar.tsx modelOptions（兜底条件）与暂存分支 onStagedSwitch model value=auto（供应商无候选时为空串）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "盲维 b 收口：旧暂存 sessionStorage {model} 无 provider 在 provider NULL 会话仍可 422，companion 兜底只兜住会话供应商非空场景",
+      "evidence": "readStagedConfigFromStorage 恢复的存量暂存 {model}（旧版本代码写入）发送时经 buildStagedInjectOptions 既有 companion 回退取 session?.llm_provider_id ?? \"\"：会话供应商非空则成对可发（兜底成立）；会话供应商 NULL 则落 \"\" 仍 422。非本变更回归（builder 未改，属既有行为）；FR-05 toast 使该失败即时可见，用户重点一次模型/供应商即成对修复；存量面窄（sessionStorage per-tab，部署后随标签页自然消亡）。可接受。",
+      "location": "frontend/src/components/daemon/session-panel/session-panel-page.tsx buildStagedInjectOptions（未改）+ readStagedConfigFromStorage"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "复跑口径差异：指示的 -t \"model-provider-cascade\" 对 page.test.tsx 匹配 0 条",
+      "evidence": "新用例标题「inject 失败 → notify.error 即时弹出后端 message；占位轮回退照旧」不含 \"model-provider-cascade\" 串，按指示过滤器执行结果 54 全 skipped（0 执行）。改用唯一标题子串 \"notify.error 即时弹出后端\" 执行得 1 绿。口径说明与用例命名不一致，非代码缺陷。",
+      "location": "frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx:1594（用例命名）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-03 显式选模型用例触发 React act(...) 告警（噪声，不失败）",
+      "evidence": "vitest 运行输出：FR-03 用例中 SessionConfigBar 内部状态更新未包裹 act(...)（localStorage 同步写 + react-query 更新），测试绿但输出有告警噪声。不影响判绿，属测试卫生项。",
+      "location": "frontend/src/components/sessions/__tests__/session-config-bar.test.tsx（FR-03 显式选模型写记忆用例）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——同一事件内多条 onStagedSwitch（model 级联 + provider 主 patch + provider NULL 成对补暂存）经 panel-page handleStagedSwitch 函数式 setState（prev 展开）逐一组合生效，三写字段互不相交故顺序无关；model 点选 pairing 读 staged?.llm_provider_id 为当前渲染 prop，不受同事件内先发 model patch 影响，判定正确。",
+    "并发": "ok——stagedConfig 单一 useState 所有权未变；localStorage 同 key 跨标签 last-write-wins 已在 design 声明且为启发式缓存语义（越界回退无正确性影响）；单线程事件内同步级联无并发写。",
+    "切换": "ok——记忆按 providerId 键控跨会话/跨切换天然隔离；新写入 localStorage（sh:last-model:）与暂存恢复 sessionStorage（sh:config-staged:）键族互不感知，组合兼容；供应商删除后孤儿 key 经 resolveAutoModelForProvider candidates.includes 校验回退，防护声明核实成立（model-memory 双函数 try/catch、remember 双参空串守卫、getLastModel 空串/坏 JSON/非字符串值 null 均有测试锚）。",
+    "作用域": "ok——纯前端浏览器本地，不入库不上报不随同步面扩散；同浏览器多会话共享记忆为 design 声明的预期语义；executeSwitch 即时分支（盲维 c）remember 位于 injectSession await 之前的裁决：可接受——记忆语义是「用户上次显式选择」（启发式偏好非生效事实），发送失败时用户意图已发生，且读取侧候选校验兜住越界，同请求 companion 已成对带供应商使 422 面极小。"
+  },
+  "reviewedAt": "2026-11-04T10:43:57+08:00"
+}

@@ -1,0 +1,737 @@
+diff --git a/frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx b/frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx
+index 36b3b7080..778796b17 100644
+--- a/frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx
++++ b/frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx
+@@ -1587,6 +1587,43 @@ describe("发送附件即时回显（ql-20260821-002）", () => {
+     // 草稿随 onSendSettled strip 比对清空（置换版 ≠ 原文的口径回归）。
+     await waitFor(() => expect(ta.value).toBe(""));
+   });
++
++  // 2026-11-04-model-provider-cascade FR-05：inject 失败（如 model_requires_provider
++  // 422）即时 toast 弹出后端 message——横幅在时间线顶部易无感，生产会话 edf0c569
++  // 三连 422 用户全程无感实证。占位轮回退/横幅既有行为不回退。
++  it("inject 失败 → notify.error 即时弹出后端 message；占位轮回退照旧", async () => {
++    renderPage();
++    await selectDefaultSession();
++    await waitFor(() =>
++      expect(
++        screen.getByPlaceholderText(/继续追问|消息将排队/),
++      ).toBeTruthy(),
++    );
++    const rejectErr = new ApiError(
++      422,
++      {
++        code: "HTTP_422_DAEMON_SESSION_CONFIG_INVALID",
++        message: "模型依赖供应商：选择模型时必须同时指定供应商。",
++        request_id: "req-test-1",
++        details: { reason: "model_requires_provider", model: "deepseek-v4.1-flash" },
++      },
++    );
++    mocks.injectSession.mockRejectedValueOnce(rejectErr);
++    const ta = screen.getByPlaceholderText(
++      /继续追问|消息将排队/,
++    ) as HTMLTextAreaElement;
++    fireEvent.change(ta, { target: { value: "继续一下" } });
++    fireEvent.click(screen.getByTitle("发送"));
++    await waitFor(() => expect(mocks.injectSession).toHaveBeenCalled());
++    await waitFor(() => expect(mocks.notifyError).toHaveBeenCalled());
++    // toast message 携带后端原文（errMessage 提取链）
++    const call = mocks.notifyError.mock.calls.at(-1) as unknown[];
++    expect(String((call[0] as { message?: string })?.message ?? call[0])).toContain(
++      "模型依赖供应商",
++    );
++    // 占位轮回退 + 原文回填可重试（FR-02 既有口径零变化）
++    await waitFor(() => expect(ta.value).toBe("继续一下"));
++  });
+ });
+ 
+ // ── task-08（2026-08-21-session-reopen-resume / FR-09 / DS-5）：reconnecting 恢复超时 + 409 中文化 ──
+diff --git a/frontend/src/components/daemon/session-panel/session-panel-dialog.tsx b/frontend/src/components/daemon/session-panel/session-panel-dialog.tsx
+index 7a4f9d2d1..ebb9e5cd8 100644
+--- a/frontend/src/components/daemon/session-panel/session-panel-dialog.tsx
++++ b/frontend/src/components/daemon/session-panel/session-panel-dialog.tsx
+@@ -1360,6 +1360,8 @@ export function SessionPanelDialog(props: SessionPanelProps) {
+           turns: prev.turns.filter((t) => t.runId !== placeholderId),
+           errorMsg: errMessage(apiErr, "追问失败"),
+         }));
++        // 2026-11-04-model-provider-cascade FR-05：失败即时 toast（errorMsg 照旧）。
++        notify.error(apiErr, "追问失败");
+         throw err; // D-003：向上抛 → 调用方按路径处理（见函数头注释）
+       } finally {
+         if (inflightSendRef.current?.placeholderId === placeholderId) {
+@@ -1429,6 +1431,8 @@ export function SessionPanelDialog(props: SessionPanelProps) {
+           ...prev,
+           errorMsg: errMessage(apiErr, "发送失败"),
+         }));
++        // 2026-11-04-model-provider-cascade FR-05：失败即时 toast（errorMsg 照旧）。
++        notify.error(apiErr, "发送失败");
+         // 2026-10-23-session-dialog-input-align / FR-02：受理即清后失败（满员 409 /
+         // 离线 / 网络）→ 原文回填可原地重试（缺省回落置换版 prompt，旧调用兼容）。
+         restoreRejectedSend(rawPrompt ?? prompt);
+diff --git a/frontend/src/components/daemon/session-panel/session-panel-page.tsx b/frontend/src/components/daemon/session-panel/session-panel-page.tsx
+index 6a79c609d..43d683a49 100644
+--- a/frontend/src/components/daemon/session-panel/session-panel-page.tsx
++++ b/frontend/src/components/daemon/session-panel/session-panel-page.tsx
+@@ -4154,6 +4154,10 @@ export function SessionPanelPage({
+             turns: prev.turns.filter((t) => t.runId !== placeholderId),
+           }));
+           setErrorMsg(errMessage(apiErr, "发送失败"));
++          // 2026-11-04-model-provider-cascade FR-05：横幅在时间线顶部（轮块流
++          // 滚动区外）易无感——toast 即时弹出后端错误信息（如
++          // model_requires_provider 422 中文文案）；横幅/回退/草稿保留零变化。
++          notify.error(apiErr, "发送失败");
+           // FR-02：受理即清后失败 → 原文回填可重试（输入框已有新内容则不覆盖）。
+           restoreRejectedSend(rawPrompt);
+         }
+@@ -4241,6 +4245,8 @@ export function SessionPanelPage({
+       } catch (err) {
+         const apiErr = err as ApiError;
+         setErrorMsg(errMessage(apiErr, "发送失败"));
++        // 2026-11-04-model-provider-cascade FR-05：失败即时 toast（横幅照旧）。
++        notify.error(apiErr, "发送失败");
+         // FR-02：受理即清后失败（满员 409 / 离线 / 网络错误）→ 原文回填可重试。
+         restoreRejectedSend(rawPrompt);
+       }
+@@ -4885,6 +4891,8 @@ export function SessionPanelPage({
+           turns: prev.turns.filter((t) => t.runId !== placeholderId),
+         }));
+         setErrorMsg(errMessage(apiErr, "重新发送失败"));
++        // 2026-11-04-model-provider-cascade FR-05：失败即时 toast（横幅照旧）。
++        notify.error(apiErr, "重新发送失败");
+       }
+     },
+     // qc 为 useQueryClient 稳定实例，补入 deps 消除 exhaustive-deps 告警（行为不变）。
+diff --git a/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx b/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx
+index 66a75161b..657a298d7 100644
+--- a/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx
++++ b/frontend/src/components/sessions/__tests__/session-config-bar.test.tsx
+@@ -266,6 +266,9 @@ beforeEach(() => {
+   mocks.apiFetch.mockReset().mockResolvedValue([]);
+   mocks.messageSuccess.mockReset();
+   mocks.messageError.mockReset();
++  // 2026-11-04-model-provider-cascade：模型记忆是持久 localStorage——用例间
++  // 清零防串扰（记忆命中/回退断言依赖干净初态）。
++  window.localStorage.clear();
+ });
+ 
+ afterEach(() => {
+@@ -392,11 +395,12 @@ describe("SessionConfigBar 切换供应商", () => {
+     // 不发请求（不产生空切换轮）、不弹 toast（D-001 静默）
+     expect(mocks.injectSession).not.toHaveBeenCalled();
+     expect(mocks.messageSuccess).not.toHaveBeenCalled();
+-    // 级联：切供应商同时重置模型暂存（""=跟随供应商配置，对齐 provisional 先例）
++    // 2026-11-04-model-provider-cascade FR-01：级联自动选中模型——无记忆取候选
++    // 第一个（GLM 平台候选 [glm-4.7]），与供应商成对进入暂存（旧「重置默认」退役）。
+     expect(patches[0]).toEqual({
+       field: "model",
+-      value: SWITCH_MODEL_DEFAULT_VALUE,
+-      label: "默认",
++      value: "glm-4.7",
++      label: "glm-4.7",
+       cancel: undefined,
+     });
+     expect(patches[1]).toEqual({
+@@ -472,7 +476,8 @@ describe("SessionConfigBar 切换供应商", () => {
+     await waitFor(() =>
+       expect(mocks.injectSession).toHaveBeenCalledWith("sess-1", "", {
+         llm_provider_id: "prov-shared",
+-        model: "",
++        // 2026-11-04-model-provider-cascade FR-01：级联自动选中（无记忆 → 候选第一个）
++        model: "glm-4.7",
+       }),
+     );
+   });
+@@ -484,10 +489,11 @@ describe("SessionConfigBar 切换供应商", () => {
+     fireEvent.click(await screen.findByRole("button", { name: "选择 GLM 平台" }));
+ 
+     await waitFor(() => expect(mocks.injectSession).toHaveBeenCalledTimes(1));
+-    // ql-20260817-010：静默切换——prompt 空串；task-10：切供应商同请求级联重置 model=""。
++    // ql-20260817-010：静默切换——prompt 空串；2026-11-04-model-provider-cascade
++    // FR-01：切供应商同请求级联自动选中模型（无记忆 → 候选第一个）。
+     expect(mocks.injectSession).toHaveBeenCalledWith("sess-1", "", {
+       llm_provider_id: "prov-glm",
+-      model: "",
++      model: "glm-4.7",
+     });
+     await waitFor(() =>
+       expect(mocks.messageSuccess).toHaveBeenCalledWith(
+@@ -891,19 +897,18 @@ describe("SessionConfigBar 供应商+模型级联（task-10）", () => {
+     agent_kinds: ["claude"],
+   };
+ 
+-  it("选中供应商 → 模型子下拉出现，候选 = 三来源去重保序 + 首项「默认」", async () => {
++  it("选中供应商 → 模型子下拉出现，候选 = 三来源去重保序（无「默认」项）；快照空显示自动解析值", async () => {
+     mocks.listProviders.mockResolvedValue([GLM_PROVIDER] as never);
+     renderBar({ llmProviderId: "prov-glm" });
+     const select = (await screen.findByRole("combobox", {
+       name: "配置-模型",
+     })) as HTMLSelectElement;
+     const values = Array.from(select.options).map((o) => o.value);
+-    // 首项固定「默认（跟随供应商配置）」value=""；随后 model → default_fallback
+-    // → role_mappings 按序去重（glm-4.7 重复只留一次；空串/缺键已过滤）。
+-    expect(values).toEqual(["", "glm-4.7", "glm-4.6", "glm-4.5-air"]);  // D-001：主模型置顶后全部条目
+-    expect(select.options[0]?.textContent).toBe("默认（跟随供应商配置）");
+-    // 快照无 model → 当前值即「默认」首项
+-    expect(select.value).toBe("");
++    // 2026-11-04-model-provider-cascade FR-02：具体供应商下不再有「默认」项；
++    // model → default_fallback → role_mappings 按序去重（glm-4.7 重复只留一次）。
++    expect(values).toEqual(["glm-4.7", "glm-4.6", "glm-4.5-air"]);
++    // 快照无 model → 显示自动解析值（无记忆 → 候选第一个 glm-4.7）
++    expect(select.value).toBe("glm-4.7");
+   });
+ 
+   it("暂存模式选模型 → onStagedSwitch 上抛 model（不 inject），控件显示暂存模型", async () => {
+@@ -933,14 +938,14 @@ describe("SessionConfigBar 供应商+模型级联（task-10）", () => {
+     expect(
+       screen.queryByRole("combobox", { name: "配置-模型" }),
+     ).not.toBeInTheDocument();
+-    // 暂存供应商 → 模型下拉立即出现，候选 = GLM 三模型
++    // 暂存供应商 → 模型下拉立即出现，候选 = GLM 三模型（级联自动选中 glm-4.7）
+     openCtrl("配置-供应商");
+     fireEvent.click(await screen.findByRole("button", { name: "选择 GLM 平台" }));
+     const select = (await screen.findByRole("combobox", {
+       name: "配置-模型",
+     })) as HTMLSelectElement;
+     const values = Array.from(select.options).map((o) => o.value);
+-    expect(values).toEqual(["", "glm-4.7", "glm-4.6", "glm-4.5-air"]);
++    expect(values).toEqual(["glm-4.7", "glm-4.6", "glm-4.5-air"]);
+     // 选回「不指定（本机默认）」= 真值(null) → cancel 暂存 → 模型下拉回退隐藏
+     openCtrl("配置-供应商");
+     fireEvent.click(
+@@ -1025,9 +1030,9 @@ describe("SessionConfigBar 供应商+模型级联（task-10）", () => {
+     const select = (await screen.findByRole("combobox", {
+       name: "配置-模型",
+     })) as HTMLSelectElement;
+-    // 候选照常三来源去重保序（首项「默认」）
++    // 候选照常三来源去重保序（2026-11-04 FR-02：无「默认」项）
+     const values = Array.from(select.options).map((o) => o.value);
+-    expect(values).toEqual(["", "glm-4.7", "glm-4.6", "glm-4.5-air"]);  // D-001：主模型置顶后全部条目
++    expect(values).toEqual(["glm-4.7", "glm-4.6", "glm-4.5-air"]);  // D-001：主模型置顶后全部条目
+     cleanup();
+     // cursor 锁定：供应商+模型整块锁定，子下拉同锁不渲染（白名单外负例承接）
+     mocks.listProviders.mockResolvedValue([GLM_PROVIDER] as never);
+@@ -1069,11 +1074,124 @@ describe("SessionConfigBar 供应商+模型级联（task-10）", () => {
+     expect(onProvisionalModelSwitch).toHaveBeenCalledWith("glm-4.6");
+     expect(onProvisionalSwitch).not.toHaveBeenCalled();
+     expect(select.value).toBe("glm-4.6");
++  });
++
++  // ── 4.6 2026-11-04-model-provider-cascade：模型自动选中/记忆/成对暂存 ─────
++
++  describe("SessionConfigBar 模型自动选中与记忆（model-provider-cascade）", () => {
++    const P = (over: Record<string, unknown> = {}) => ({
++      id: "prov-p",
++      name: "P 平台",
++      models: [
++        { name: "m1", roles: ["sonnet"] },
++        { name: "m2", roles: [] },
++      ],
++      agent_kinds: ["claude"],
++      ...over,
++    });
++
++    it("FR-01 记忆命中：暂存选供应商自动带上次显式选过的模型（成对 patches）", async () => {
++      mocks.listProviders.mockResolvedValue([P()] as never);
++      window.localStorage.setItem("sh:last-model:prov-p", JSON.stringify("m2"));
++      const { patches } = renderBarControlled({ llmProviderId: null });
++      openCtrl("配置-供应商");
++      fireEvent.click(await screen.findByRole("button", { name: "选择 P 平台" }));
++      expect(patches[0]).toEqual({
++        field: "model",
++        value: "m2",
++        label: "m2",
++        cancel: undefined,
++      });
++      expect(patches[1]).toEqual({
++        field: "llm_provider_id",
++        value: "prov-p",
++        label: "P 平台",
++        cancel: undefined,
++      });
++    });
++
++    it("FR-01 无记忆取候选第一个；记忆越界回退第一个且不污染本地记忆", async () => {
++      mocks.listProviders.mockResolvedValue([P()] as never);
++      window.localStorage.setItem("sh:last-model:prov-p", JSON.stringify("m3-gone"));
++      const { patches } = renderBarControlled({ llmProviderId: null });
++      openCtrl("配置-供应商");
++      fireEvent.click(await screen.findByRole("button", { name: "选择 P 平台" }));
++      expect((patches[0] as { value: string }).value).toBe("m1");
++      // 自动解析不写记忆——越界值原样保留
++      expect(window.localStorage.getItem("sh:last-model:prov-p")).toBe(
++        JSON.stringify("m3-gone"),
++      );
++    });
++
++    it("FR-03 显式选模型写记忆（会话供应商在场）", async () => {
++      mocks.listProviders.mockResolvedValue([P()] as never);
++      renderBar({ llmProviderId: "prov-p" });
++      const select = (await screen.findByRole("combobox", {
++        name: "配置-模型",
++      })) as HTMLSelectElement;
++      fireEvent.change(select, { target: { value: "m2" } });
++      expect(window.localStorage.getItem("sh:last-model:prov-p")).toBe(
++        JSON.stringify("m2"),
++      );
++    });
++
++    it("FR-04 provider NULL 点模型成对补暂存引擎默认供应商（422 缺口根治）", async () => {
++      mocks.listProviders.mockResolvedValue([
++        { ...P(), id: "prov-d", name: "D 平台", is_default: true },
++      ] as never);
++      const { patches } = renderBarControlled({ llmProviderId: null });
++      // 显示层回退：引擎默认供应商在场 → 模型下拉初始可见（2026-10-28 行为）
++      const select = (await screen.findByRole("combobox", {
++        name: "配置-模型",
++      })) as HTMLSelectElement;
++      fireEvent.change(select, { target: { value: "m1" } });
++      const fields = patches.map((p) => (p as { field: string }).field).sort();
++      expect(fields).toEqual(["llm_provider_id", "model"]);
++      const providerPatch = patches.find(
++        (p) => (p as { field: string }).field === "llm_provider_id",
++      ) as { value: string; cancel?: boolean };
++      expect(providerPatch.value).toBe("prov-d");
++      expect(providerPatch.cancel).toBeUndefined();
++    });
++
++    it("FR-04 已显式暂存供应商时点模型不覆盖既有暂存，记忆写给生效供应商", async () => {
++      mocks.listProviders.mockResolvedValue([
++        { ...P(), id: "prov-d", name: "D 平台", is_default: true },
++        P(),
++      ] as never);
++      const { patches } = renderBarControlled({ llmProviderId: null });
++      // 先暂存供应商 P（级联自动选中 m1）
++      openCtrl("配置-供应商");
++      fireEvent.click(await screen.findByRole("button", { name: "选择 P 平台" }));
++      // 再显式改模型（显示层跟随暂存 P → 候选 P 的模型）
++      const select = (await screen.findByRole("combobox", {
++        name: "配置-模型",
++      })) as HTMLSelectElement;
++      fireEvent.change(select, { target: { value: "m2" } });
++      const providerPatches = patches.filter(
++        (p) => (p as { field: string }).field === "llm_provider_id",
++      );
++      // 仅级联产生的一条 provider patch——模型点选不再补 provider
++      expect(providerPatches).toHaveLength(1);
++      expect(providerPatches[0]).toMatchObject({ value: "prov-p" });
++      const modelPatches = patches.filter(
++        (p) => (p as { field: string }).field === "model",
++      );
++      expect((modelPatches.at(-1) as { value: string }).value).toBe("m2");
++      expect(window.localStorage.getItem("sh:last-model:prov-p")).toBe(
++        JSON.stringify("m2"),
++      );
++    });
+ 
+-    // 切回「默认」→ 暂存重置回空串
+-    fireEvent.change(select, { target: { value: "" } });
+-    expect(onProvisionalModelSwitch).toHaveBeenLastCalledWith("");
+-    expect(select.value).toBe("");
++    it("FR-02 快照模型空 + 记忆命中 → 显示记忆值（仅显示不暂存）", async () => {
++      mocks.listProviders.mockResolvedValue([P()] as never);
++      window.localStorage.setItem("sh:last-model:prov-p", JSON.stringify("m2"));
++      renderBar({ llmProviderId: "prov-p" });
++      const select = (await screen.findByRole("combobox", {
++        name: "配置-模型",
++      })) as HTMLSelectElement;
++      expect(select.value).toBe("m2");
++    });
+   });
+ });
+ 
+@@ -1952,8 +2070,10 @@ describe("SessionConfigBar 默认供应商引擎匹配（session-config-default-
+       name: "配置-模型",
+     })) as HTMLSelectElement;
+     const values = Array.from(select.options).map((o) => o.value);
+-    expect(values).toEqual(["", "glm-4.7", "glm-4.6"]);
+-    expect(select.value).toBe("");
++    // 2026-11-04-model-provider-cascade FR-02：无「默认」项；快照空 → 显示自动
++    // 解析值（无记忆 → 候选第一个 glm-4.7）。
++    expect(values).toEqual(["glm-4.7", "glm-4.6"]);
++    expect(select.value).toBe("glm-4.7");
+   });
+ 
+   it("claude 会话未显式选供应商 + 引擎匹配默认存在 → 模型下拉渲染，「不指定」项保持当前高亮（显示层回退不改选择语义）", async () => {
+@@ -1992,8 +2112,8 @@ describe("SessionConfigBar 默认供应商引擎匹配（session-config-default-
+     const select = (await screen.findByRole("combobox", {
+       name: "配置-模型",
+     })) as HTMLSelectElement;
++    // 2026-11-04-model-provider-cascade FR-02：无「默认」项，候选单模型直显。
+     expect(Array.from(select.options).map((o) => o.value)).toEqual([
+-      "",
+       "glm-4.7",
+     ]);
+   });
+diff --git a/frontend/src/components/sessions/session-config-bar.tsx b/frontend/src/components/sessions/session-config-bar.tsx
+index 181b97753..22f09ad33 100644
+--- a/frontend/src/components/sessions/session-config-bar.tsx
++++ b/frontend/src/components/sessions/session-config-bar.tsx
+@@ -57,7 +57,7 @@
+  * data-staged-pending 测试锚 + 悬停 title「已记住，将随下一条消息发送时生效」；
+  * 禁用态 title 优先（D-009）；正常会话与 askuser 待答场景统一。
+  */
+-import { useEffect, useMemo, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { useQuery, useQueryClient } from "@tanstack/react-query";
+ import { Dropdown, Tag, Tooltip, type MenuProps } from "antd";
+ import { Brain, ChevronDown, Cloud, GitBranch, Settings2, User } from "lucide-react";
+@@ -66,6 +66,8 @@ import { ApiError } from "@/lib/api";
+ import type { components } from "@/lib/api-types";
+ import { useMineAgentProfiles } from "@/lib/agent-profiles";
+ import { listUsableProviders, noProviderLabel } from "@/lib/api/llm-providers";
++import type { LlmProviderRead } from "@/lib/api/llm-providers";
++import { getLastModel, rememberLastModel } from "@/lib/model-memory";
+ import { useNotify } from "@/lib/errors";
+ import {
+   fetchSessionGitStatus,
+@@ -93,6 +95,43 @@ export const SWITCH_NO_PROVIDER_VALUE = "";
+  */
+ export const SWITCH_MODEL_DEFAULT_VALUE = "";
+ 
++/**
++ * 供应商模型候选排序（2026-11-04-model-provider-cascade FR-01 抽出复用）：
++ * 主模型（sonnet role）置顶 + 去重保序 + 过滤空名。模型自动解析与模型下拉
++ * 候选必须同源同序（显示即所得）。
++ */
++function orderedProviderModelNames(provider: LlmProviderRead): string[] {
++  const entries = provider.models ?? [];
++  const primaryIdx = entries.findIndex((m) => m.roles?.includes("sonnet"));
++  const ordered =
++    primaryIdx > 0
++      ? [entries[primaryIdx], ...entries.filter((_, i) => i !== primaryIdx)]
++      : entries;
++  const seen = new Set<string>();
++  const models: string[] = [];
++  for (const m of ordered) {
++    const name = m?.name;
++    if (!name || seen.has(name)) continue;
++    seen.add(name);
++    models.push(name);
++  }
++  return models;
++}
++
++/**
++ * 模型自动解析（FR-01）：该供应商上次显式选过的模型（本地记忆，越界回退）
++ * → 候选第一个 → 空串（跟随供应商配置）。模块级纯函数便于单测直测。
++ */
++export function resolveAutoModelForProvider(
++  provider: LlmProviderRead | null | undefined,
++): string {
++  if (!provider) return "";
++  const candidates = orderedProviderModelNames(provider);
++  const remembered = getLastModel(provider.id);
++  if (remembered && candidates.includes(remembered)) return remembered;
++  return candidates[0] ?? "";
++}
++
+ /**
+  * 2026-10-30-askuser-config-pending（FR-01 / D-001@v2）：暂存待生效悬停文案——
+  * 生效语义载体（用户裁决「只逐控件标记」不加常驻汇总行，语义走悬停）。控件
+@@ -631,27 +670,26 @@ export function SessionConfigBar({
+   /**
+    * 模型候选 = provider.model → default_fallback_model → model_role_mappings
+    * 各角色 model **去重保序**（空串/缺键过滤；不做上游 /v1/models 实时拉取，
+-   * D-002）。首项「默认（跟随供应商配置）」在渲染处固定，不进候选集。
++   * D-002）。排序/去重逻辑抽模块级 orderedProviderModelNames（与模型自动解析
++   * 同源同序，2026-11-04-model-provider-cascade）。旧「首项默认」已随 FR-02
++   * 移除——具体供应商下不再提供「默认」选项。
+    */
+-  const modelCandidates = useMemo(() => {
+-    if (!selectedProvider) return [] as string[];
+-    // D-001：下拉源 = 供应商模型列表条目名（主模型置顶）。
+-    const entries = selectedProvider.models ?? [];
+-    const primaryIdx = entries.findIndex((m) => m.roles?.includes("sonnet"));
+-    const ordered =
+-      primaryIdx > 0
+-        ? [entries[primaryIdx], ...entries.filter((_, i) => i !== primaryIdx)]
+-        : entries;
+-    const raw: (string | null | undefined)[] = ordered.map((m) => m?.name);
+-    const seen = new Set<string>();
+-    const models: string[] = [];
+-    for (const m of raw) {
+-      if (!m || seen.has(m)) continue;
+-      seen.add(m);
+-      models.push(m);
+-    }
+-    return models;
+-  }, [selectedProvider]);
++  const modelCandidates = useMemo(
++    () => (selectedProvider ? orderedProviderModelNames(selectedProvider) : []),
++    [selectedProvider],
++  );
++
++  /**
++   * 2026-11-04-model-provider-cascade FR-01：供应商级联的模型自动解析
++   * （记忆→候选第一个→空串跟随）。组件内薄封装（providers 列表在手）。
++   */
++  const resolveAutoModel = useCallback(
++    (providerId: string): string =>
++      resolveAutoModelForProvider(
++        providers.find((p) => p.id === providerId) ?? null,
++      ),
++    [providers],
++  );
+ 
+   /**
+    * provisional 模式模型暂存（组件内显示用；父层经 onProvisionalModelSwitch
+@@ -662,11 +700,18 @@ export function SessionConfigBar({
+   // 2026-10-25-session-config-deferred-switch：会话态模型显示优先受控暂存值
+   // （键存在 = 面板侧已归一为真暂存，值 ≠ 当前生效值）。
+   const stagedModel = staged?.model;
++  // 2026-11-04-model-provider-cascade FR-02：快照/暂存模型为空且候选非空时
++  // 显示自动解析值（记忆→候选第一个）。仅显示层——不产生暂存/载荷，未显式
++  // 动作发送行为零变化（载荷 model 缺省 = 跟随供应商配置，既有语义）。
++  const autoModelForDisplay = useMemo(
++    () => (selectedProvider ? resolveAutoModel(selectedProvider.id) : ""),
++    [selectedProvider, resolveAutoModel],
++  );
+   const currentModel = provisional
+-    ? provisionalModel
++    ? provisionalModel || autoModelForDisplay
+     : stagedModel !== undefined
+       ? stagedModel
+-      : (configSnapshot?.model ?? "");
++      : (configSnapshot?.model ?? "") || autoModelForDisplay;
+ 
+   /**
+    * 快照模型可能已不在候选集（供应商高级设置后续改过）→ 追加到尾部兜底，
+@@ -893,11 +938,13 @@ export function SessionConfigBar({
+     if (stagedMode) {
+       setOpenKind(null);
+       const cancel = effectiveValues[p.field] === p.value;
+-      // 暂存供应商（非取消）级联重置模型暂存——候选随供应商变，旧模型对新供应
+-      // 商无意义；值 "" 经面板归一（与生效模型一致即清字段），生效模型非空时
+-      // 「模型 → 默认」是真实生效变化（对齐旧「切供应商 inject 带 model:""」语义）。
++      // 2026-11-04-model-provider-cascade FR-01：暂存供应商（非取消）级联自动
++      // 选中模型——该供应商上次显式选过的模型（记忆，越界回退）→ 候选第一个
++      // → 空串跟随；与供应商成对进入暂存（旧「重置默认」会让载荷 model 落空、
++      // 显示与实际注入错位）。自动解析本身不写记忆（记忆仅由显式选模型产生）。
+       if (p.field === "llm_provider_id" && !cancel) {
+-        onStagedSwitch({ field: "model", value: SWITCH_MODEL_DEFAULT_VALUE, label: "默认" });
++        const auto = resolveAutoModel(p.value);
++        onStagedSwitch({ field: "model", value: auto, label: auto || "默认" });
+       }
+       onStagedSwitch({
+         field: p.field,
+@@ -905,6 +952,26 @@ export function SessionConfigBar({
+         label: p.label,
+         cancel: cancel || undefined,
+       });
++      // 2026-11-04-model-provider-cascade FR-03/FR-04：显式选模型（非取消）——
++      // 记忆「生效供应商 → 所选模型」；会话 provider NULL 且无供应商暂存时成对
++      // 补暂存显示层引擎默认供应商 id，发送载荷携带 model+provider 非空对
++      // （后端 model_requires_provider 守卫不再拒绝，生产会话 edf0c569 缺口根治）。
++      if (p.field === "model" && !cancel) {
++        const effectiveProviderId =
++          staged?.llm_provider_id ?? llmProviderId ?? engineDefaultProvider?.id ?? null;
++        if (effectiveProviderId) rememberLastModel(effectiveProviderId, p.value);
++        if (
++          llmProviderId == null &&
++          staged?.llm_provider_id === undefined &&
++          engineDefaultProvider
++        ) {
++          onStagedSwitch({
++            field: "llm_provider_id",
++            value: engineDefaultProvider.id,
++            label: engineDefaultProvider.name,
++          });
++        }
++      }
+       // D-001（用户定调）：暂存静默——控件值变化即反馈，不弹 toast、不渲染
+       // 「待生效」标记；切换结果由发送成功后的时间线切换信息行呈现。
+       return;
+@@ -918,6 +985,13 @@ export function SessionConfigBar({
+       if (p.field === "model") {
+         setProvisionalModel(p.value);
+         onProvisionalModelSwitch?.(p.value);
++        // 2026-11-04-model-provider-cascade FR-03/FR-04：记忆 + provider 空时
++        // 成对补引擎默认供应商（预会话 preProviderId 经 onProvisionalSwitch 回写）。
++        const effectiveProviderId = llmProviderId || engineDefaultProvider?.id || null;
++        if (effectiveProviderId) rememberLastModel(effectiveProviderId, p.value);
++        if (!llmProviderId && engineDefaultProvider) {
++          onProvisionalSwitch?.("llm_provider_id", engineDefaultProvider.id);
++        }
+         // 2026-09-14-session-thinking-level task-06（FR-06）：模型变档位重置
+         // （照「切供应商重置模型」模式——动态档位按当前模型（claude
+         // supportedEffortLevels per-model），模型既变旧档对新模型无意义；仅清
+@@ -926,11 +1000,14 @@ export function SessionConfigBar({
+         onProvisionalThinkingLevelSwitch?.("");
+         return;
+       }
+-      // task-10：切供应商级联重置模型暂存（候选随供应商变，旧模型对新供应商
+-      // 无意义；「不指定」下 model 非空更会被后端 422——task-11 守卫）。
++      // 2026-11-04-model-provider-cascade FR-01：切供应商级联自动选中模型
++      // （记忆→候选第一个→空串跟随），替代旧「重置默认」——候选随供应商变，
++      // 旧模型对新供应商无意义；「不指定」下自动解析为空串（跟随），model 非
++      // 空不会被后端 422（task-11 守卫前提已由成对语义保证）。
+       if (p.field === "llm_provider_id") {
+-        setProvisionalModel(SWITCH_MODEL_DEFAULT_VALUE);
+-        onProvisionalModelSwitch?.(SWITCH_MODEL_DEFAULT_VALUE);
++        const auto = resolveAutoModel(p.value);
++        setProvisionalModel(auto);
++        onProvisionalModelSwitch?.(auto);
+       }
+       onProvisionalSwitch?.(p.field, p.value);
+       return;
+@@ -939,15 +1016,23 @@ export function SessionConfigBar({
+     setSubmitting(true);
+     setOpenKind(null);
+     try {
+-      // task-10（FR-03-3）：供应商与模型同请求——切供应商级联重置 model=""
+-      // （语义见上）；切模型补带当前 llm_provider_id（model 非空必须挂供应商，
+-      // 后端 422 守卫）。档案切换不带伴生键，payload 零变化。
++      // task-10（FR-03-3）+ 2026-11-04-model-provider-cascade：供应商与模型同
++      // 请求——切供应商级联自动解析 model（记忆→第一个→空跟随）；切模型补带
++      // 供应商（会话值 → 引擎默认 → 不指定兜底；model 非空必须挂供应商，后端
++      // 422 守卫）。档案切换不带伴生键，payload 零变化。显式选模型同样写记忆。
+       const companion: Partial<SessionInjectOptions> =
+         p.field === "llm_provider_id"
+-          ? { model: SWITCH_MODEL_DEFAULT_VALUE }
++          ? { model: resolveAutoModel(p.value) }
+           : p.field === "model"
+-            ? { llm_provider_id: llmProviderId ?? SWITCH_NO_PROVIDER_VALUE }
++            ? {
++                llm_provider_id:
++                  llmProviderId ?? engineDefaultProvider?.id ?? SWITCH_NO_PROVIDER_VALUE,
++              }
+             : {};
++      if (p.field === "model") {
++        const effectiveProviderId = llmProviderId ?? engineDefaultProvider?.id ?? null;
++        if (effectiveProviderId) rememberLastModel(effectiveProviderId, p.value);
++      }
+       const resp = await injectSession(sessionId, prompt, {
+         ...companion,
+         [p.field]: p.value,
+@@ -1126,7 +1211,7 @@ export function SessionConfigBar({
+                     ? STAGED_PENDING_TITLE
+                     : running && !stagedMode
+                       ? "运行中可切换，将于本轮结束后生效"
+-                      : "模型（默认=跟随供应商配置）"
++                      : "模型（随供应商自动选中，可手动切换）"
+               }
+               data-staged-pending={staged?.model !== undefined ? "true" : undefined}
+               onChange={(e) => {
+@@ -1148,9 +1233,9 @@ export function SessionConfigBar({
+                   "cursor-not-allowed text-muted-foreground/60 hover:bg-card",
+               )}
+             >
+-              <option value={SWITCH_MODEL_DEFAULT_VALUE}>
+-                默认（跟随供应商配置）
+-              </option>
++              {/* 2026-11-04-model-provider-cascade FR-02：具体供应商下不再提供
++                  「默认」选项——模型必须显式具体值（不指定态模型选择整体不渲染，
++                  即默认语义）；选项集 = 候选（+越界快照/暂存值兜底显示）。 */}
+               {modelOptions.map((m) => (
+                 <option key={m} value={m}>
+                   {m}
+diff --git a/frontend/src/lib/__tests__/model-memory.test.ts b/frontend/src/lib/__tests__/model-memory.test.ts
+new file mode 100644
+index 000000000..5ce61bd0f
+--- /dev/null
++++ b/frontend/src/lib/__tests__/model-memory.test.ts
+@@ -0,0 +1,52 @@
++/**
++ * model-memory 单测（2026-11-04-model-provider-cascade FR-03）：
++ * remember/get 读写闭环、缺键 null、坏 JSON 容错、非法入参静默。
++ */
++
++import { afterEach, describe, expect, it } from "vitest";
++
++import { getLastModel, rememberLastModel } from "@/lib/model-memory";
++
++describe("model-memory（供应商→模型本地记忆）", () => {
++  afterEach(() => {
++    window.localStorage.clear();
++  });
++
++  it("remember 后 get 闭环命中（JSON 透明）", () => {
++    rememberLastModel("p-1", "glm-5.3-flash");
++    expect(getLastModel("p-1")).toBe("glm-5.3-flash");
++    // 底层确为 localStorage（跨调用可读）
++    expect(window.localStorage.getItem("sh:last-model:p-1")).toBe(
++      JSON.stringify("glm-5.3-flash"),
++    );
++  });
++
++  it("缺键返回 null", () => {
++    expect(getLastModel("p-none")).toBeNull();
++  });
++
++  it("坏 JSON 容错返回 null 不抛错", () => {
++    window.localStorage.setItem("sh:last-model:p-bad", "{not-json");
++    expect(getLastModel("p-bad")).toBeNull();
++  });
++
++  it("非字符串/空串 JSON 值视为无记忆", () => {
++    window.localStorage.setItem("sh:last-model:p-num", "42");
++    expect(getLastModel("p-num")).toBeNull();
++    window.localStorage.setItem("sh:last-model:p-empty", '""');
++    expect(getLastModel("p-empty")).toBeNull();
++  });
++
++  it("空 providerId/model 入参静默不写入", () => {
++    rememberLastModel("", "m");
++    rememberLastModel("p", "");
++    expect(window.localStorage.length).toBe(0);
++    expect(getLastModel("")).toBeNull();
++  });
++
++  it("同供应商重复写入取最新", () => {
++    rememberLastModel("p-1", "m1");
++    rememberLastModel("p-1", "m2");
++    expect(getLastModel("p-1")).toBe("m2");
++  });
++});
+diff --git a/frontend/src/lib/model-memory.ts b/frontend/src/lib/model-memory.ts
+new file mode 100644
+index 000000000..549e294c2
+--- /dev/null
++++ b/frontend/src/lib/model-memory.ts
+@@ -0,0 +1,46 @@
++/**
++ * lib/model-memory.ts —— 供应商→模型本地记忆（2026-11-04-model-provider-cascade FR-03）。
++ *
++ * 职责：记住「用户上次在页面上为某供应商显式选择的模型」，供应商级联时自动
++ * 选中（FR-01）。浏览器本地 localStorage，不入库不上报——跨会话的用户偏好
++ * 启发式缓存，非权威数据（记忆越界/丢失回退候选第一个，无正确性影响）。
++ *
++ * 容错口径：JSON.parse 坏值/QuotaExceeded/隐私模式 localStorage 不可用 →
++ * 静默忽略返回 null / 不阻塞交互（FR-03 行为句）。SSR 无 window 同静默。
++ *
++ * @module lib/model-memory
++ */
++
++const KEY_PREFIX = "sh:last-model:";
++
++/**
++ * 记录「供应商 → 上次显式选择的模型」。
++ * 写入失败（隐私模式/容量/SSR）静默忽略——记忆是启发式缓存，不阻塞交互。
++ */
++export function rememberLastModel(providerId: string, model: string): void {
++  if (!providerId || !model) return;
++  try {
++    window.localStorage.setItem(
++      `${KEY_PREFIX}${providerId}`,
++      JSON.stringify(model),
++    );
++  } catch {
++    // 隐私模式/容量超限/SSR：静默忽略（FR-03 行为句）。
++  }
++}
++
++/**
++ * 读取供应商的上次显式模型。坏 JSON/缺键/SSR 返回 null（调用方回退候选第一个）。
++ */
++export function getLastModel(providerId: string): string | null {
++  if (!providerId) return null;
++  try {
++    const raw = window.localStorage.getItem(`${KEY_PREFIX}${providerId}`);
++    if (raw === null) return null;
++    const parsed: unknown = JSON.parse(raw);
++    return typeof parsed === "string" && parsed ? parsed : null;
++  } catch {
++    // 坏 JSON / localStorage 不可用：容错返回 null（FR-03 行为句）。
++    return null;
++  }
++}
