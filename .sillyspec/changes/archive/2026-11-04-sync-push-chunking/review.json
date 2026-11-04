@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-sync-push-chunking",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "88a36bbcc3e54440923d058ebe153343382de8bb",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-03 失败警告「前 N/M 块已落地」文案已实现但未被测试钉住",
+      "evidence": "src/spec-sync.js:957 构造 landedNote，实测复跑 C 组输出确含「（前 1/3 块已落地，下轮自动续传未落地部分）」，但 test/sync-push-chunking.test.mjs:131-133 只断言返回形状（ok:false/synced:0）与服务器 POST 数，未捕获 console.warn 断言文案；requirements.md:27 把警告文案列为必须项",
+      "location": "test/sync-push-chunking.test.mjs:128-133"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "三个 env 键非法值回退缺省无任何测试断言（FR-02 声明未钉测试）",
+      "evidence": "回退逻辑真实存在且正确（src/spec-sync.js:64-68 isFinite&&>=1000 / :70-74 isInteger&&>=1 / :76-80 isFinite&&>=1024，Number('abc')=NaN、Number('')=0、'0'/'2.5' 均落缺省分支）；但 test 全文只显式传 opts（A 组）或设合法值 CHUNK_OPS=5/4（B/C 组），无 'abc'/'0'/空串等坏值用例；「未配置」态有代码路径证据（hub08 无 env 跑通且断言精确 POST 计数 test/hub08-spec-sync-conflict.test.mjs:115）",
+      "location": "test/sync-push-chunking.test.mjs:19-44"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-03 断点续传（下轮 diff 只含未落地部分）未被第二轮同步演练",
+      "evidence": "测试 C 标题含「下轮 diff 续传」但只跑到失败返回即止，未做「刷新 manifest 后第二次 syncSpecTree 只补发未落地块」的闭环断言；机理上免费成立——代码确认无新增记账面（失败路径不写 lastSyncTs/baseSnapshot，src/spec-sync.js:964 直接 return，已落地块由服务器清单推进下轮 diff 自然出界），且属既有 diff 机制非本变更新增面，但声明与测试覆盖存在缺口",
+      "location": "test/sync-push-chunking.test.mjs:124-133"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "多块时「前块 conflict + 后块 HTTP 失败」会掩盖该轮冲突横幅（瞬态，下轮重撞可再检出）",
+      "evidence": "src/spec-sync.js:953-964 后块 HTTP 失败走 return {synced:0,ok:false}，此前块已合并进 body 的 conflict/server_versions 被丢弃；单批不存在此形态。但冲突路径 base_version 未变、下轮 diff 重生成同批 ops 必重撞冲突，best-effort 收敛语义不受损；design.md:43 已声明合并形状风险面，此为相邻瞬态，接受不改",
+      "location": "src/spec-sync.js:953-964"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-04T22:00:22+08:00"
+}

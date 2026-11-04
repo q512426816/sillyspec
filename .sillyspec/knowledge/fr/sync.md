@@ -742,3 +742,108 @@ created_at: 2026-09-22T09:42:59.537Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-rename-platform-tombstone/requirements.md#FR-04
 最近确认：2921364ddcc22f78cd1d62686adaf0c1c0bbc9ad
+
+## FR-sync-048 ops 超过阈值时自动按 op 数与 base64 字节数双约束切块顺序推送，逐块独立提交，全部块落地后行为与单批等价（冲突/墓碑/成功语义不变）
+变更：2026-11-04-sync-push-chunking
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 12 个本地新增文件、`SILLYSPEC_SPEC_SYNC_CHUNK_OPS=5`；When 推送；Then 服务器收到 3 次 POST（5+5+2 o
+全文：.sillyspec/changes/archive/2026-11-04-sync-push-chunking/requirements.md#FR-01
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-push-chunking:flow:测试绑定FR-01
+  tests: test/sync-push-chunking.test.mjs「B. 12 ops 按 env CHUNK_OPS=5 → 3 块顺序提交全部落地」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-push-chunking
+  status: active
+
+## FR-sync-049 推送单请求预算可通过 SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS 调整（默认 30s 不变）；块大小可经 SILLYSPEC_SPEC_SYNC_CHUNK_OPS / SILLYSPEC_SPEC_SYNC_CHUNK_BYTES 调整
+变更：2026-11-04-sync-push-chunking
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given `SILLYSPEC_SPEC_SYNC_CHUNK_OPS=5`；When 12 ops 推送；Then 每块 ≤5 ops（块切分随 env 生效）。Giv
+全文：.sillyspec/changes/archive/2026-11-04-sync-push-chunking/requirements.md#FR-02
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-push-chunking:flow:测试绑定FR-02
+  tests: test/sync-push-chunking.test.mjs「B. 12 ops 按 env CHUNK_OPS=5 → 3 块顺序提交全部落地」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-push-chunking
+  status: active
+
+## FR-sync-050 中途某块失败时已落地块保留（不回滚），下轮同步 diff 自动只含未落地部分（断点续传），失败提示标注已落地块数
+变更：2026-11-04-sync-push-chunking
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 12 ops 切 3 块、服务器对第 2 块回 500；When 推送；Then 返回 `{synced:0, ok:false}`、服务器只见 2 次 POS
+全文：.sillyspec/changes/archive/2026-11-04-sync-push-chunking/requirements.md#FR-03
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-push-chunking:flow:测试绑定FR-03
+  tests: test/sync-push-chunking.test.mjs「C. 中途块 500 → ok:false、已落地 1 块保留、下轮 diff 续传」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-push-chunking
+  status: active
+
+## FR-sync-051 分批纯逻辑函数有判别性单测（边界：超限单 op 独占一块、恰好等于阈值、双约束同时生效）
+变更：2026-11-04-sync-push-chunking
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 测试文件以显式 `opts.maxOps/maxBytes` 驱动各边界；When 断言块数与块内分布；Then 全部通过（无 env 依赖、无顺序依赖）。
+全文：.sillyspec/changes/archive/2026-11-04-sync-push-chunking/requirements.md#FR-04
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-push-chunking:flow:测试绑定FR-04
+  tests: test/sync-push-chunking.test.mjs「A. chunkOpsForPush 双约束切块」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-push-chunking
+  status: active
+
+## FR-sync-052 既有测试套件全绿
+变更：2026-11-04-sync-push-chunking
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 实现与测试就位；When 运行新测试、相邻同步回归与 lint；Then 全部退出码 0。
+全文：.sillyspec/changes/archive/2026-11-04-sync-push-chunking/requirements.md#FR-05
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-sync-push-chunking:flow:测试绑定FR-05
+  tests: test/check-syntax.mjs | test/hub08-spec-sync-conflict.test.mjs | test/hub09-sync-circuit-abort.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-sync-push-chunking
+  status: active

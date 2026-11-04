@@ -20,3 +20,4 @@
 - 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿
 - 2026-11-04-sync-fail-silent-fix | platform sync 失败静默与慢链路全量对账修复
 - 2026-11-04-junction-guard-rename-content | 跨仓错绑告警与 rename op 带内容两护栏
+- 2026-11-04-sync-push-chunking | spec 同步推送分批化根治大积压超时

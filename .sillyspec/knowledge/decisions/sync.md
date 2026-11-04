@@ -90,3 +90,12 @@
 锚点：platform_sync/service.py
 最近确认：89f30febe3343e13d7832e540367648c5529eea4
 理由：最大风险：合成载荷被平台 `_ensure_change_row` 在「从未同步过」的变更上先建占位行再立即被墓碑收敛——产生一行 location='deleted' 的墓碑行；这与平台既有 3 行历史墓碑（2026-08-26/09-10/09-11）形态一致，可接受。次风险：平台行有 last_pushed_at 而合成载荷不带 base_ts——平台契约「base_ts 缺失无条件接受」（platform_sync/service.py 分支 1），无 409 面；若平台后续收紧该契约，fallback 是 best-effort 失败日志（不阻断）。 放弃的方案：①daemon reconcile 对账「平台 active 行 vs 本地全无」主动软删——多机工作区下他机活跃变更会被误删，需要引入行级机器归属，改动面过大；②sync 对 progressData null 一律发墓碑——打错 --change 名（从未存在）会把平台同名真变更误软删，不可接受；台账正是为了区分「从未存在」与「存在过且已终态」。平台侧 7 天占位行保护窗 + 全量 reparse 兜底（已有）继续作为外部裸删（rm -rf + SQL 全清）的最后防线。
+
+## D-sync-001@v1 2026-11-04-sync-push-chunking——只改客户端推送腿：`src/spec-sync.js` 的单次 `POST /api/changes/-/spec-sync`（整批 ops 一个请求、30s
+状态：implemented
+变更：2026-11-04-sync-push-chunking
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-04-sync-push-chunking/design.md
+文件：src/spec-sync.js, test/sync-push-chunking.test.mjs
+最近确认：88a36bbcc3e54440923d058ebe153343382de8bb
+理由：只改客户端推送腿：`src/spec-sync.js` 的单次 `POST /api/changes/-/spec-sync`（整批 ops 一个请求、30s 单请求预算写死）改为**双约束切块顺序推送**——新增纯函数 `chunkOpsForPush` 按「块内 op 数（默认 128）+ base64 字节粗估和（默认 2MB）」切块，逐块独立 POST，全部块落地后把各块响应合并成单批等价形状交给既有冲突/墓碑/成功处理路径（下游零改动）。推送单请求预算经 `SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS` 可调（默认 30s 不变），块尺寸经 `SILLYSPEC_SPEC_SYNC_CHUNK_OPS` / `SILLYSPEC_SPEC_SYNC_CHUNK_BYTES` 可调（conventions：机制先落缺省，env 只作调优，缺省小批量一块直发零回归）。 为什么是这个方案：生产实证（multi-agent-platform 工作区）spec 文件树同步 15 天零落地——单批 2436 ops/45.7MB（base64 后 ~60MB）在「客户端单请求 30s 掐线 + 服务端 apply 16-34s」双超下 best-effort 重试永不收敛。分批后每块上传+服务端处理都在预算内；已落地块推进服务器清单（spec_version bump），失败即停，下一轮 diff 以刷新后的清单为锚、已落地路径自动出 diff——**断点续传免费获得，无需客户端记账**。服务器端 apply_ops 单事务语义按块天然保持（块=事务单元），不动服务端。

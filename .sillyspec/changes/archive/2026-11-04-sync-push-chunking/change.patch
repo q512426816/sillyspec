@@ -1,0 +1,295 @@
+diff --git a/src/spec-sync.js b/src/spec-sync.js
+index 325fcd1f..ec628e62 100644
+--- a/src/spec-sync.js
++++ b/src/spec-sync.js
+@@ -52,6 +52,60 @@ function toPosix(p) {
+ // 小响应维持 10s 噪音闸门不变。
+ const MANIFEST_FULL_TIMEOUT_MS = 120_000;
+ 
++// 推送分批（2026-11-04-sync-push-chunking）：大积压单批 POST 在单请求预算内必死——
++// 生产实证 multi-agent-platform 工作区 15 天积压 2436 ops/45.7MB（base64 后 ~60MB），
++// 上传+服务端 apply 双超（客户端 30s 掐线、服务器 16-34s 处理后 400/中断），37 连败
++// 零落地。切块顺序推送：每块独立提交，已落地块推进服务器清单，失败即停由下轮 diff
++// 断点续传（锚点刷新后已落地路径自动出 diff）。env 仅调优，缺省零回归（小批量一块直发）。
++const PUSH_TIMEOUT_DEFAULT_MS = 30_000;
++const CHUNK_OPS_DEFAULT = 128;
++const CHUNK_BYTES_DEFAULT = 2 * 1024 * 1024;
++
++function resolvePushTimeoutMs() {
++  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS);
++  if (Number.isFinite(raw) && raw >= 1000) return Math.floor(raw);
++  return PUSH_TIMEOUT_DEFAULT_MS;
++}
++
++function resolveChunkOps() {
++  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS);
++  if (Number.isInteger(raw) && raw >= 1) return raw;
++  return CHUNK_OPS_DEFAULT;
++}
++
++function resolveChunkBytes() {
++  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_CHUNK_BYTES);
++  if (Number.isFinite(raw) && raw >= 1024) return Math.floor(raw);
++  return CHUNK_BYTES_DEFAULT;
++}
++
++/**
++ * 按 op 数与 base64 字节数双约束切块（顺序保序；单 op 超任一上限独占一块——
++ * 4.7MB 级 change.patch 单文件不切不丢弃）。行宽为粗估（content + path×2 + 包裹），
++ * 只为分块比例，无需精确。
++ */
++export function chunkOpsForPush(ops, opts = {}) {
++  const maxOps = opts.maxOps ?? resolveChunkOps();
++  const maxBytes = opts.maxBytes ?? resolveChunkBytes();
++  if (!Array.isArray(ops) || ops.length === 0) return [];
++  if (maxOps < 1 || maxBytes < 1) return [ops.slice()];
++  const chunks = [];
++  let cur = [];
++  let curBytes = 0;
++  for (const op of ops) {
++    const size = (op.content ? op.content.length : 0) + op.path.length * 2 + 96;
++    if (cur.length > 0 && (cur.length >= maxOps || curBytes + size > maxBytes)) {
++      chunks.push(cur);
++      cur = [];
++      curBytes = 0;
++    }
++    cur.push(op);
++    curBytes += size;
++  }
++  if (cur.length > 0) chunks.push(cur);
++  return chunks;
++}
++
+ function debugLog(msg) {
+   if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg);
+ }
+@@ -68,7 +122,7 @@ export function describeSyncError(err) {
+     return '平台响应慢，本轮同步被总预算熔断让路（best-effort，下一条命令自动重试）';
+   }
+   if (err && err.name === 'TimeoutError') {
+-    return '单请求超时（清单 10s / 推送 30s 口径，best-effort，下次自动重试）';
++    return '单请求超时（清单增量 10s/全量 120s；推送默认 30s，SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS 可调；分批尺寸 SILLYSPEC_SPEC_SYNC_CHUNK_*；best-effort，下次自动重试）';
+   }
+   return err && err.message ? err.message : String(err);
+ }
+@@ -877,30 +931,47 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
+     return { synced: 0, ok: true };
+   }
+ 
+-  // 3. POST ops
++  // 3. POST ops（2026-11-04-sync-push-chunking：分批顺序推送——单批大积压在单请求
++  //    预算内上传+服务端 apply 双超零落地；切块后每块独立提交，失败即停下轮续传）
+   try {
+-    const res = await fetch(syncUrl, {
+-      method: 'POST',
+-      headers: {
+-        'Content-Type': 'application/json',
+-        Authorization: `Bearer ${platform.token}`,
+-      },
+-      body: JSON.stringify({ ops }),
+-      signal: withSignal(30000),
+-    });
+-    if (!res.ok) {
+-      const raw = await res.text().catch(() => '');
+-      const detail = describeErrorBody(res.status, raw);
+-      const failCount = bumpFailStreak(specRoot, logLabel, detail);
+-      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
+-      if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+-      else console.warn(line);
+-      if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+-        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
++    const chunks = chunkOpsForPush(ops);
++    if (chunks.length > 1) {
++      console.log(`[spec-sync] 推送分批：${ops.length} ops 切 ${chunks.length} 块顺序提交（块上限 ${resolveChunkOps()} ops / ${Math.round(resolveChunkBytes() / 1024)}KB 估算）: ${logLabel}`);
++    }
++    let landedChunks = 0;
++    const body = { conflict: false, server_versions: {}, platform_deleted: [] };
++    for (let ci = 0; ci < chunks.length; ci++) {
++      const res = await fetch(syncUrl, {
++        method: 'POST',
++        headers: {
++          'Content-Type': 'application/json',
++          Authorization: `Bearer ${platform.token}`,
++        },
++        body: JSON.stringify({ ops: chunks[ci] }),
++        signal: withSignal(resolvePushTimeoutMs()),
++      });
++      if (!res.ok) {
++        const raw = await res.text().catch(() => '');
++        const detail = describeErrorBody(res.status, raw);
++        const failCount = bumpFailStreak(specRoot, logLabel, detail);
++        const landedNote = landedChunks > 0 ? `（前 ${landedChunks}/${chunks.length} 块已落地，下轮自动续传未落地部分）` : '';
++        const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）${landedNote}: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
++        if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
++        else console.warn(line);
++        if (failCount >= FAIL_STREAK_ESCALATE_AT) {
++          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
++        }
++        return { synced: 0, ok: false };
+       }
+-      return { synced: 0, ok: false };
++      const chunkBody = await res.json().catch(() => ({}));
++      landedChunks += 1;
++      // 块响应合并成单批等价形状：conflict 任一块命中即真；server_versions /
++      // platform_deleted 逐块累积（块间路径互斥——computeSpecOps 每 path 至多一 op）。
++      if (chunkBody.conflict) body.conflict = true;
++      Object.assign(body.server_versions, chunkBody.server_versions || {});
++      if (Array.isArray(chunkBody.platform_deleted)) body.platform_deleted.push(...chunkBody.platform_deleted);
++      if (chunks.length > 1) debugLog(`[spec-sync] 分批 ${ci + 1}/${chunks.length} 落地（${chunks[ci].length} ops）`);
+     }
+-    const body = await res.json().catch(() => ({}));
+     if (body.conflict) {
+       // HUB-08 冲突闭环：落 spec-sync-conflict-<change>.json（与进度 sync-conflict-* 同目录），
+       // 供 platform status 列出 + platform resolve 三态处置。此前只 warn 返回，下次 sync 用
+@@ -1037,5 +1108,6 @@ export default {
+   filterStaleUpdates,
+   dropFollowServerUpdates,
+   partitionConflictPaths,
++  chunkOpsForPush,
+   syncSpecTree,
+ };
+diff --git a/test/sync-push-chunking.test.mjs b/test/sync-push-chunking.test.mjs
+new file mode 100644
+index 00000000..3d87df03
+--- /dev/null
++++ b/test/sync-push-chunking.test.mjs
+@@ -0,0 +1,139 @@
++/**
++ * 2026-11-04-sync-push-chunking 回归：spec 树推送分批化。
++ *
++ * 生产实证（multi-agent-platform 工作区）：15 天积压 2436 ops/45.7MB 单批 POST 在
++ * 「清单 10s / 推送 30s」单请求预算内上传+服务端 apply 双超，37 连败 400/中断，
++ * spec_version 冻结零落地。分批顺序推送（op 数 + base64 字节数双约束切块）后：
++ * 每块独立提交在预算内；已落地块推进服务器清单；中途失败下轮 diff 断点续传。
++ *
++ * 三层断言：
++ *   A. chunkOpsForPush 纯逻辑边界（阈值恰好/超出、单 op 超字节独占一块、双约束同时生效、序保序）；
++ *   B. syncSpecTree 集成：多块全部落地（服务器收到 N 个 POST、总和=ops 数、synced 正确）；
++ *   C. 中途块 HTTP 500：已落地块保留语义（ok:false、服务器只见前 i 块）。
++ */
++import http from 'node:http'
++import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { syncSpecTree, chunkOpsForPush } from '../src/spec-sync.js'
++
++let failures = 0
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else { console.error('  ❌ ' + msg); failures++; }
++}
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sync-chunk-${process.pid}-`))
++const mkOp = (path, contentLen = 0) => ({ op: 'add', path, base_version: 0, content: 'x'.repeat(contentLen) })
++
++// ── A. chunkOpsForPush 纯逻辑 ──
++console.log('\n--- A. chunkOpsForPush 双约束切块 ---')
++{
++  const single = [mkOp('a.md')]
++  assert(chunkOpsForPush(single, { maxOps: 4, maxBytes: 1024 }).length === 1, '单 op 单块')
++
++  const exact = [mkOp('a'), mkOp('b'), mkOp('c')]
++  assert(chunkOpsForPush(exact, { maxOps: 3, maxBytes: 1 << 20 }).length === 1, '恰好等于 ops 阈值=1 块（触发条件是「已有块满再来新 op」）')
++
++  const four = [mkOp('a'), mkOp('b'), mkOp('c'), mkOp('d')]
++  const byOps = chunkOpsForPush(four, { maxOps: 3, maxBytes: 1 << 20 })
++  assert(byOps.length === 2 && byOps[0].length === 3 && byOps[1].length === 1, `ops 阈值切块 3+1（实得 ${byOps.map((c) => c.length).join('+')}）`)
++
++  // 尺寸粗估=content+path×2+96：4000B op ≈ 4098；a+b=8196>8192 切块，c（≈108B）并入第二块
++  const byBytes = chunkOpsForPush([mkOp('a', 4000), mkOp('b', 4000), mkOp('c', 10)], { maxOps: 100, maxBytes: 8192 })
++  assert(byBytes.length === 2 && byBytes[0].length === 1 && byBytes[1].length === 2, `字节阈值切块 1+2（实得 ${byBytes.map((c) => c.length).join('+')}）`)
++
++  const both = chunkOpsForPush([mkOp('a', 100), mkOp('b', 100), mkOp('c', 100)], { maxOps: 2, maxBytes: 250 })
++  assert(both.length === 3, `双约束同时生效取更严（实得 ${both.length} 块）`)
++
++  const huge = [mkOp('huge.bin', 99999)]
++  const oneHuge = chunkOpsForPush(huge, { maxOps: 8, maxBytes: 100 })
++  assert(oneHuge.length === 1 && oneHuge[0].length === 1, '超字节单 op 独占一块（不切不丢弃不死循环）')
++
++  const ordered = [1, 2, 3, 4, 5].map((i) => mkOp(`f${i}`))
++  const flat = chunkOpsForPush(ordered, { maxOps: 2, maxBytes: 1 << 20 }).flat().map((o) => o.path)
++  assert(JSON.stringify(flat) === JSON.stringify(ordered.map((o) => o.path)), '切块保序（flatten 等于原序）')
++
++  assert(chunkOpsForPush([], { maxOps: 2, maxBytes: 100 }).length === 0, '空 ops 零块（调用方已有 ops.length===0 短路，防御）')
++}
++
++// ── 集成 mock 服务器：manifest 返回空清单（全部本地文件 → add ops）──
++let posts = [] // 每次 spec-sync POST 的 { opsCount, status }
++const server = http.createServer((req, res) => {
++  if (req.url.includes('/api/changes/-/spec-manifest')) {
++    res.writeHead(200, { 'Content-Type': 'application/json' })
++    res.end(JSON.stringify({ files: {}, spec_version: 1 }))
++    return
++  }
++  if (req.url.includes('/api/changes/-/spec-sync') && req.method === 'POST') {
++    let raw = ''
++    req.on('data', (d) => { raw += d })
++    req.on('end', () => {
++      let opsCount = 0
++      try { opsCount = JSON.parse(raw).ops.length } catch { /* 保持 0 */ }
++      const seq = posts.length
++      posts.push({ opsCount, seq })
++      // C 组用例：第 2 块（seq=1）回 500
++      if (process.env.SYNC_CHUNK_FAIL_SECOND === '1' && seq === 1) {
++        res.writeHead(500, { 'Content-Type': 'application/json' })
++        res.end(JSON.stringify({ code: 'internal_error', message: 'mock fail' }))
++        return
++      }
++      res.writeHead(200, { 'Content-Type': 'application/json' })
++      res.end(JSON.stringify({ ok: true, new_versions: {}, conflict: false, platform_deleted: [] }))
++    })
++    return
++  }
++  res.writeHead(404); res.end()
++})
++await new Promise((r) => server.listen(0, '127.0.0.1', r))
++const mockUrl = `http://127.0.0.1:${server.address().port}`
++
++const makeSpec = (sub, fileCount) => {
++  const specDir = join(tmpRoot, sub)
++  mkdirSync(specDir, { recursive: true })
++  for (let i = 0; i < fileCount; i++) writeFileSync(join(specDir, `f${i}.md`), `content ${i}\n`)
++  return specDir
++}
++
++// ── B. 多块全部落地 ──
++console.log('\n--- B. 12 ops 按 env CHUNK_OPS=5 → 3 块顺序提交全部落地 ---')
++{
++  posts = []
++  const prevOps = process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS
++  process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS = '5'
++  try {
++    const specDir = makeSpec('multi', 12)
++    const r = await syncSpecTree(specDir, { url: mockUrl, token: 'tok' }, 'chunk-chg', {})
++    assert(r && r.ok === true && r.synced === 12, `全部落地 synced=12 ok=true（实得 ${JSON.stringify(r && { ok: r.ok, synced: r.synced })}）`)
++    assert(posts.length === 3, `服务器收到 3 次 POST（实得 ${posts.length}）`)
++    assert(posts.map((p) => p.opsCount).join('+') === '5+5+2', `块内 ops 5+5+2（实得 ${posts.map((p) => p.opsCount).join('+')}）`)
++  } finally {
++    if (prevOps === undefined) delete process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS
++    else process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS = prevOps
++  }
++}
++
++// ── C. 第 2 块 500 → 已落地块保留、ok:false、服务器只见前 2 块 ──
++console.log('\n--- C. 中途块 500 → ok:false、已落地 1 块保留、下轮 diff 续传 ---')
++{
++  posts = []
++  const prevOps = process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS
++  process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS = '4'
++  process.env.SYNC_CHUNK_FAIL_SECOND = '1'
++  try {
++    const specDir = makeSpec('failmid', 12)
++    const r = await syncSpecTree(specDir, { url: mockUrl, token: 'tok' }, 'chunk-fail', {})
++    assert(r && r.ok === false && r.synced === 0, `中途失败返回 ok:false synced=0（实得 ${JSON.stringify(r && { ok: r.ok, synced: r.synced })}）`)
++    assert(posts.length === 2, `失败即停：服务器只见 2 次 POST（第 1 块已落地 + 第 2 块 500）（实得 ${posts.length}）`)
++  } finally {
++    if (prevOps === undefined) delete process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS
++    else process.env.SILLYSPEC_SPEC_SYNC_CHUNK_OPS = prevOps
++    delete process.env.SYNC_CHUNK_FAIL_SECOND
++  }
++}
++
++server.closeAllConnections?.()
++await new Promise((r) => server.close(r))
++console.log(`\n${failures === 0 ? '✅ sync-push-chunking 全部通过' : '❌ 存在失败'}（失败 ${failures}）`)
++process.exitCode = failures === 0 ? 0 : 1

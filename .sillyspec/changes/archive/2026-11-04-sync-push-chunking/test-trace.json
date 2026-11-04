@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-sync-push-chunking",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-sync-push-chunking:flow:测试绑定FR-01",
+      "tests": [
+        "test/sync-push-chunking.test.mjs「B. 12 ops 按 env CHUNK_OPS=5 → 3 块顺序提交全部落地」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-sync-push-chunking"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-sync-push-chunking:flow:测试绑定FR-02",
+      "tests": [
+        "test/sync-push-chunking.test.mjs「B. 12 ops 按 env CHUNK_OPS=5 → 3 块顺序提交全部落地」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-sync-push-chunking"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-sync-push-chunking:flow:测试绑定FR-03",
+      "tests": [
+        "test/sync-push-chunking.test.mjs「C. 中途块 500 → ok:false、已落地 1 块保留、下轮 diff 续传」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-sync-push-chunking"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-sync-push-chunking:flow:测试绑定FR-04",
+      "tests": [
+        "test/sync-push-chunking.test.mjs「A. chunkOpsForPush 双约束切块」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-sync-push-chunking"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-04-sync-push-chunking:flow:测试绑定FR-05",
+      "tests": [
+        "test/check-syntax.mjs",
+        "test/hub08-spec-sync-conflict.test.mjs",
+        "test/hub09-sync-circuit-abort.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-sync-push-chunking"
+    }
+  ]
+}
