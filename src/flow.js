@@ -403,9 +403,13 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       ...(km.routeHits || []).slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
       ...scopeMatchedFiles,
     ])].slice(0, 12)
-    if (thinMatchedFiles.length > 0 || rejected.length > 0 || scopeMatchedFiles.length > 0) {
-      try {
-        const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+    // 遥测（FR-04，2026-11-05-knowledge-search-observability）：channel 单源记录（调优/画像
+    // 数据地基）；真零命中也落盘（zeroHit 标记 + 空 matchedFiles——stats 文件矩阵零贡献，
+    // 真实零命中率恰是向量层的目标场景，此前「仅命中才落盘」把它定义没了）。fail-soft 不阻断注入。
+    try {
+      const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+      const { resultChannel } = await import('./knowledge-vector.js')
+      if (thinMatchedFiles.length > 0 || rejected.length > 0 || scopeMatchedFiles.length > 0) {
         appendKnowledgeHit(join(specBase, '.runtime'), {
           type: 'inject',
           change,
@@ -415,10 +419,24 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
           mentionedFiles,
           ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
           rejectedCount: rejected.length,
+          channel: resultChannel(km),
           source: 'thin-start',
         })
-      } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不影响注入本体 */ }
-    }
+      } else {
+        appendKnowledgeHit(join(specBase, '.runtime'), {
+          type: 'inject',
+          change,
+          query: kmQuery,
+          matchedFiles: [],
+          injectedFiles: [],
+          mentionedFiles: [],
+          rejectedCount: 0,
+          channel: resultChannel(km),
+          zeroHit: true,
+          source: 'thin-start',
+        })
+      }
+    } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不影响注入本体 */ }
     if (domains.length === 0 && rejected.length === 0 && !km.matched) {
       lines.length = 0
       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)

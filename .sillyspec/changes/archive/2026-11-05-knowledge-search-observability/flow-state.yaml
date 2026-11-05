@@ -1,0 +1,57 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  知识检索观测补盲与向量质量收口
+
+
+  动机与背景：
+
+  三子代理交叉分析（算法/模型基建/使用数据，2026-11-05）实证：①search 显式检索面零遥测（查什么/命中率/通道全盲）且 inject 事件不记通道——向量层与后续地板调优无数据地基；②stats 遥测被两个测试用例污染
+  62%（用真实仓 specBase 跑 flowKnowledgeDigest，僵尸查询灌入遥测，官方读数虚胖 3 倍）；③thin-start 零命中不落盘——真实零命中率（向量层目标场景）永不可见；④向量结果跨文件重复污染
+  top-k（798 条中 104 重复槽位，实测 top10 中 5 条同条目副本，去重后真命中升 2-3 位）；⑤search 面向量通道 score 恒显 0（keywords∩query 口径对 vector
+  通道是错值）；⑥VECTOR_TIMEOUT_MS=3000 硬编码小于 worker 冷启 1~3s（昨日平台修复变更 design.md 留痕的独立议题）。用户已批准第一批行动计划（「做」）。
+
+
+  成功标准：
+
+  - VECTOR_TIMEOUT_MS 缺省 3000→5000 且 env SILLYSPEC_KNOWLEDGE_VECTOR_TIMEOUT_MS 可调（非法值回落缺省）
+
+  - 向量 decisionHits 按 (anchor,change) 去重保最高分（跨文件副本不再挤占 top-k）
+
+  - search 面向量通道透出真实余弦分（不再恒 0）
+
+  - inject 遥测记 channel（routing/vector/fallback/scope）；thin-start 零命中落盘（zeroHit 标记，matchedFiles 空不污染 stats 文件矩阵）
+
+  - knowledge search 面新增 type=search 遥测（query/matched/channel/entry_count；stats 现有聚合零回归）
+
+  - 两个污染测试改用 tmpdir 隔离 specBase，跑测试不再写真实仓遥测
+
+  - 既有测试面全绿 + 新增用例覆盖上述行为
+autopilot: false
+prestage_ack: false
+baseline_commit: 31c408a26c605f4d8466ab204382bfc5cf5d9386
+updatedAt: '2026-11-05T00:00:01.918Z'
+baseline_sha256: a05fdb81868a5701ac209af0616ca0c0c4324767e322ae4b84464b88a511c600
+spec_approved: true
+spec_approved_at: '2026-11-04T23:20:50.705Z'
+spec_approved_by: zcode-knowledge-observability
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-knowledge-observability
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（38.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261104234750\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 12 个
+

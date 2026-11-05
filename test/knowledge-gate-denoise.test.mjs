@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync, cpSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -76,8 +76,16 @@ test('① 真实库：score 字段在场；D-001 置顶可弹，空标题零分 
 
 test('② 真实库 digest：D-001 在场、空标题噪音三件套消失', async () => {
   const cd = mkdtempSync(join(tmpdir(), 'ss-kgd-'))
+  // 语料拷贝进 tmpdir specBase（2026-11-05-knowledge-search-observability FR-06）：
+  // 真实 specBase 会把 digest 遥测写进真实仓 .runtime（62% 遥测污染源之一）；
+  // 尾部断言真实仓遥测行数零变化（评审 P2 清偿：零污染自动守卫）。
+  const realHitsPath = join(REPO_ROOT, '.sillyspec', '.runtime', 'state', 'knowledge-hits.jsonl')
+  const realHitsLines = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter(Boolean).length : 0)
+  const realHitsBefore = realHitsLines(realHitsPath)
+  const specBase = mkdtempSync(join(tmpdir(), 'ss-kgd-kb-'))
+  cpSync(REAL_KB, join(specBase, 'knowledge'), { recursive: true })
   const r = await flowKnowledgeDigest({
-    specBase: join(REPO_ROOT, '.sillyspec'),
+    specBase,
     change: '2026-09-28-kgd', changeDir: cd,
     input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
   })
@@ -85,7 +93,9 @@ test('② 真实库 digest：D-001 在场、空标题噪音三件套消失', asy
   assert.match(text, /枚举开放世界是错误方向/, 'D-001 死路注记注入（标题锚——迁移稳定，2026-10-14-decision-legacy-renumber 后 id 为全局号形态）')
   assert.ok(!/D-009@v1/.test(text) && !/D-010@v1/.test(text) && !/D-011@v1/.test(text),
     `空标题噪音三件套不应注入（实际：${r.lines.filter(l => /D-0\d+@v1/.test(l)).join(' | ')}）`)
+  assert.equal(realHitsLines(realHitsPath), realHitsBefore, '真实仓遥测零写入（FR-06 自动守卫）')
   rmQuiet(cd)
+  rmQuiet(specBase)
 })
 
 test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回显；未回应照常回显', async () => {

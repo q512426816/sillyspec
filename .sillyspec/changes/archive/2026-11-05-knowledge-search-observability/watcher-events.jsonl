@@ -1,0 +1,13 @@
+{"ts":1793834403804,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793834434434,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793834444491,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793834710549,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-inject-telemetry.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793834982125,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/knowledge-match.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793835645919,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1793835986073,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793835986073,"kind":"task-done","stage":"tasks","detail":"checked 0→6","provisional":true}
+{"ts":1793836002787,"kind":"commit","stage":null,"detail":"081f4be0","provisional":true}
+{"ts":1793836013011,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-05-knowledge-search-observability/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793836072479,"kind":"gate-run","stage":"verify","detail":"门实测 passed（38.5s） · 20261104234750","provisional":true}
+{"ts":1793836649806,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793836708867,"kind":"commit","stage":null,"detail":"eb1e8fde","provisional":true}

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-05-knowledge-search-observability",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "[已清偿] FR-06 测试绑定虚指 + 零污染无自动断言——清偿提交 eb1e8fde 升为自动守卫",
+      "evidence": "原缺口：requirements.md:85 声明的「真实仓 specBase 零写入」用例不存在、零污染仅人工验证。清偿核实（HEAD=eb1e8fde，工作树与提交一致）：① 两用例头部快照真实仓遥测行数、尾部断言零变化——test/knowledge-inject-ranking.test.mjs:98（realHitsBefore 快照）+ :115（assert.equal 前后零变化）、test/knowledge-gate-denoise.test.mjs:84 + :96，锚点路径 REPO_ROOT/.sillyspec/.runtime/state/knowledge-hits.jsonl 与 appendKnowledgeHit→runtimeStatePath 实际落点一致，specBase 回退真实仓的回归会使 digest 遥测追加 1 行即刻红——守卫真实有效；② requirements.md:85 绑定行改为真实用例名「⑤/②（tmpdir 隔离 + 真实仓遥测零写入自动断言）」，与文件内 test() 名对齐。本次复跑两文件 exit=0，真实仓 hits.jsonl 985→985 零写入。",
+      "location": "test/knowledge-inject-ranking.test.mjs:98"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "去重空串槽会合并「同 id 且均无 change」的多条不同 reason 条目",
+      "evidence": "键 `${id}\\u0000${change||''}` 使所有无 change 的同 id 条目共用一键——跨文件副本（本变更目标场景）与真实独立条目（同 id 多条、均无「变更：」字段、reason 不同）按键不可区分，后者收并为 1 条且同分时保先到（`h.score > cur.score` 平局不换）。FR-02/design 已显式声明「change 缺省以空串入键」取舍；同号不同 change 不误并有测试钉住（FR-02 用例 chg-y 断言）。无 change 同号多义是语料异常形态（平台契约注释：change 在场时消歧是诚实消歧面），损失有界、可接受。",
+      "location": "src/knowledge-vector.js:239-244"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "vectorScore 浮点与 keywords 计数同 score 字段分纲并存——eval score_contract 探针理论上会挂，实际结构上不可达",
+      "evidence": "src/stages/knowledge.js:210-216 按 channel 分叉 score 口径（vector→余弦分，其余→关键词命中数）；eval/knowledge/lib/probes.mjs:57-59 的 score-contract 探针断言 score===matchedTags.length，若 eval 走到 vector 通道必挂——但 probes.mjs materialize 只物化 knowledge/ 文件、不写 local.yaml platform 段 → vectorEnabled 无平台配置返回 false，vector 通道在 eval 环境结构上不可达。design 风险节承诺「实现时跑 eval 基线确认」但 tasks/commit 均无 eval 复跑留痕；首轮评审以代码结构核验替代（结论：无破坏路径），声明性承诺与留痕有缺口，判接受。",
+      "location": "src/stages/knowledge.js:210-216"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "零命中落盘改变事件量纲：totalInjects 随 zeroHit 记录增长",
+      "evidence": "src/knowledge-stats.js:77-80 对 type=inject 无条件 totalInjects+=1，zeroHit 记录（matchedFiles=[]）使 inject 事件计数上升——这是 design 风险节显式声明的取舍（「补盲的正确方向而非回归，发布说明留痕」）；命中矩阵/neverHit 零影响（refs 空数组 touch 零调用，neverHit 对照面不变），knowledge-stats 回归测试实跑绿。",
+      "location": "src/knowledge-stats.js:77-80"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "零命中事件 channel 恒为 'routing'（else 缺省）——channel 分布分析需按 zeroHit 过滤",
+      "evidence": "真零命中时 result.json 无 fallback/vector/scope 标记 → resultChannel else 分支返 'routing'（src/knowledge-match.js:295-302）；FR-04 原文即定义「否则 routing」，实现合规，但下游按 channel 聚合时零命中会灌入 routing 份额，需以 zeroHit:true 区分（字段在场，可区分）。",
+      "location": "src/knowledge-match.js:295-302"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "vectorScore 对缺 score 的平台候选回落 1（满分）并首次透出到 search 显示面",
+      "evidence": "src/knowledge-vector.js:232 `typeof r.score === 'number' ? r.score : 1`——缺分候选在 search 面显示为满分 1.0；沿用同函数 decisionHits 既有约定（:221 同款回落），非本变更引入的判定，但 FR-03 使其首次进入用户可见分值。平台端点契约保证 score 在场，属边缘形态，接受。",
+      "location": "src/knowledge-vector.js:232"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "留痕「套件 3 红」中 runtime-relayout 现不可复现（复跑绿）；另两红复现且证实与本变更无关",
+      "evidence": "实跑：runtime-relayout.test.mjs exit=0（留痕称红，stash 对照判存量——当时环境态不可复原，方向无害）；doc-ref-check 红=docs/sillyspec/platform-interface-map.md 对 src/index.js 行锚漂移（本变更未触及 docs/src-index/spec-sync），且本变更前一提交 b9fd150e（2026-11-04）已留痕 doc-ref-check 既有红；spec-dir-home-guard 红=工作树未跟踪残留 test/.sillyspec/（git status `??`，Oct 20 生成）导致 Test 5 向上命中提前截断——环境残留非代码回归。三个套件的导入面本变更均未触及，「非本变更引入」结论成立。",
+      "location": ".sillyspec/changes/2026-11-05-knowledge-search-observability/tasks.md:12"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-04T23:59:24Z"
+}

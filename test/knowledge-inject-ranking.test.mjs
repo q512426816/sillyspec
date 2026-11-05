@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -89,8 +89,17 @@ test('④ 真实库钉子：枚举词表查询 → D-001@v1 枚举开放世界�
 
 test('⑤ 真实库 digest 钉子：flowKnowledgeDigest 注入段渲染该条目与死路短句', async () => {
   const cd = mkdtempSync(join(tmpdir(), 'ss-rank-5-'))
+  // 语料拷贝进 tmpdir specBase（2026-11-05-knowledge-search-observability FR-06）：真实
+  // specBase 会把 digest 遥测写进真实仓 .runtime/knowledge-hits.jsonl（62% 遥测污染源之一
+  // ——每次跑测试灌一条僵尸查询）。断言语义不变：knowledge/ 是逐字节拷贝，真实库钉子照常生效；
+  // 尾部断言真实仓遥测行数前后零变化（评审 P2 清偿：零污染从人工验证升为自动守卫）。
+  const realHitsPath = join(REPO_ROOT, '.sillyspec', '.runtime', 'state', 'knowledge-hits.jsonl')
+  const realHitsLines = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter(Boolean).length : 0)
+  const realHitsBefore = realHitsLines(realHitsPath)
+  const specBase = mkdtempSync(join(tmpdir(), 'ss-rank-5-kb-'))
+  cpSync(REAL_KB, join(specBase, 'knowledge'), { recursive: true })
   const r = await flowKnowledgeDigest({
-    specBase: join(REPO_ROOT, '.sillyspec'),
+    specBase,
     change: '2026-09-28-knowledge-inject-ranking',
     changeDir: cd,
     input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
@@ -103,7 +112,9 @@ test('⑤ 真实库 digest 钉子：flowKnowledgeDigest 注入段渲染该条目
   assert.match(line, /死路|否决理由/, '带死路短句或否决理由渲染')
   assert.match(line, /decisions\/cli-entry\.md/, '迁域不换号：条目渲染带真实域文件指针')
   assert.ok(r.summary.rejectedDecisions >= 1, 'summary 计数含死路面')
+  assert.equal(realHitsLines(realHitsPath), realHitsBefore, '真实仓遥测零写入（FR-06 自动守卫）')
   rmQuiet(cd)
+  rmQuiet(specBase)
 })
 
 test('⑥ deathPathNote：死路句提取与无标记回退', () => {

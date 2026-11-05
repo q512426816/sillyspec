@@ -17,10 +17,10 @@
  */
 
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
-import { join, basename } from 'path'
+import { join, basename, dirname } from 'path'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { parseKnowledgeIndex, keywordMatchesContext, normalizeAnchorForCompare } from '../knowledge-match.js'
-import { matchKnowledgeHybrid } from '../knowledge-vector.js'
+import { matchKnowledgeHybrid, resultChannel } from '../knowledge-vector.js'
 
 // ── 工具函数 ──
 
@@ -132,6 +132,21 @@ export async function cmdSearch(dir, args, opts = {}) {
     ? result.json.parkingFiltered : []
   const payload = buildSearchPayload(result, knowledgeDir, limit, query)
 
+  // search 面遥测（FR-05，2026-11-05-knowledge-search-observability）：显式检索此前零落盘
+  // ——查询形态/命中率/通道分布是向量层调优（地板值/词表收录）的唯一数据源。fail-soft：
+  // 落盘失败不影响检索输出（R-04 纪律）；stats 按 type 严格过滤，type=search 不进既有视图。
+  try {
+    const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+    appendKnowledgeHit(join(dirname(knowledgeDir), '.runtime'), {
+      type: 'search',
+      query,
+      matched: Boolean(result && result.matched),
+      channel: resultChannel(result),
+      entry_count: (payload.matches || []).length,
+      matchedFiles: (payload.matches || []).map((m) => m.id).slice(0, 12),
+    })
+  } catch { /* 遥测 fail-soft（R-04） */ }
+
   output(true, {
     query,
     ...payload,
@@ -176,11 +191,8 @@ export function buildSearchPayload(result, knowledgeDir, limit, query) {
  */
 export function buildSearchMatches(result, knowledgeDir, limit, query) {
   const ctx = String(query || '').toLowerCase()
-  const channel = result && result.json && result.json.fallback ? 'fallback'
-    : result && result.json && result.json.vector ? 'vector'
-      : result && result.json && result.json.scope ? 'scope'
-        : 'routing'
-  return result.entries.slice(0, limit).map(entry => {
+  const channel = resultChannel(result)
+  return result.entries.slice(0, limit).map((entry) => {
     const filePath = join(knowledgeDir, entry.file)
     let title = entry.display
     let summary = ''
@@ -192,12 +204,16 @@ export function buildSearchMatches(result, knowledgeDir, limit, query) {
     }
 
     const tags = entry.keywords
+    // 向量通道透出真实余弦分（FR-03，2026-11-05-knowledge-search-observability）：
+    // keywords∩query 对 vector 通道恒 0（keywords=['vector'] 非查询词）——错值不只是缺值；
+    // vectorScore 由 buildResultFromPlatform 挂文件级最高分。其余通道 score 口径不变。
+    const vectorScore = channel === 'vector' && typeof entry.vectorScore === 'number' ? entry.vectorScore : null
     return {
       id: pathToId(entry.file, knowledgeDir),
       path: join('knowledge', entry.file),
       title,
       summary,
-      score: tags.filter(k => keywordMatchesContext(k, ctx)).length,
+      score: vectorScore !== null ? Math.round(vectorScore * 1000) / 1000 : tags.filter((k) => keywordMatchesContext(k, ctx)).length,
       tags,
       channel,
       category: entry.category,

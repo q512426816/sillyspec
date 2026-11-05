@@ -1163,3 +1163,12 @@ supersedes：D-001@v1
 文件：src/doctor-diagnostics.js, test/doctor-injection-budget.test.mjs
 最近确认：cdcce4ca0a02678854dced87f7bb66f7335250a4
 理由：src/doctor-diagnostics.js 新增 detectInjectionBudget(cwd) 探测器（detectDocBloat 同款形态：软限→WARNING 不 FAIL、fail-soft 跳过），挂入 runDoctorDiagnostics 的 dimensions 数组，renderDoctorSummary/formatDoctorJson 走既有通用渲染零改动。扫描面：仓根 AGENTS.md/CLAUDE.md/SKILL.md、templates/agents-instruction.md（模板源，sillyspec 本仓开发面）、.claude/skills/*/SKILL.md 逐文件 statSync 字节量，预算 20000 字节——对齐 Claude Code 系 harness 压缩截断线（superpowers #2481：截断后超线内容对 agent 不可见，SDD 技能丢五轮修复上限跑 18 轮）。选 WARN 制而非测试硬门：① silyspec-execute SKILL.md 实况 18.9KB 已贴线，硬门上线即红且阈值无事故校准依据；② 阈值待首次真实截断事故校准后再考虑升格（doctor WARN 即校准数据源）。
+
+## D-core-engine-046@v1 2026-11-05-knowledge-search-observability——三子代理交叉分析（2026-11-05）定档的第一批改进：观测补盲（channel 记录、零命中落盘、search 面遥测、测试污染隔离）+ 两处廉价质量收口（
+状态：implemented
+变更：2026-11-05-knowledge-search-observability
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-05-knowledge-search-observability/design.md
+文件：src/flow.js, src/knowledge-match.js, src/knowledge-vector.js, src/stages/execute.js, src/stages/knowledge.js, test/knowledge-gate-denoise.test.mjs, test/knowledge-inject-ranking.test.mjs, test/knowledge-vector-observability.test.mjs, test/thin-inject-telemetry.test.mjs
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+理由：三子代理交叉分析（2026-11-05）定档的第一批改进：观测补盲（channel 记录、零命中落盘、search 面遥测、测试污染隔离）+ 两处廉价质量收口（向量去重、真实分透出）+ 一处预算修正（超时 env 化）。全部落在 CLI 消费端（sillyspec 仓）——遵循「平台只做语义召回，策略面本地解析」架构原则（噪音地板留第二批、英文词表与换模型按触发条件缓办，见变更 proposal）。遥测复用 knowledge-hits.js 底座（appendKnowledgeHit 透传任意字段、平台直报 best-effort 现成），零新存储面：channel/zeroHit 是 inject 记录新字段、search 是新 type，stats 按 type 严格过滤故零回归。 去重与分数透出都在 buildResultFromPlatform 单点实现（跨文件重复根因=平台 parse_decision_entries 无跨文件去重，CLI 端修是唯一不碰平台契约的位置；平台侧语料重复本身是 epoch 迁移遗留，治理另案）。

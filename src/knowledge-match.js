@@ -286,6 +286,21 @@ export function keywordMatchesContext(keyword, contextLower) {
   return new RegExp(`(^|[^a-z0-9_])${escapeRegex(kw)}([^a-z0-9_]|$)`).test(contextLower)
 }
 
+/** 检索结果 → 命中通道单源判定（routing/vector/fallback/scope，2026-11-05-knowledge-search-
+ *  observability FR-04）：注入遥测 channel 字段与 search 面通道行同口径。放本叶子模块（而非
+ *  knowledge-vector.js）——stages/execute.js 静态导入本函数，若从 knowledge-vector 导入会形成
+ *  stages/index→execute→knowledge-vector→…→stages/index 的 TDZ 环（execute.js 头注释 2026-09-14
+ *  实证同型坑）。json 判别键与各层构造方一致（fallbackByQueryShingles/buildResultFromPlatform/
+ *  buildScopeRecallResult 的 json 标记）。 */
+export function resultChannel(result) {
+  const json = result && result.json
+  if (!json) return 'routing'
+  if (json.fallback) return 'fallback'
+  if (json.vector) return 'vector'
+  if (json.scope) return 'scope'
+  return 'routing'
+}
+
 /** 查询词片抽取：CJK 连续段 bigram ＋ ≥4 字符 ASCII 词（小写；短词与标点数字不参与；
  *  纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。
  *  snake/kebab 复合词保留整词并额外产出 ≥4 字符拆分片段（FR-02：查询 worktree_apply 时

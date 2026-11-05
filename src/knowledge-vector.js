@@ -38,9 +38,21 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname } from 'path'
 import { readPlatformConfig } from './sync.js'
-import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile } from './knowledge-match.js'
+import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile, resultChannel } from './knowledge-match.js'
 
-const VECTOR_TIMEOUT_MS = 3000
+export { resultChannel }
+
+/** 向量召回 HTTP 预算（ms）。缺省 5000 覆盖平台 embedding worker 冷启 1~3s + 查询嵌入
+ *  （2026-11-04-knowledge-vector-async-refresh 平台侧修复的配套议题——旧缺省 3000 在
+ *  worker 闲置自灭后的首查必超时白降级一次）；env SILLYSPEC_KNOWLEDGE_VECTOR_TIMEOUT_MS
+ *  正整数覆盖，非法值回落缺省（2026-11-05-knowledge-search-observability FR-01）。 */
+const VECTOR_TIMEOUT_MS_DEFAULT = 5000
+
+export function resolveVectorTimeoutMs(env = process.env) {
+  const raw = Number(env.SILLYSPEC_KNOWLEDGE_VECTOR_TIMEOUT_MS)
+  return Number.isFinite(raw) && Number.isInteger(raw) && raw > 0 ? raw : VECTOR_TIMEOUT_MS_DEFAULT
+}
+
 const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
 /** 能力缓存重试窗：unavailable 记录 1h 内不再探测（平台部署后最迟 1h 自动启用）。 */
 const CAPABILITY_RETRY_MS = 60 * 60 * 1000
@@ -142,7 +154,7 @@ const vectorDeadEndpoints = new Set()
  * 平台向量召回（纯 HTTP 层）。未连接/失败/形态不符 → null（调用方降级）。
  * @returns {Promise<{results: Array<{spec_path: string, anchor: string, score: number}>}|null>}
  */
-export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = VECTOR_TIMEOUT_MS }) {
+export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = resolveVectorTimeoutMs() }) {
   const cfg = readPlatformConfig(cwd)
   if (!cfg || !cfg.url || !cfg.token) return null
   const base = String(cfg.url).replace(/\/+$/, '')
@@ -215,9 +227,23 @@ export function buildResultFromPlatform(indexDir, pvResults) {
       file,
       anchor: rs[0].anchor,
       display: `${file}（平台向量召回）`,
+      // search 面真实分透出（FR-03）：该文件命中的最高余弦分——buildSearchMatches
+      // 对 vector 通道用它替代 keywords∩query 计数（原先恒 0 是错值不只是缺值）
+      vectorScore: Math.max(...rs.map((r) => (typeof r.score === 'number' ? r.score : 1))),
     })
   }
   if (decisionHits.length === 0) return null
+  // 跨文件同键去重（FR-02，2026-11-05-knowledge-search-observability）：epoch 迁移/蒸馏
+  // fanout 遗留同 (id, change) 条目在多个域文件存副本（实测 798 条中 104 重复槽位，top10
+  // 曾被 5 条副本挤占）——键含 change||''（无 change 的同号跨变更是诚实形态不误并），保分高
+  const byKey = new Map()
+  for (const h of decisionHits) {
+    const key = `${h.id}\u0000${h.change || ''}`
+    const cur = byKey.get(key)
+    if (!cur || h.score > cur.score) byKey.set(key, h)
+  }
+  decisionHits.length = 0
+  decisionHits.push(...byKey.values())
   decisionHits.sort((a, b) =>
     (b.score - a.score) ||
     (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))

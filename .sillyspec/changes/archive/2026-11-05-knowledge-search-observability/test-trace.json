@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-05-knowledge-search-observability",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs「resolveVectorTimeoutMs：缺省/env 覆盖/非法回落」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs「buildResultFromPlatform 跨文件同键去重保最高分」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs「search 面向量通道透出真实余弦分」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs「inject 遥测记 channel + 零命中落盘 zeroHit」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs「cmdSearch 落 type=search 遥测」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-06",
+      "tests": [
+        "test/knowledge-gate-denoise.test.mjs「② 真实库 digest（tmpdir 隔离 + 真实仓遥测零写入自动断言）」",
+        "test/knowledge-inject-ranking.test.mjs「⑤ 真实库 digest 钉子（tmpdir 隔离 + 真实仓遥测零写入自动断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-11-05-knowledge-search-observability:flow:测试绑定FR-07",
+      "tests": [
+        "test/knowledge-vector-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-05-knowledge-search-observability"
+    }
+  ]
+}

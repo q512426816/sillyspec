@@ -21,7 +21,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 // （test 直 import 本文件皆此形态）触发 stages/index.js 顶层 stageRegistry 对本文件 definition
 // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
 // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
-import { matchKnowledge } from '../knowledge-match.js'
+import { matchKnowledge, resultChannel } from '../knowledge-match.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 
@@ -136,10 +136,12 @@ function buildWaveKnowledgeSection(changeDir, wave) {
     }
     }
     try {
+      // channel 单源记录（FR-04，2026-11-05-knowledge-search-observability）——画像/调优数据地基
       appendKnowledgeHit(path.join(specBase, '.runtime'), {
         type: 'inject',
         change: path.basename(changeDir),
         query,
+        channel: resultChannel(result),
         matchedFiles: result.matched ? [...humanEntries, ...routeHits].map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
         ...(result.matched ? (() => {
           const scopeMatchedFiles = scopeTelemetryRefs(result, { includeRejected: false })

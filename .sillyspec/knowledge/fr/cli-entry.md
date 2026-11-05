@@ -12179,3 +12179,136 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-04-sync-fail-silent-fix
   status: active
+
+## FR-cli-entry-643 VECTOR_TIMEOUT_MS 缺省 3000→5000 且 env SILLYSPEC_KNOWLEDGE_VECTOR_TIMEOUT_MS 可调（非法值回落缺省）
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：env 覆盖与非法值
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-01
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-01
+  tests: test/knowledge-vector-observability.test.mjs「resolveVectorTimeoutMs：缺省/env 覆盖/非法回落」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-644 向量 decisionHits 按 (anchor,change) 去重保最高分（跨文件副本不再挤占 top-k）
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：跨文件同条目副本
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-02
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-02
+  tests: test/knowledge-vector-observability.test.mjs「buildResultFromPlatform 跨文件同键去重保最高分」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-645 search 面向量通道透出真实余弦分（不再恒 0）
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：向量命中查询
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-03
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-03
+  tests: test/knowledge-vector-observability.test.mjs「search 面向量通道透出真实余弦分」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-646 inject 遥测记 channel（routing/vector/fallback/scope）；thin-start 零命中落盘（zeroHit 标记，matchedFiles 空不污染 stats 文件矩阵）
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：零命中注入
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-04
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-04
+  tests: test/knowledge-vector-observability.test.mjs「inject 遥测记 channel + 零命中落盘 zeroHit」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-647 knowledge search 面新增 type=search 遥测（query/matched/channel/entry_count；stats 现有聚合零回归）
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：显式检索落遥测
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-05
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-05
+  tests: test/knowledge-vector-observability.test.mjs「cmdSearch 落 type=search 遥测」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-648 两个污染测试改用 tmpdir 隔离 specBase，跑测试不再写真实仓遥测
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：跑测试零污染
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-06
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-06
+  tests: test/knowledge-gate-denoise.test.mjs「② 真实库 digest（tmpdir 隔离 + 真实仓遥测零写入自动断言）」 | test/knowledge-inject-ranking.test.mjs「⑤ 真实库 digest 钉子（tmpdir 隔离 + 真实仓遥测零写入自动断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active
+
+## FR-cli-entry-649 既有测试面全绿 + 新增用例覆盖上述行为
+变更：2026-11-05-knowledge-search-observability
+状态：active
+摘要：回归
+全文：.sillyspec/changes/archive/2026-11-05-knowledge-search-observability/requirements.md#FR-07
+最近确认：eb1e8fde9b9d946ed93dd0a0dda3ac1273c937c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-05-knowledge-search-observability:flow:测试绑定FR-07
+  tests: test/knowledge-vector-observability.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-05-knowledge-search-observability
+  status: active

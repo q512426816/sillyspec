@@ -7,7 +7,8 @@
  *   ① thin 命中 → inject 事件落盘：change/query 与既有事件同形，分级字段
  *      injectedFiles（恒空，thin 面只出按需 Read 行）/ mentionedFiles（📚 行 top-3）/
  *      source:'thin-start' 在场；既有 matchedFiles 口径不变
- *   ② 未命中（无 entries 且无 rejected）→ 零落盘
+ *   ② 未命中（无 entries 且无 rejected）→ 落 zeroHit 事件（2026-11-05-knowledge-search-
+ *      observability FR-04 起契约：matchedFiles 空不污染 stats 文件矩阵，真实零命中率可见）
  *   ③ 遥测写失败 fail-soft：.runtime 为普通文件时注入本体照常出命中行
  *
  * fixture：临时 spec 树（mkdtempSync，Windows 兼容）——同 test/knowledge-inject.test.mjs 先例。
@@ -90,7 +91,7 @@ async function main() {
     } finally { cleanup(fx) }
   }
 
-  console.log('── ② 未命中零落盘 ──')
+  console.log('── ② 未命中落 zeroHit 事件（2026-11-05-knowledge-search-observability FR-04 起：真实零命中率可见）──')
   {
     const fx = makeSpecRoot()
     try {
@@ -105,7 +106,12 @@ async function main() {
       const events = existsSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl'))
         ? readKnowledgeHits(fx.runtimeDir).filter((h) => h.type === 'inject')
         : []
-      assertTrue(events.length === 0, `② 无命中零落盘（events=${events.length}）`)
+      assertTrue(events.length === 1, `② 零命中恰落一条 inject 事件（events=${events.length}）`)
+      const ev = events[events.length - 1]
+      assertTrue(ev.zeroHit === true, '② zeroHit 标记在场')
+      assertTrue(Array.isArray(ev.matchedFiles) && ev.matchedFiles.length === 0, '② matchedFiles 空（stats 文件矩阵零贡献）')
+      assertTrue(typeof ev.channel === 'string' && ev.channel.length > 0, `② channel 在场（${ev.channel}）`)
+      assertTrue(ev.source === 'thin-start', '② source=thin-start')
     } finally { cleanup(fx) }
   }
 
