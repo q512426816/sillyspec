@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a319d6d38ad27e63073b8777c0c771ca9eda69fa",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "[首轮] FR-02 存量删除未随 HEAD 提交落地：35 文件仅 git rm 暂存，提交信息与提交实体不符 → [增量复审 a319d6d3] 已清偿",
+      "evidence": "首轮证据：1bf40bb4 diff-tree 零 D；git status 35 条 staged 'D ' 全在 .sillyspec/knowledge/generated/（34 中文切块名 + INDEX.md）；ls-files=0；工作区目录已删——删除停在暂存区，checkout HEAD 即复活死区。增量复审：HEAD=a319d6d3，diff-tree --name-status -r 该笔含 35 D + 2 M；git ls-tree -r --name-only HEAD .sillyspec/knowledge/generated/ = 0（checkout/还原 HEAD 无死区复活面）；git status --porcelain 中 knowledge/generated 计数 = 0（暂存删除已全部被 pathspec 带走）。首笔+修复笔合并删除记录 = 35，与 requirements『34 切块 + INDEX』吻合。",
+      "location": ".sillyspec/knowledge/generated/（35 文件 D，commit a319d6d3）"
+    },
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "[首轮] FR-03 场景未达成：SKILL.md L32/L36 仍诱导跑 refresh 且 T3 负向正则盲区 → [增量复审 a319d6d3] 已清偿",
+      "evidence": "首轮证据：SKILL.md L32『scan 完成后 refresh，generated/ 中有用的条目待人工合并』、L36『自动知识走 refresh』、L3 description 并列 refresh 为功能动词；T3 负向正则仅封『重扫 scan 文档重写|仅写 `generated/`』两短语，上述全部放行。增量复审：L32 已改为『扫描后：scan 文档本体由 scan 流程直接维护（2026-11-07 起 refresh 已退役、generated/ 已退库——不要再跑 refresh）』；L36 已改为『不要直接编辑 manual/ 目录——新知识走 propose（用户确认后 accept 合并）；generated/ 已退库不存在，勿重建』——两处旧语义消失，新文案与实际行为一致（refresh 零写盘纯提示）；test/knowledge-generated-retire.test.mjs L89 负向正则补封『自动知识走 `refresh`|scan 完成后 `refresh`』两短语（盲区关闭）。复跑 8/8 绿、EXIT=0，无回归。",
+      "location": ".claude/skills/sillyspec-knowledge/SKILL.md:32,36；test/knowledge-generated-retire.test.mjs:89"
+    },
+    {
+      "severity": "P3",
+      "status": "deferred",
+      "title": "[首轮] change.patch 留档缺 SKILL.md 修改面与 generated 删除面 → 待收口重跑重新冻结（主控声明漂移判定会触发，非本笔范围）",
+      "evidence": "首轮：patch 仅含 knowledge.js+test 两面，design 清单 4 项。增量复审时点 change.patch 仍为旧版（未随 a319d6d3 更新，属收口重跑冻结产物）；交付面已可由 git 两笔提交完整取证（1bf40bb4 + a319d6d3 合计覆盖 design 全部 4 项文件面）。非阻断，留待收口兑现。",
+      "location": ".sillyspec/changes/2026-11-07-knowledge-generated-retire/change.patch"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "[首轮] 源码注释残留退役前旧语义（knowledge.js L13/L516/L618）——本笔修复未触及，维持披露",
+      "evidence": "增量复审 grep 证实 L13 头注释『refresh — 从 scan 文档刷新自动知识（仅写 generated/）』仍在（a319d6d3 的 2 M 为 SKILL.md 与 test 文件，knowledge.js 未动，L516/L618 同前）。纯注释误导面零行为影响，非阻断，建议后续变更顺手清理。",
+      "location": "src/stages/knowledge.js:13,516,618"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "[首轮] FR-02 测试绑定描述宽于用例实面（绑定行称 validate/search 零回归，T2 仅实测 validate）——主控裁决维持",
+      "evidence": "主控声明绑定措辞维持，search 零回归由 ledger『10 面 knowledge 回归 0 fail』背书（含 search 面）。源码侧 search 对 generated 的残留引用仅为 ID 前缀兼容解析（L244/L269），无生成侧消费，与『零消费』声明一致。披露接受，非阻断。",
+      "location": ".sillyspec/changes/2026-11-07-knowledge-generated-retire/requirements.md:36；test/knowledge-generated-retire.test.mjs T2"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "[首轮成立，无变化] design 答『不适用：纯输出函数』经源码核实成立：cmdRefresh 无输入解析无状态，resolveKnowledgeDir 纯路径拼接。",
+    "并发": "[首轮] 零写盘源码级证实（cmdRefresh 函数体无任何 fs 写调用）+ T1 前后快照实证；T1 反向有效性成立（旧体先 mkdirSync 再查 scanDir，快照必红 + ok:false 双保险）。[增量] 删除面已随 a319d6d3 落地，『一次性 git 操作』现与事实一致；单文件复跑 8/8 绿无回归。",
+    "切换": "[首轮] 『删除随提交原子落地』当时失准（35 条暂存中间态，为 P1-1 根源）。[增量] 已消除：35 D 随修复笔原子落地，git status 零 generated 残留，无悬空中间态；废弃提示路径始终无中间态。",
+    "作用域": "[首轮] 提交全本仓路径、未越平台仓；scan 本体目录 7 处真实存在（探针路径核验通过）；dispatch 入口保留（L652-653 case 'refresh'）防断链成立。[增量] a319d6d3 变更面 = 35 D（generated）+ 2 M（SKILL.md、test），均在承诺文件清单内，无范围外夹带；非 generated 的他路径未暂存删除与 test/.sillyspec/ 未跟踪目录为并行会话/历史遗留，按纪律未处置。"
+  },
+  "reviewedAt": "2026-11-07T04:45:45+08:00"
+}

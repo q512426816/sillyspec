@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-knowledge-generated-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-07-knowledge-generated-retire:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-generated-retire.test.mjs「T1: refresh 废弃提示零写盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-generated-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-07-knowledge-generated-retire:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-generated-retire.test.mjs「T2: validate/search 零回归（无 generated 前提）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-generated-retire"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-07-knowledge-generated-retire:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-generated-retire.test.mjs「T3: help 与 SKILL 废弃文案同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-generated-retire"
+    }
+  ]
+}

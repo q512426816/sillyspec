@@ -1,0 +1,84 @@
+{
+  "change": "2026-11-07-knowledge-generated-retire",
+  "baseline": "78031661c79e19262c6f1d250ce183094ec07570",
+  "head": "a319d6d38ad27e63073b8777c0c771ca9eda69fa",
+  "files": [
+    "src/stages/knowledge.js",
+    "test/knowledge-generated-retire.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 101,
+    "deletions": 111
+  },
+  "savedAt": "2026-11-06T20:47:19.095Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "78031661c79e19262c6f1d250ce183094ec07570",
+    "totals": {
+      "files": 3,
+      "additions": 101,
+      "deletions": 111
+    },
+    "rows": [
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 8,
+        "deletions": 111,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-generated-retire.test.mjs",
+        "additions": 93,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-knowledge/SKILL.md",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "d55763a9d171c12843df119736857ba49427ce86d99f4f1f4d647af5b0e8b9b1",
+  "patchStatus": "ok"
+}

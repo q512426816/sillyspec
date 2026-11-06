@@ -415,120 +415,17 @@ export async function cmdValidate(dir, args, opts = {}) {
 // ── refresh ──
 
 export async function cmdRefresh(dir, args, opts = {}) {
+  // generated 切块退役（2026-11-07-knowledge-generated-retire）：双仓审计实证切块镜像为
+  // 零消费死区（INDEX 零引用、检索四层零进语料、自带 INDEX 零读取方）且是双源漂移源
+  // （平台仓同事实矛盾实证）——scan 文档本体在 docs 下项目 scan 目录，保留为唯一真相源，
+  // 切块产物退出知识库。子命令入口保留防脚本断链，行为=废弃提示零写盘。
   const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
-  const generatedDir = join(knowledgeDir, 'generated')
-
-  if (!existsSync(knowledgeDir)) {
-    output(false, {}, { code: 'knowledge_dir_missing', path: knowledgeDir })
-    return
-  }
-
-  // refresh 只写 generated/ 区
-  mkdirSync(generatedDir, { recursive: true })
-
-  // 扫描 scan 文档。项目名用 DB 注册名优先（坑 knowledge-basename-project-mismatch）：
-  // scan 写侧 docs/<project> 的 project 来自 dbProjectName || basename(cwd)，注册名 ≠ 目录名
-  // （projects yaml name/path 分离、平台模式 specRoot≠sourceRoot）时，用 basename(dir) 拼
-  // scanDir 永远找不到 → refresh 恒报 scan_docs_missing。DB 读失败回退 basename（与写侧
-  // default 同口径）。查不到注册名对应目录时再回退 basename 试一次（双形态兼容）。
-  const base = opts.specDir || join(dir, '.sillyspec')
-  let projectName = null
-  try {
-    const { DatabaseSync } = await import('node:sqlite')
-    const db = new DatabaseSync(join(base, '.runtime', 'sillyspec.db'), { readOnly: true })
-    const row = db.prepare('SELECT name FROM project LIMIT 1').get()
-    db.close()
-    if (row && row.name) projectName = row.name
-  } catch { /* db 不可读 → 走 basename 兜底 */ }
-  if (!projectName) projectName = basename(dir)
-  let scanDir = join(base, 'docs', projectName, 'scan')
-  if (!existsSync(scanDir) && projectName !== basename(dir)) {
-    scanDir = join(base, 'docs', basename(dir), 'scan')
-  }
-
-  if (!existsSync(scanDir)) {
-    output(false, {}, { code: 'scan_docs_missing', path: scanDir })
-    return
-  }
-
-  const scanFiles = readdirSync(scanDir).filter(f => f.endsWith('.md'))
-  const generated = []
-  const overwritten = []
-  // 同 run 文件名去重（坑 knowledge-slug-collision）：slug 只由章节标题生成，不同 scan 文件
-  // 的同名章节（如各自都有「## 概述」）后者 writeFileSync 静默覆盖前者，INDEX 却登记两条
-  // 指向同一路径的条目——知识条目无声丢失。碰撞时追加 -2/-3 后缀保双份（唯一命名零扰动，
-  // 每次 refresh 按相同文件顺序重跑，后缀分配稳定）
-  const usedNames = new Set()
-
-  for (const scanFile of scanFiles) {
-    const scanPath = join(scanDir, scanFile)
-    const content = readFileSync(scanPath, 'utf8')
-    const title = extractTitle(content) || scanFile.replace('.md', '')
-
-    // 简单提取：取每个 ## 章节作为一个知识条目候选
-    const sections = extractSections(content)
-    for (const section of sections) {
-      if (section.lines < 3) continue // 太短的章节跳过
-
-      const slug = section.heading.toLowerCase()
-        .replace(/[^\w\u4e00-\u9fff]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 60)
-
-      let fileName = `${slug}.md`
-      if (usedNames.has(fileName)) {
-        let n = 2
-        while (usedNames.has(`${slug}-${n}.md`)) n++
-        fileName = `${slug}-${n}.md`
-      }
-      usedNames.add(fileName)
-      const genPath = join(generatedDir, fileName)
-      const isNew = !existsSync(genPath)
-
-      const entryContent = [
-        `---`,
-        `source: scan/${scanFile}`,
-        `section: ${section.heading}`,
-        `generated_at: ${new Date().toISOString()}`,
-        `---`,
-        ``,
-        `# ${title} — ${section.heading}`,
-        ``,
-        section.body,
-      ].join('\n')
-
-      // INDEX/generated 是 search/validate 的解析源（跨进程读），走原子写防半截
-      writeAtomicSync(genPath, entryContent)
-      generated.push({ file: `generated/${fileName}`, title: `${title} — ${section.heading}`, new: isNew })
-      if (!isNew) overwritten.push(`generated/${fileName}`)
-    }
-  }
-
-  // 更新 generated/INDEX.md
-  const genIndexPath = join(generatedDir, 'INDEX.md')
-  const indexLines = [
-    '---',
-    `generated_at: ${new Date().toISOString()}`,
-    '---',
-    '',
-    '# Generated Knowledge Index',
-    '',
-    '> Auto-generated from scan documents. Do not edit manually.',
-    '',
-  ]
-  for (const g of generated) {
-    indexLines.push(`- ${g.title} → [${g.file}](${g.file})`)
-  }
-  writeAtomicSync(genIndexPath, indexLines.join('\n'))
-
   output(true, {
-    generated_count: generated.length,
-    new_count: generated.filter(g => g.new).length,
-    overwritten_count: overwritten.length,
-    files: generated,
+    deprecated: true,
+    message: 'knowledge refresh 已退役（2026-11-07-knowledge-generated-retire）：generated 切块为死区已退库。scan 文档本体在 docs 下的项目 scan 目录，由 scan 流程维护；知识沉淀走 propose → 用户确认后 accept 合并。',
+    knowledge_dir: knowledgeDir,
   })
 }
-
 // ── propose ──
 
 export async function cmdPropose(dir, args, opts = {}) {
@@ -731,7 +628,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
       '  scope                 知识注入作用域现状与标记语法（always/repo/module/关键词；纯读）',
       '  stats                 覆盖率/死条目统计（纯读）',
-      '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
+      '  refresh               （已退役 2026-11-07）generated 切块死区退库——零写盘废弃提示；scan 本体由 scan 流程维护',
       '  propose --title "..." [--body "<文本>" | --body-file <路径>] [--category <名>] [--from <来源>]   提议新知识（长中文正文用 --body-file 从文件读正文，绕开命令行传参）',
       '  accept --id proposed/<slug> [--file <目标>] [--dry-run]   合并待审提议为正式知识（用户确认后执行；category 有效时可省 --file 自动路由）',
       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',

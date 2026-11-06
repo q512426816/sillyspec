@@ -1,0 +1,48 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  generated 切块死区退库
+
+
+  动机与背景：双仓审计实证 generated 目录（scan 文档的 ## 切块镜像）为死区——INDEX 零引用、检索四层零消费、generated 下 INDEX
+  全仓零读取方；且平台仓已实证双源矛盾（同一事实与人工区各说各话：EventSource 与 fetch-sse 相反、已修复问题仍挂着）——切块镜像纯漂移源。scan 文档本体（docs 项目 scan
+  目录）保留，仅切块产物退出知识库。
+
+
+  成功标准：
+
+  - knowledge refresh 子命令改为废弃提示（输出说明切块已退役与 scan 本体位置），不再写任何文件
+
+  - 本仓 knowledge 下 generated 存量目录删除（34 文件）
+
+  - 既有 knowledge 测试面全绿 + 新增用例锁 refresh 废弃行为（零写盘）
+
+  - help 文案与 SKILL.md 的 refresh 描述同步为废弃说明
+autopilot: true
+prestage_ack: true
+baseline_commit: 78031661c79e19262c6f1d250ce183094ec07570
+updatedAt: '2026-11-06T20:47:20.913Z'
+baseline_sha256: 99b8028ef20802d06d9a594e5ebbe724e5a5f574f7a0dde3a5907c132544b147
+spec_approved: true
+spec_approved_at: '2026-11-06T20:34:39.323Z'
+spec_approved_by: claude-knowledge-generated-retire
+spec_approved_channel: user-confirmed
+spec_attested_by: claude-knowledge-generated-retire
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js3)（5.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261106203806\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+
