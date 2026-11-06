@@ -3556,10 +3556,10 @@
 - row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-01
   tests: test/knowledge-vector-recall.test.mjs「⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: c5b1d9a5a6cd83437910253ba0a6ff9ea5dd7904
   source_change: 2026-10-15-vector-gate-tighten
   status: active
 
@@ -3575,10 +3575,10 @@
 - row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-02
   tests: test/knowledge-vector-recall.test.mjs「① 命中面」 | test/knowledge-vector-recall.test.mjs「②③④ 降级三面」 | test/knowledge-vector-recall.test.mjs「⑤⑥ 触发纪律」 | test/knowledge-vector-recall.test.mjs「⑦ 真实库锚点映射」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: c5b1d9a5a6cd83437910253ba0a6ff9ea5dd7904
   source_change: 2026-10-15-vector-gate-tighten
   status: active
 

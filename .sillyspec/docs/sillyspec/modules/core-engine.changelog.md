@@ -114,3 +114,4 @@
 | 2026-11-04 | 2026-11-04-fence-aware-task-rows | 任务行解析围栏感知守卫防幻影任务 |
 | 2026-11-04 | 2026-11-04-doctor-injection-budget | doctor 常驻注入面体积预算告警 |
 | 2026-11-05 | 2026-11-05-knowledge-search-observability | 知识检索观测补盲与向量质量收口 |
+| 2026-11-06 | 2026-11-06-knowledge-body-recall | 2026-11-06-knowledge-body-recall |

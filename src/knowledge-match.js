@@ -446,6 +446,93 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
 }
 
 /**
+ * 正文词片兜底（2026-11-06-knowledge-body-recall FR-01）：普通知识文件 `##` 段落语料的
+ * 查询词片召回——四层检索既有语料均不含普通文件正文（根因见该变更 design），本通道补位。
+ *
+ * - 语料：INDEX 引用的普通知识文件（排除 decisions/fr 路由行——各有专用通道；排除停车场
+ *   文件），按 `## ` 切段，段落=锚点级命中单元。
+ * - 词片：复用 queryShingles（无新分词逻辑；纯 ASCII 查询零词片=零产出，既有语义边界）。
+ * - 窗判定（D-002 段落覆盖数口径，非 decisions 通道的绝对次数窗）：词片**覆盖的段落数**
+ *   n_segs ∈ [2, max(2, ceil(8% × 该文件段落总数))] 才算「跨段复现且非泛在」——绝对次数
+ *   窗在正文语料会误杀稀有词（实测 5% 次数窗上限恒 2，正文出现 3-5 次的稀有词被误判泛在，
+ *   依据 .sillyspec/.runtime/logs/bigram-stats.log：泛在词「目录」段覆盖 19.3%、「会话」
+ *   11.9% vs 稀有词「重开」1.8%、「问题」3.7%，8% 取分界带）。
+ * - 已修复段落过滤（FR-04）：段落含 `- 状态：已修复/已解决/已退役` 状态行时跳过（口径对齐
+ *   isResolvedRoute 的正文状态行判据）。
+ * - 无可命中段落返回 null（保持调用方零命中语义，对齐 fallbackByQueryShingles 契约）。
+ */
+export function fallbackByBodyShingles(indexDir, taskContext) {
+  const shingles = queryShingles(taskContext)
+  if (shingles.length === 0) return null
+  const entries = parseKnowledgeIndex(indexDir)
+  if (entries.length === 0) return null
+
+  const byFile = new Map()
+  for (const e of entries) {
+    const file = String(e.file || '').replace(/\\/g, '/')
+    // 专用通道文件（decisions/fr 路由行）与停车场不入正文语料
+    if (/^decisions\//.test(file) || /^fr\//.test(file) || isParkingFile(file)) continue
+    if (!byFile.has(file)) byFile.set(file, [])
+    byFile.get(file).push(e)
+  }
+
+  const hits = []
+  for (const [file] of byFile) {
+    let content
+    try {
+      content = readFileSync(join(indexDir, file), 'utf8').replace(/\r\n?/g, '\n')
+    } catch { continue /* 文件不可读跳过（fail-soft，对齐 isResolvedRoute 读取容错） */ }
+    // `## ` 切段；段头之后的正文参与词片判定
+    const blocks = content.split(/^## /m).slice(1)
+    if (blocks.length === 0) continue
+    const segs = blocks.map((b) => {
+      const lines = b.split('\n')
+      return { heading: lines[0].trim(), text: b.toLowerCase() }
+    })
+    // 已修复段落过滤（FR-04）
+    const active = segs.filter((s) => !/^\s*-\s*状态[：:]\s*(已修复|已解决|已退役)/m.test(s.text))
+    const ceil = Math.max(2, Math.ceil(active.length * 0.08))
+    // 词片 → 覆盖段落数（段落覆盖口径）；窗内词片按段落聚合
+    const segHitCount = new Map()
+    const inWindow = new Set()
+    for (const sh of shingles) {
+      let n = 0
+      for (const s of active) if (s.text.includes(sh)) n++
+      if (n >= 2 && n <= ceil) {
+        inWindow.add(sh)
+        for (const s of active) if (s.text.includes(sh)) segHitCount.set(s, (segHitCount.get(s) || 0) + 1)
+      }
+    }
+    if (inWindow.size === 0) continue
+    const entry = byFile.get(file)[0]
+    for (const s of active) {
+      const score = segHitCount.get(s) || 0
+      if (score === 0) continue
+      hits.push({
+        file,
+        anchor: s.heading,
+        keywords: [...inWindow].filter((sh) => s.text.includes(sh)),
+        display: `${s.heading}（正文词片命中）`,
+        category: entry.category || '',
+        score,
+      })
+    }
+  }
+  if (hits.length === 0) return null
+  hits.sort((a, b) => b.score - a.score)
+  const top = hits.slice(0, 10)
+  return {
+    matched: true,
+    entries: top,
+    report: `Status: body fallback matched (${top.length} segments in ${byFile.size} files)`,
+    json: {
+      matched: true, entry_count: top.length, fallback: true, bodyFallback: true,
+      entries: top.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
+    },
+  }
+}
+
+/**
  * 用任务上下文匹配知识条目
  * @param {string} indexDir - knowledge 目录路径
  * @param {string} taskContext - 任务上下文（task 名称 + 描述，用于关键词匹配）

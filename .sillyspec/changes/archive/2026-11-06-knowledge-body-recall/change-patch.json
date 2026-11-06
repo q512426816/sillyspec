@@ -1,0 +1,101 @@
+{
+  "change": "2026-11-06-knowledge-body-recall",
+  "baseline": "df12c5ff876d8f4470afaefb81b28fe5cf178ac7",
+  "head": "8758175eb0c52cc5318e1f62279ed9ea43fc8348",
+  "files": [
+    "eval/knowledge/baseline.json",
+    "src/knowledge-match.js",
+    "src/knowledge-vector.js",
+    "test/knowledge-body-recall.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 319,
+    "deletions": 15
+  },
+  "savedAt": "2026-11-06T16:18:04.220Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "eval",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "df12c5ff876d8f4470afaefb81b28fe5cf178ac7",
+    "totals": {
+      "files": 4,
+      "additions": 319,
+      "deletions": 15
+    },
+    "rows": [
+      {
+        "path": "eval/knowledge/baseline.json",
+        "additions": 12,
+        "deletions": 12,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 87,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 31,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-body-recall.test.mjs",
+        "additions": 189,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "37e1340be6ad133b5f19becb0a2cc76b7239d63e8cf38a87d460d2f4ac3c7db2",
+  "patchStatus": "ok"
+}

@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname } from 'path'
 import { readPlatformConfig } from './sync.js'
-import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile, resultChannel } from './knowledge-match.js'
+import { matchByRouting, fallbackByQueryShingles, fallbackByBodyShingles, parseDecisionEntries, isParkingFile, resultChannel } from './knowledge-match.js'
 
 export { resultChannel }
 
@@ -281,6 +281,31 @@ async function fuseBaseWithScope(base, indexDir, scopeFiles) {
 }
 
 /**
+ * 路由命中结果的正文词片并联融合（2026-11-06-knowledge-body-recall FR-02）：弱命中不短路
+ * 的根因修复——路由命中（哪怕泛词 tag 撞词的弱命中）此前直接 return，正文写了相关词的普通
+ * 知识文件段落永久不可见。body 兜底命中按 `file#anchor` 键去重后**追加**顶层 entries 尾部
+ * （路由命中原序不动；`json.entries` 不同步——全仓零消费点，仅在 json 面挂 bodyFallback 判
+ * 定键）；本路径零网络（「路由命中零网络」契约保持）。fail-soft：body 兜底异常原样返回 base。
+ */
+function fuseRoutingWithBodyFallback(base, indexDir, taskContext) {
+  try {
+    const body = fallbackByBodyShingles(indexDir, taskContext)
+    if (!body) return base
+    const seen = new Set(base.entries.map((e) => `${String(e.file || '').replace(/\\/g, '/')}#${e.anchor || ''}`))
+    const additions = body.entries.filter((e) => {
+      const key = `${String(e.file || '').replace(/\\/g, '/')}#${e.anchor || ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (additions.length === 0) return base
+    base.entries = [...base.entries, ...additions]
+    base.json = { ...(base.json || {}), bodyFallback: true }
+    return base
+  } catch { return base }
+}
+
+/**
  * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
  * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ scope 遍历 → 本地词片 → 空。
  * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
@@ -295,7 +320,9 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
     // 融合（2026-11-02-knowledge-fusion）：路由命中后仍跑 scope——热文件触达的 rejected/手工条目
     // 原先被 early-return 永久遮住。只追加 scopeDecisionHits/scopeEntries（不重排路由结果）；
     // scope 构建失败原样返回路由结果；仍不跑平台向量（路由命中零网络）。
-    return fuseBaseWithScope(r, indexDir, scopeFiles)
+    // 正文词片并联（2026-11-06-knowledge-body-recall FR-02）：同一 early-return 也遮正文——
+    // body 兜底先行并联（零网络），scope 融合照旧。
+    return fuseBaseWithScope(fuseRoutingWithBodyFallback(r, indexDir, taskContext), indexDir, scopeFiles)
   }
   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
   if (vectorEnabled(cwd)) {
@@ -315,5 +342,6 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
     } catch { /* 图构建 fail-soft——降级词片层 */ }
   }
   const fb = fallbackByQueryShingles(indexDir, taskContext)
-  return fb || r
+  // 零命中链末端补跑（FR-01）：decisions 词片回退优先，无果时普通文件正文兜底接管
+  return fb || fallbackByBodyShingles(indexDir, taskContext) || r
 }

@@ -1,0 +1,446 @@
+diff --git a/eval/knowledge/baseline.json b/eval/knowledge/baseline.json
+index c0f39dd4..11b21e27 100644
+--- a/eval/knowledge/baseline.json
++++ b/eval/knowledge/baseline.json
+@@ -3,9 +3,9 @@
+   "generated_by": "eval/knowledge/run.mjs",
+   "snapshot": {
+     "sillyspec": {
+-      "head": "f483db394bdbdb4d8dad72fbc5836d5c4fab7bef",
+-      "knowledge_hash": "26efd903ad32adbdaef0b3515a156f4ca48ebdb757504d5eebb894de72174ca8",
+-      "knowledge_files": 139
++      "head": "c5b1d9a5a6cd83437910253ba0a6ff9ea5dd7904",
++      "knowledge_hash": "ef33189ed3662e37e286fb6827eb06e5ea449853459da0a74a99d0305b973665",
++      "knowledge_files": 141
+     }
+   },
+   "cases": {
+@@ -265,13 +265,13 @@
+         "raw": {
+           "top1": 0.6667,
+           "top3": 0.75,
+-          "mrr": 0.7257,
++          "mrr": 0.7215,
+           "n": 12
+         },
+         "rendered": {
+           "top1": 0.6667,
+           "top3": 0.75,
+-          "mrr": 0.7257,
++          "mrr": 0.7215,
+           "n": 12
+         },
+         "truncated": [],
+@@ -326,8 +326,8 @@
+           },
+           {
+             "id": "s-scope-04",
+-            "raw_rank": 4,
+-            "rendered_rank": 4,
++            "raw_rank": 5,
++            "rendered_rank": 5,
+             "truncated": false
+           },
+           {
+@@ -360,7 +360,7 @@
+           "added": {
+             "top1": 0.4,
+             "top3": 0.6,
+-            "mrr": 0.5167,
++            "mrr": 0.5067,
+             "n": 5,
+             "reachable": 0.8
+           },
+@@ -380,7 +380,7 @@
+         "raw": {
+           "top1": 0.25,
+           "top3": 0.5,
+-          "mrr": 0.4236,
++          "mrr": 0.4167,
+           "n": 4
+         },
+         "rendered": {
+@@ -408,7 +408,7 @@
+           },
+           {
+             "id": "s-man-10",
+-            "raw_rank": 9,
++            "raw_rank": 12,
+             "rendered_rank": null,
+             "truncated": true
+           },
+@@ -423,7 +423,7 @@
+           "approx": {
+             "top1": 0,
+             "top3": 0.3333,
+-            "mrr": 0.2315,
++            "mrr": 0.2222,
+             "n": 3,
+             "reachable": 1
+           },
+@@ -441,7 +441,7 @@
+   "self_smoke": {
+     "sillyspec": {
+       "cases": 214,
+-      "skipped": 603,
++      "skipped": 618,
+       "own_hit_top3": 0.0187,
+       "name_only_top3": 0.028,
+       "leak_gap": -0.0093
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 58798efb..6561627e 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -445,6 +445,93 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
+   }
+ }
+ 
++/**
++ * 正文词片兜底（2026-11-06-knowledge-body-recall FR-01）：普通知识文件 `##` 段落语料的
++ * 查询词片召回——四层检索既有语料均不含普通文件正文（根因见该变更 design），本通道补位。
++ *
++ * - 语料：INDEX 引用的普通知识文件（排除 decisions/fr 路由行——各有专用通道；排除停车场
++ *   文件），按 `## ` 切段，段落=锚点级命中单元。
++ * - 词片：复用 queryShingles（无新分词逻辑；纯 ASCII 查询零词片=零产出，既有语义边界）。
++ * - 窗判定（D-002 段落覆盖数口径，非 decisions 通道的绝对次数窗）：词片**覆盖的段落数**
++ *   n_segs ∈ [2, max(2, ceil(8% × 该文件段落总数))] 才算「跨段复现且非泛在」——绝对次数
++ *   窗在正文语料会误杀稀有词（实测 5% 次数窗上限恒 2，正文出现 3-5 次的稀有词被误判泛在，
++ *   依据 .sillyspec/.runtime/logs/bigram-stats.log：泛在词「目录」段覆盖 19.3%、「会话」
++ *   11.9% vs 稀有词「重开」1.8%、「问题」3.7%，8% 取分界带）。
++ * - 已修复段落过滤（FR-04）：段落含 `- 状态：已修复/已解决/已退役` 状态行时跳过（口径对齐
++ *   isResolvedRoute 的正文状态行判据）。
++ * - 无可命中段落返回 null（保持调用方零命中语义，对齐 fallbackByQueryShingles 契约）。
++ */
++export function fallbackByBodyShingles(indexDir, taskContext) {
++  const shingles = queryShingles(taskContext)
++  if (shingles.length === 0) return null
++  const entries = parseKnowledgeIndex(indexDir)
++  if (entries.length === 0) return null
++
++  const byFile = new Map()
++  for (const e of entries) {
++    const file = String(e.file || '').replace(/\\/g, '/')
++    // 专用通道文件（decisions/fr 路由行）与停车场不入正文语料
++    if (/^decisions\//.test(file) || /^fr\//.test(file) || isParkingFile(file)) continue
++    if (!byFile.has(file)) byFile.set(file, [])
++    byFile.get(file).push(e)
++  }
++
++  const hits = []
++  for (const [file] of byFile) {
++    let content
++    try {
++      content = readFileSync(join(indexDir, file), 'utf8').replace(/\r\n?/g, '\n')
++    } catch { continue /* 文件不可读跳过（fail-soft，对齐 isResolvedRoute 读取容错） */ }
++    // `## ` 切段；段头之后的正文参与词片判定
++    const blocks = content.split(/^## /m).slice(1)
++    if (blocks.length === 0) continue
++    const segs = blocks.map((b) => {
++      const lines = b.split('\n')
++      return { heading: lines[0].trim(), text: b.toLowerCase() }
++    })
++    // 已修复段落过滤（FR-04）
++    const active = segs.filter((s) => !/^\s*-\s*状态[：:]\s*(已修复|已解决|已退役)/m.test(s.text))
++    const ceil = Math.max(2, Math.ceil(active.length * 0.08))
++    // 词片 → 覆盖段落数（段落覆盖口径）；窗内词片按段落聚合
++    const segHitCount = new Map()
++    const inWindow = new Set()
++    for (const sh of shingles) {
++      let n = 0
++      for (const s of active) if (s.text.includes(sh)) n++
++      if (n >= 2 && n <= ceil) {
++        inWindow.add(sh)
++        for (const s of active) if (s.text.includes(sh)) segHitCount.set(s, (segHitCount.get(s) || 0) + 1)
++      }
++    }
++    if (inWindow.size === 0) continue
++    const entry = byFile.get(file)[0]
++    for (const s of active) {
++      const score = segHitCount.get(s) || 0
++      if (score === 0) continue
++      hits.push({
++        file,
++        anchor: s.heading,
++        keywords: [...inWindow].filter((sh) => s.text.includes(sh)),
++        display: `${s.heading}（正文词片命中）`,
++        category: entry.category || '',
++        score,
++      })
++    }
++  }
++  if (hits.length === 0) return null
++  hits.sort((a, b) => b.score - a.score)
++  const top = hits.slice(0, 10)
++  return {
++    matched: true,
++    entries: top,
++    report: `Status: body fallback matched (${top.length} segments in ${byFile.size} files)`,
++    json: {
++      matched: true, entry_count: top.length, fallback: true, bodyFallback: true,
++      entries: top.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
++    },
++  }
++}
++
+ /**
+  * 用任务上下文匹配知识条目
+  * @param {string} indexDir - knowledge 目录路径
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+index 15eeeaa5..918685b6 100644
+--- a/src/knowledge-vector.js
++++ b/src/knowledge-vector.js
+@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+ import { runtimeStatePath } from './runtime-paths.js'
+ import { join, dirname } from 'path'
+ import { readPlatformConfig } from './sync.js'
+-import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile, resultChannel } from './knowledge-match.js'
++import { matchByRouting, fallbackByQueryShingles, fallbackByBodyShingles, parseDecisionEntries, isParkingFile, resultChannel } from './knowledge-match.js'
+ 
+ export { resultChannel }
+ 
+@@ -280,6 +280,31 @@ async function fuseBaseWithScope(base, indexDir, scopeFiles) {
+   } catch { return base }
+ }
+ 
++/**
++ * 路由命中结果的正文词片并联融合（2026-11-06-knowledge-body-recall FR-02）：弱命中不短路
++ * 的根因修复——路由命中（哪怕泛词 tag 撞词的弱命中）此前直接 return，正文写了相关词的普通
++ * 知识文件段落永久不可见。body 兜底命中按 `file#anchor` 键去重后**追加**顶层 entries 尾部
++ * （路由命中原序不动；`json.entries` 不同步——全仓零消费点，仅在 json 面挂 bodyFallback 判
++ * 定键）；本路径零网络（「路由命中零网络」契约保持）。fail-soft：body 兜底异常原样返回 base。
++ */
++function fuseRoutingWithBodyFallback(base, indexDir, taskContext) {
++  try {
++    const body = fallbackByBodyShingles(indexDir, taskContext)
++    if (!body) return base
++    const seen = new Set(base.entries.map((e) => `${String(e.file || '').replace(/\\/g, '/')}#${e.anchor || ''}`))
++    const additions = body.entries.filter((e) => {
++      const key = `${String(e.file || '').replace(/\\/g, '/')}#${e.anchor || ''}`
++      if (seen.has(key)) return false
++      seen.add(key)
++      return true
++    })
++    if (additions.length === 0) return base
++    base.entries = [...base.entries, ...additions]
++    base.json = { ...(base.json || {}), bodyFallback: true }
++    return base
++  } catch { return base }
++}
++
+ /**
+  * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
+  * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ scope 遍历 → 本地词片 → 空。
+@@ -295,7 +320,9 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
+     // 融合（2026-11-02-knowledge-fusion）：路由命中后仍跑 scope——热文件触达的 rejected/手工条目
+     // 原先被 early-return 永久遮住。只追加 scopeDecisionHits/scopeEntries（不重排路由结果）；
+     // scope 构建失败原样返回路由结果；仍不跑平台向量（路由命中零网络）。
+-    return fuseBaseWithScope(r, indexDir, scopeFiles)
++    // 正文词片并联（2026-11-06-knowledge-body-recall FR-02）：同一 early-return 也遮正文——
++    // body 兜底先行并联（零网络），scope 融合照旧。
++    return fuseBaseWithScope(fuseRoutingWithBodyFallback(r, indexDir, taskContext), indexDir, scopeFiles)
+   }
+   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
+   if (vectorEnabled(cwd)) {
+@@ -315,5 +342,6 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
+     } catch { /* 图构建 fail-soft——降级词片层 */ }
+   }
+   const fb = fallbackByQueryShingles(indexDir, taskContext)
+-  return fb || r
++  // 零命中链末端补跑（FR-01）：decisions 词片回退优先，无果时普通文件正文兜底接管
++  return fb || fallbackByBodyShingles(indexDir, taskContext) || r
+ }
+diff --git a/test/knowledge-body-recall.test.mjs b/test/knowledge-body-recall.test.mjs
+new file mode 100644
+index 00000000..dbb07168
+--- /dev/null
++++ b/test/knowledge-body-recall.test.mjs
+@@ -0,0 +1,189 @@
++// 2026-11-06-knowledge-body-recall——普通知识文件正文段落的词片兜底召回
++// 双路分析定稿：四层检索语料均不含普通知识文件正文（根因），本文件锁 FR-01~04：
++// body 兜底主路径/段落覆盖窗（泛在排除稀有落窗）/已修复段落过滤/弱命中并联追加
++// 不重排+零网络/去重/既有通道零回归/零命中链补跑。
++// fixture 复现实证场景：正文写了相关词、INDEX 词表未收录的条目。
++
++import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { pathToFileURL, fileURLToPath } from 'node:url'
++
++const root = join(fileURLToPath(import.meta.url), '..', '..')
++const { fallbackByBodyShingles, queryShingles } = await import(
++  pathToFileURL(join(root, 'src', 'knowledge-match.js')).href
++)
++const { matchKnowledgeHybrid } = await import(
++  pathToFileURL(join(root, 'src', 'knowledge-vector.js')).href
++)
++
++let passed = 0, failed = 0
++function ok(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function setup(name) {
++  const dir = join(tmpdir(), `kbr-${name}`)
++  rmSync(dir, { recursive: true, force: true })
++  const kr = join(dir, '.sillyspec', 'knowledge')
++  mkdirSync(join(kr, 'decisions'), { recursive: true })
++  // INDEX：普通文件路由行（关键词故意不含目标词——复现「词表未收录」）；decisions 路由行
++  writeFileSync(join(kr, 'INDEX.md'), [
++    '# Knowledge Index', '',
++    '## Known Issues',
++    '- 无关词甲|无关词乙 → [知识条目](known-issues.md)',
++    '',
++    '## Decisions',
++    '- 决策|runtime → [决策知识](decisions/runtime.md)',
++  ].join('\n'))
++  // 普通知识文件：8 段落。窗上限 = max(2, ceil(8%×8)) = 2
++  // 「重开」覆盖 2 段（落窗）；「泛词」覆盖 5 段（>2 泛在排除）；「过期」覆盖 2 段但一段已修复
++  const L = (t, body) => [`## ${t}`, '', body, ''].join('\n')
++  writeFileSync(join(kr, 'known-issues.md'), [
++    '# 知识条目 — known-issues', '',
++    L('条目甲', '会话结束后想重开续聊，正文写了词表没收的词。'),
++    L('条目乙', '该场景重开失败报 409，正文描述与词表无关。'),
++    L('条目丙', '泛词出现在很多段落里。'),
++    L('条目丁', '泛词再次出现。'),
++    L('条目戊', '泛词第三次出现。'),
++    L('条目己', '泛词第四次出现。'),
++    L('条目庚', '会话过期回收的说明。'),
++    `## 条目辛`, '', '- 状态：已修复', '旧问题：过期窗口太短已修复。', '',
++  ].join('\n'))
++  // decisions 域文件（decisions 通道对照用）
++  writeFileSync(join(kr, 'decisions', 'runtime.md'), [
++    '# 决策知识 — runtime', '',
++    '## D-001@v1 决策条目样例',
++    '状态：implemented',
++    '变更：2026-01-01-a',
++    '理由：决策理由样例，含词表无关的正文词',
++    '',
++  ].join('\n'))
++  return dir
++}
++function clean(dir) { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++
++const kd = (dir) => join(dir, '.sillyspec', 'knowledge')
++
++// ── T1: 正文词片主路径锚点级命中（FR-01）──
++console.log('\n=== T1: 正文词片主路径锚点级命中 ===')
++{
++  const dir = setup('t1')
++  try {
++    const r = fallbackByBodyShingles(kd(dir), '会话重开')
++    ok(r !== null && r.matched === true, `matched:true（实得 ${JSON.stringify(r && r.matched)}）`)
++    const anchors = (r.entries || []).map((e) => e.anchor)
++    ok(anchors.includes('条目甲') && anchors.includes('条目乙'), `锚点级命中条目甲乙（实得 ${anchors.join(',')}）`)
++    ok((r.entries || []).every((e) => e.file === 'known-issues.md'), 'entries 带 file')
++    ok(r.json && r.json.bodyFallback === true && r.json.fallback === true, 'json.bodyFallback 判定键')
++    const kw = (r.entries || []).find((e) => e.anchor === '条目甲')
++    ok(kw && kw.keywords && kw.keywords.includes('重开'), `keywords 含落窗词片「重开」（实得 ${JSON.stringify(kw && kw.keywords)}）`)
++    // 词表未收录场景兜底：INDEX 关键词「无关词甲」不在查询——路由本应零命中，body 兜底独立可用
++    ok(String((r.entries || [])[0].display || '').includes('正文词片命中'), 'display 标注正文词片命中')
++  } finally { clean(dir) }
++}
++
++// ── T2: 段落覆盖窗——泛在排除 / 稀有落窗（FR-04）──
++console.log('\n=== T2: 段落覆盖窗泛在排除/稀有落窗 ===')
++{
++  const dir = setup('t2')
++  try {
++    const r = fallbackByBodyShingles(kd(dir), '泛词')
++    ok(r === null, `泛在词（覆盖 5/8 段 > 窗上限 2）零命中（实得 ${JSON.stringify(r && r.matched)}）`)
++    const r2 = fallbackByBodyShingles(kd(dir), '会话重开')
++    ok(r2 !== null, '稀有词（覆盖 2/8 段 = 窗）落窗命中')
++  } finally { clean(dir) }
++}
++
++// ── T3: 已修复段落过滤（FR-04）──
++console.log('\n=== T3: 已修复段落跳过 ===')
++{
++  const dir = setup('t3')
++  try {
++    // 「过期」覆盖 条目庚 + 条目辛（已修复）→ 窗内但已修复段被滤，只剩条目庚
++    const r = fallbackByBodyShingles(kd(dir), '会话过期')
++    const anchors = (r && r.entries || []).map((e) => e.anchor)
++    ok(anchors.includes('条目庚'), '未修复段（条目庚）命中')
++    ok(!anchors.includes('条目辛'), '已修复段（条目辛，状态行）被跳过')
++  } finally { clean(dir) }
++}
++
++// ── T4: 弱命中并联——追加不重排 + 零网络（FR-02）──
++console.log('\n=== T4: 弱命中并联追加不重排+零网络 ===')
++{
++  const dir = setup('t4')
++  try {
++    // fetch 沼泽：任何网络调用即抛（路由命中路径必须零网络）
++    const origFetch = globalThis.fetch
++    globalThis.fetch = () => { throw new Error('network call on routing-hit path') }
++    try {
++      // 查询含 INDEX 关键词（路由弱命中）+ 正文词片（body 命中）
++      const r = await matchKnowledgeHybrid(kd(dir), '无关词甲 会话重开', { cwd: dir })
++      ok(r.matched === true, 'hybrid matched:true')
++      const first = (r.entries || [])[0]
++      ok(first && first.display === '知识条目', `路由命中条目仍在首位不重排（实得 ${first && first.display}）`)
++      const bodyEntries = (r.entries || []).filter((e) => String(e.display || '').includes('正文词片命中'))
++      ok(bodyEntries.length > 0, 'body 命中追加在结果中')
++      const idxRoute = (r.entries || []).findIndex((e) => e.display === '知识条目')
++      const idxBody = (r.entries || []).findIndex((e) => String(e.display || '').includes('正文词片命中'))
++      ok(idxRoute < idxBody, 'body 命中排在路由命中之后（追加不重排）')
++    } finally { globalThis.fetch = origFetch }
++  } finally { clean(dir) }
++}
++
++// ── T5: 并联去重——同锚点不重复（FR-02）──
++console.log('\n=== T5: 去重无重复键 ===')
++{
++  const dir = setup('t5')
++  try {
++    // INDEX 路由行带锚点#条目甲：查询同时含路由关键词与正文词片 → 条目甲只出现一次
++    const kr = kd(dir)
++    writeFileSync(join(kr, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Known Issues',
++      '- 无关词甲|无关词乙 → [条目甲](known-issues.md#条目甲)',
++    ].join('\n'))
++    const r = await matchKnowledgeHybrid(kr, '无关词甲 会话重开', { cwd: dir })
++    const keys = (r.entries || []).map((e) => `${e.file}#${e.anchor || ''}`)
++    const dup = keys.filter((k, i) => keys.indexOf(k) !== i)
++    ok(dup.length === 0, `file+anchor 无重复键（实得重复 ${JSON.stringify(dup)}）`)
++    ok(keys.filter((k) => k === 'known-issues.md#条目甲').length === 1, '条目甲 路由+body 双命中只出现一次')
++  } finally { clean(dir) }
++}
++
++// ── T6: 既有通道零回归（FR-03）──
++console.log('\n=== T6: decisions 通道与向量门零回归对照 ===')
++{
++  const dir = setup('t6')
++  try {
++    // decisions 回退照旧：查询命中 decisions 语料的词片复现窗（此处构造 decisions 独有词不进窗
++    // 的场景较绕——直接断言纯 decisions 词查询的 hybrid 结果结构四键+decisionHits 语义未变）
++    const origFetch = globalThis.fetch
++    globalThis.fetch = () => { throw new Error('network call without platform config') }
++    try {
++      // 无平台配置（fixture 无 local.yaml）→ 向量层不启用零网络（FR-core-engine-211 语义）
++      const r = await matchKnowledgeHybrid(kd(dir), '决策 runtime 无关词乙', { cwd: dir })
++      ok(Array.isArray(r.entries), '返回结构 entries 数组保持')
++      ok('decisionHits' in r || 'routeHits' in r || r.matched === false, '既有字段语义未破坏')
++    } finally { globalThis.fetch = origFetch }
++    // queryShingles 既有行为零变化（导出面回归）
++    ok(Array.isArray(queryShingles('会话重开')) && queryShingles('会话重开').includes('重开'), 'queryShingles 导出与产出保持')
++  } finally { clean(dir) }
++}
++
++// ── T7: 零命中链补跑（FR-01 接线）──
++console.log('\n=== T7: 零命中链补跑 ===')
++{
++  const dir = setup('t7')
++  try {
++    // 路由零命中（查询不含 INDEX 关键词）+ decisions 无此词片 → body 兜底接管
++    const r = await matchKnowledgeHybrid(kd(dir), '会话重开', { cwd: dir })
++    ok(r.matched === true, `零命中链由 body 兜底接管 matched:true（实得 ${JSON.stringify(r && r.matched)}）`)
++    const bodyEntries = (r.entries || []).filter((e) => String(e.display || '').includes('正文词片命中'))
++    ok(bodyEntries.length >= 2, 'body 兜底锚点级 entries 返回')
++  } finally { clean(dir) }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)

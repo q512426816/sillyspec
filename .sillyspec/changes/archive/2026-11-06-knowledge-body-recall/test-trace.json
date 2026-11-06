@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-06-knowledge-body-recall",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-06-knowledge-body-recall:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-body-recall.test.mjs「T1: 正文词片主路径锚点级命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-body-recall"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-06-knowledge-body-recall:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-body-recall.test.mjs「T4: 弱命中并联追加不重排+零网络」",
+        "test/knowledge-body-recall.test.mjs「T5: 去重无重复键」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-body-recall"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-06-knowledge-body-recall:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-body-recall.test.mjs「T6: decisions 通道与向量门零回归对照」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-body-recall"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-06-knowledge-body-recall:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-body-recall.test.mjs「T2: 段落覆盖窗泛在排除/稀有落窗」",
+        "test/knowledge-body-recall.test.mjs「T3: 已修复段落跳过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-body-recall"
+    }
+  ]
+}

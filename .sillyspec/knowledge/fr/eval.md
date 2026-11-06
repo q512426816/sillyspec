@@ -978,3 +978,90 @@ created_at: 2026-10-15T12:09:39.989Z
 - 场景：注记在场 — Given 变更完成；When 读 design/README；Then 数据规划注记在场（可检索）
 全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-06
 最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+## FR-eval-050 正文词片兜底——普通知识文件正文段落锚点级可召回
+变更：2026-11-06-knowledge-body-recall
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given INDEX 引用的普通知识文件某 `##` 段落正文含查询词片且词片覆盖段落数落在段落覆盖窗内；When 路由零命中的查询经 `fallbackByBodyShingles` 检索；Then 该段落以锚点级 entry 命中（`{file, anchor, keywords:[落窗词片], display:"<标题>（正文词片命中）", catego
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-body-recall/requirements.md#FR-01
+最近确认：8758175eb0c52cc5318e1f62279ed9ea43fc8348
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-body-recall:flow:测试绑定FR-01
+  tests: test/knowledge-body-recall.test.mjs「T1: 正文词片主路径锚点级命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-body-recall
+  status: active
+
+## FR-eval-051 弱命中并联——路由命中时 body 兜底结果追加不重排、零网络
+变更：2026-11-06-knowledge-body-recall
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 路由层弱命中（泛词 tag 撞词）已返回结果；When `matchKnowledgeHybrid` 路由命中路径执行；Then 并联调用 body 兜底，命中的 entries 按 `file+anchor` 键去重后**追加**到顶层 `result.entries` 尾部（路由命中原
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-body-recall/requirements.md#FR-02
+最近确认：8758175eb0c52cc5318e1f62279ed9ea43fc8348
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-body-recall:flow:测试绑定FR-02
+  tests: test/knowledge-body-recall.test.mjs「T4: 弱命中并联追加不重排+零网络」 | test/knowledge-body-recall.test.mjs「T5: 去重无重复键」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-body-recall
+  status: active
+
+## FR-eval-052 既有四通道零回归
+变更：2026-11-06-knowledge-body-recall
+状态：active
+摘要：默认场景
+依据决策：D-004@v1
+场景正文：
+- 场景：默认场景 — Given 既有路由 / 平台向量 / scope / decisions 词片回退四通道；When 本变更合入后按既有测试面运行；Then 四通道函数签名、输出结构、行为逐字段不变（`fallbackByQueryShingles` 原样保留；向量门行为不变，承接 FR-core-engine-21
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-body-recall/requirements.md#FR-03
+最近确认：8758175eb0c52cc5318e1f62279ed9ea43fc8348
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-body-recall:flow:测试绑定FR-03
+  tests: test/knowledge-body-recall.test.mjs「T6: decisions 通道与向量门零回归对照」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-body-recall
+  status: active
+
+## FR-eval-053 窗判定与已修复段落过滤
+变更：2026-11-06-knowledge-body-recall
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 词片覆盖段落数超出窗上限（泛在词，如本仓实测「目录」19.3%、「会话」11.9%）或段落含已修复状态行；When body 兜底检索执行；Then 泛在词片不参与命中；已修复段落被跳过（口径对齐 isResolvedRoute 正文状态行判据）。
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-body-recall/requirements.md#FR-04
+最近确认：8758175eb0c52cc5318e1f62279ed9ea43fc8348
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-body-recall:flow:测试绑定FR-04
+  tests: test/knowledge-body-recall.test.mjs「T2: 段落覆盖窗泛在排除/稀有落窗」 | test/knowledge-body-recall.test.mjs「T3: 已修复段落跳过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-body-recall
+  status: active

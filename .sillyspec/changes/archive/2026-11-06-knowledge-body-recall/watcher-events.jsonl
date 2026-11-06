@@ -1,0 +1,32 @@
+{"ts":1793980380482,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1793980380482,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1793980380482,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1793980408965,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1793980551752,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1793980726276,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1793980850599,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793980850599,"kind":"task-done","stage":"design","detail":"checked 0→6","provisional":true}
+{"ts":1793980915301,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793980959894,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793980984876,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793981000730,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1793981044405,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793981051903,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981381215,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793981384845,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793981388338,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793981487871,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981487871,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793981501694,"kind":"commit","stage":null,"detail":"c5b1d9a5","provisional":true}
+{"ts":1793981548780,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981548780,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793981596993,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981596993,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793981652134,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981652134,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793981719710,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/baseline.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793981733228,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793981733228,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1793981747336,"kind":"commit","stage":null,"detail":"8758175e","provisional":true}
+{"ts":1793981864112,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-06-knowledge-body-recall/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793981878457,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.8s） · 20261106161756","provisional":true}
