@@ -22,6 +22,7 @@
 - tailwind|md:|断点|视口|容器断点|侧栏|grid-cols → [Tailwind md: 是视口断点非容器断点：侧栏内嵌组件禁用响应式前缀](conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀)
 - daemon|vitest|单测目录|tests/**|src|__tests__|include|no test files → [daemon 单测只能落 tests/**（vitest include 不含 src）](conventions.md#daemon-单测只能落-testsvitest-include-不含-src)
 - daemon|测试目录|双目录|app/modules/daemon/tests|tests/modules/daemon|TaskCard|allowed_paths|归属 → [backend daemon 模块测试双目录惯例](conventions.md#backend-daemon-模块测试双目录惯例)
+- task|frontmatter|的提取|解析只允许走|src|taskcard → [conventions.md#task 卡 frontmatter 的提取+解析只允许走 src/taskcard-frontmatter.js 单一源，禁止另起口径](conventions.md#task 卡 frontmatter 的提取+解析只允许走 src/taskcard-frontmatter.js 单一源，禁止另起口径)
 
 ## Patterns
 
@@ -43,6 +44,8 @@
 - 集成验证|x-api-key|ws 升级|403|userprofile|第二实例|daemon.pid|隔离 → [daemon 本机集成验证：WS 鉴权只认 X-API-Key + USERPROFILE 隔离跑第二实例](patterns.md#daemon-本机集成验证ws-鉴权只认-x-api-key--userprofile-隔离跑第二实例)
 - aiosqlite|for update|sqlite|部分唯一索引|integrityerror|并发防重|懒建 → [aiosqlite 不支持 SELECT FOR UPDATE：并发唯一性守卫用部分唯一索引+IntegrityError 捕获](patterns.md#aiosqlite-不支持-select-for-update并发唯一性守卫用部分唯一索引integrityerror-捕获)
 - mcp|env|mcpServers|白名单|claude.exe|注入|stdio|子进程环境 → [MCP server 子进程不继承 claude.exe 完整环境：env 必须放 mcpServers[*].env](patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv)
+- 真实坏数据整卡转测试夹具|原样字节保留|列锁死断言|硬门禁暴露存量隐性坏数据时修数据不弱化断言 → [patterns.md#真实坏数据整卡转测试夹具：原样字节保留 + 行:列锁死断言；硬门禁暴露存量隐性坏数据时修数据不弱化断言](patterns.md#真实坏数据整卡转测试夹具：原样字节保留 + 行:列锁死断言；硬门禁暴露存量隐性坏数据时修数据不弱化断言)
+- 门禁类校验落点选聚合路径的单点入口|下游门禁保持纯语义|同一信号不双维度重复报 → [patterns.md#门禁类校验落点选聚合路径的单点入口，下游门禁保持纯语义——同一信号不双维度重复报](patterns.md#门禁类校验落点选聚合路径的单点入口，下游门禁保持纯语义——同一信号不双维度重复报)
 
 ## Known Issues
 - 导出|乱码|GBK|控制台码页|PYTHONIOENCODING|TOOL_RESULT|替换字符 → [会话日志 TOOL_RESULT 中文乱码（Windows 控制台码页，落库即坏不可导出还原）](known-issues.md#会话日志-tool_result-中文乱码windows-控制台码页落库即坏不可导出还原)
@@ -89,6 +92,9 @@
 - agentmission|session_id|判别口径|非 null|查表|uuid4|绑定会话 → [AgentMission.session_id 判别口径：列非 NULL 不可信，须查表确认指向真实 AgentSession](known-issues.md#-agentmissionsession_id-判别口径列非-null-不可信须查表确认指向真实-agentsession)
 - 后台子代理|canusetool|fail-closed|running turn|死锁|run_in_background|权限 → [后台子代理脱离平台 running turn 后权限回调 fail-closed 死锁](known-issues.md#-后台子代理脱离平台-running-turn-后权限回调-fail-closed-死锁)
 - 路由顺序|字面量|参数路由|422|uuid_parsing|sessions/events|盲区|asgitransport → [字面量端点被两段式参数路由吞致 422 + 审查盲区三连（sessions/events，修复 commit 0c7860f7）](known-issues.md#-字面量端点被两段式参数路由吞致-422--审查盲区三连sessionsevents修复-commit-0c7860f7)
+- js|yaml|报错行号是切出的|YAML|文本内|基坐标 → [known-issues.md#js-yaml 报错行号是切出的 YAML 文本内 0 基坐标，frontmatter 场景换算文件行号须 +2、列 +1](known-issues.md#js-yaml 报错行号是切出的 YAML 文本内 0 基坐标，frontmatter 场景换算文件行号须 +2、列 +1)
+- task|frontmatter|手填值含未引号方括号|全角括号会造出非法|YAML|加引号或改块式列表 → [known-issues.md#task 卡 frontmatter 手填值含未引号方括号/全角括号会造出非法 YAML——加引号或改块式列表](known-issues.md#task 卡 frontmatter 手填值含未引号方括号/全角括号会造出非法 YAML——加引号或改块式列表)
+- 解析器|catch|返回空默认值会让硬门禁空真过门|无字段|解析失败|必须可区分 → [known-issues.md#解析器 catch 返回空默认值会让硬门禁空真过门——「无字段」与「解析失败」必须可区分](known-issues.md#解析器 catch 返回空默认值会让硬门禁空真过门——「无字段」与「解析失败」必须可区分)
 
 ## SillySpec Gotchas
 

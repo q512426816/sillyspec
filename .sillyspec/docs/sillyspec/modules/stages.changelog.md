@@ -79,3 +79,5 @@
 | 2026-11-04 | 2026-11-04-question-typing-subagent-guard | 提问分型与子代理豁免两处提示词修正 |
 | 2026-11-05 | 2026-11-05-knowledge-search-observability | 知识检索观测补盲与向量质量收口 |
 | 2026-11-06 | 2026-11-06-knowledge-propose-body-file | 知识提议命令支持从文件读正文 |
+| 2026-11-06 | 2026-11-07-knowledge-accept-channel | 待审知识收口通道——proposed 可合并生效 |
+| 2026-11-06 | 2026-11-07-knowledge-generated-retire | generated 切块死区退库 |

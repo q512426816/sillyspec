@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "67ac73e82c0edf8c458673836c358f07472426a1",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "SKILL.md 命令表 category 白名单文案未随五目标扩展更新（探针⑤局部不一致）",
+      "evidence": "初评（ef480950）：.claude/skills/sillyspec-knowledge/SKILL.md 第 23 行命令表仍写「category 有效（known-issues/patterns/conventions）可省 --file」，与 ACCEPT_TARGETS 五目标（L309）矛盾。清偿核验（67ac73e8）：git grep HEAD 确认 L23 已改为「category 有效（known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas）可省 --file」，五个 category 名与 ACCEPT_TARGETS 逐一对齐；新增四段模板节（L27-36）与 accept 键名/行为本就一致（structuralWarnings 键名逐字匹配、advisory 不阻断语义匹配）。",
+      "location": ".claude/skills/sillyspec-knowledge/SKILL.md:23"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "target_file_required 错误消息仍只枚举三目标，与五目标白名单矛盾",
+      "evidence": "初评（ef480950）：message 为「category 无效或缺失，须显式 --file known-issues.md|patterns.md|conventions.md」，遗漏 sillyspec-gotchas/testing-gotchas。清偿核验（67ac73e8）：git grep HEAD 确认 src/knowledge-classify.js:379 已改为「须显式 --file（known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas 五目标）」，category 枚举与 ACCEPT_TARGETS 完全一致（该分支校验对象是 category 名而非 .md 文件名，用 category 名语义正确）。",
+      "location": "src/knowledge-classify.js:379"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "change.patch 归档不完整：缺 SKILL.md 差异（design 清单 3 文件 vs patch 2 文件）",
+      "evidence": "design.md 文件变更清单列 3 项（knowledge-classify.js/SKILL.md/新测试），change.patch 仅含 knowledge-classify.js 与 test 两个 hunk；git show --stat ef480950 实含 8 文件（含 .claude/skills/sillyspec-knowledge/SKILL.md +11）。两次评审均以 HEAD 提交为锚覆盖核实 SKILL.md 实际改动，但 patch 作为变更证据面不完整（若约定只归档代码面则无害，需确认）。增量复审未触及（仅验 LOW ①②），维持 open。",
+      "location": ".sillyspec/changes/2026-11-07-knowledge-k-shape-minimal/change.patch"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "T4 为空占位断言，FR-04 回归证据依赖 ledger 跑批回执而非测试文件自身",
+      "evidence": "test/knowledge-k-shape-minimal.test.mjs T4 仅 ok(true) 并注明「回归由跑批执行」；ledger 回执称 6 面 knowledge 回归 0 fail（材料给定；两次评审均按口径仅复跑单文件：12 passed 0 failed exit=0）。测试内已注释披露该委托，属可接受的绑定弱化，非隐瞒。",
+      "location": "test/knowledge-k-shape-minimal.test.mjs:99-102"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "design 答不适用成立：常量扩展与 structuralWarningsFor 均为无状态同步纯函数（正则检测入参 body），无顺序/迟到依赖；实测代码核实。",
+    "并发": "design 答零新增并发面成立：advisory 为落盘前纯读计算（L370 先于一切写路径），写语义与整文件读写模式未改，不引入锁或共享态。",
+    "切换": "design 答中断无中间态成立：structuralWarnings 在内存计算后随返回对象透传（dry-run L418 / 正式 L446 两处条件展开），不落任何中间文件；dry-run 路径零写盘未变。",
+    "作用域": "design 答不串台成立：五目标均为知识目录内相对 basename；目标文件缺失时 fail('target_file_missing')（L383，--file 显式与 category 自动路由同一守卫；classifyUncategorizedEntry L231 同款），平台仓无 gotchas 文件时如实报错不静默。初评两处三目标陈旧文案已于 67ac73e8 清偿（见 findings 1/2），提示面与行为面现已一致。"
+  },
+  "reviewNotes": "初评（ef480950，2026-11-07T04:56:58+08:00）：单文件复跑 test/knowledge-k-shape-minimal.test.mjs 12 passed / 0 failed / exit 0。检查单结论：①FR-01/02/03 与实现、测试三方一致——CATEGORY_SECTIONS 与 ACCEPT_TARGETS 均五目标（L37/L309），insertRouteLine 既有 EOF 追加语义未动（L162 注释+T1 实测 INDEX 落位）；advisory 两分支/dry-run 同携/警告下落盘均有活断言。②盲维四问全部答出且经代码核实为真（见 dimensionNotes）。③披露边界三项均在 design（advisory 过渡不升硬门/目标集扩展不等完整契约/启发式误报风险与缓解「现象」「根因」例）。④防护实证通过：警告不进任何写分支；dry-run 返回键在场（L418）；target_file_missing 双路径守卫（L383/L231）。⑤cli-copy-selfsufficient：四段指引节与 accept 键名/行为一致，命令表 L23 三目标文案漂移（finding 1，后清偿）。⑥测试有效性静态核验：置空 structuralWarningsFor（返回 []）→ 条件展开致键缺席 → T2「缺段结构列警告」「dry-run 同携」必红；ACCEPT_TARGETS 回退三目标 → category=sillyspec-gotchas 走 target_file_required → T1 前三断言必红。附核正则：/^#{1,3}\\s*问题/m 实测 ## 问题=true、### 问题=true、无标题=false、## 解决问题=false、行中=false（行首锚定正确，规避中文非 \\w 致 \\b 恒假的失效模式；#### 问题不命中属声明的 h1-h3 启发式边界）。按纪律未做源码变异实测，⑥为静态推演+活跑绿双证。",
+  "incrementalReviews": [
+    {
+      "reviewedAgainst": "67ac73e82c0edf8c458673836c358f07472426a1",
+      "scope": "仅 LOW ①② 清偿核验（协调方指定，一轮即止）",
+      "result": "两处文案均改为五目标枚举，与 ACCEPT_TARGETS（known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas）逐一一致（git grep HEAD + git diff ef480950..HEAD 双证，各 1 行改动：SKILL.md:23 命令表、knowledge-classify.js:379 错误消息）；单文件复跑 12 passed / 0 failed。findings ①② open→resolved，verdict 维持 PASS，reviewedAgainst 前移至 67ac73e8 完整 sha。",
+      "reviewedAt": "2026-11-07T04:59:00+08:00"
+    }
+  ],
+  "reviewedAt": "2026-11-07T04:59:00+08:00"
+}

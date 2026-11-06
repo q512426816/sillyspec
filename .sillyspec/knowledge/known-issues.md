@@ -454,3 +454,60 @@ session_id 列 NOT NULL + default_factory=uuid4（为兼容 ~50 处存量构造�
 - 现状：knowledge/decisions/unmapped.md 单文件 285KB（~700 条 legacy 决策，epoch 迁移后只读稳定）；fr/unmapped.md 存量池 fr-unreferenced unmapped×625 等。归属清偿已完成可动部分：伪域 36 条迁真域、图簇登记仓分流（_unmapped 2183→761 真缺口）、新增决策经 module-map 路由落真域。
 - 缓办裁决：①decisions/unmapped.md 拆分=决策条目跨文件迁移，id 寻址键（file+id+change）全体漂移——引用面（变更名#D-xxx@vN 引用/幽灵节点 id/平台 spec_path/INDEX 路由）需整体对账，风险体量对等 legacy-renumber 级变更，而池只读稳定无增长噪音，维护收益不抵迁移风险；②fr-unmapped 存量退休——L3 已裁决冻结（2026-10-15-fr-chain-l3-adjudication D-001@v1），fr-unreferenced 信号已无门禁消费方，625 条存量池有基线消音不刷信号，退休动作失去紧迫性。
 - 重启条件：decisions/unmapped.md 恢复增长（新增落 unmapped 说明路由缺口回归）或需要跨文件决策查询时，用一次性迁移工具（对齐 renumber 先例：dry-run 对账+原子写+幂等）做拆分。
+
+## js-yaml 报错行号是切出的 YAML 文本内 0 基坐标，frontmatter 场景换算文件行号须 +2、列 +1
+
+## 问题
+jsYaml.load 抛错返回的 mark.line / mark.column 是「切出的 YAML 文本内」的 0 基坐标，直接当文件行号用会错位（off-by-two）；且 js-yaml 原始 message 里内嵌的坐标（如 (19:35)）同样是 YAML 文本坐标而非文件坐标，两者并存易误导定位。2026-09-20 实证：调查报告给的坏行 19/21/25，实际文件坏行是 20/22/26（差值即 frontmatter 首行 --- 占的 1 行 + 0 基换 1 基）。
+
+## 解法
+- 换算公式：error.line = mark.line + yamlStartLine（frontmatter 场景 yamlStartLine 恒为 2：首行 --- ，YAML 自次行起，得文件 1 基行）；error.column = mark.column + 1；mark 缺席时回退 1。
+- 用真实坏卡断言 error.line 精确值（20/22/26）与 column 精确值（35/17/78）锁死换算，防止回归。
+- 报错文案显式给「文件:行:列」，对冲 js-yaml message 内嵌坐标的误导。
+
+## 证据
+- src/taskcard-frontmatter.js（parseTaskFrontmatter 换算实现，jsdoc 写明公式与 0 基语义）
+- test/taskcard-frontmatter-hardgate.test.mjs:39（三夹具行:列锁死断言）
+- 变更档案 changes/archive/2026-09-20-taskcard-yaml-hardgate/ 的 design.md 风险登记 R-01、decisions.md D-001@v1 故障面、verify-result.md 独立复核节（brainstorm 轮抓 P1 行号 off-by-one 已修）；提交 3f854037
+
+## 适用条件
+任何对 Markdown frontmatter 做 jsYaml 解析并需向用户报文件内定位的场景；换新解析器或改 frontmatter 提取偏移时须重验行:列断言。
+
+## task 卡 frontmatter 手填值含未引号方括号/全角括号会造出非法 YAML——加引号或改块式列表
+
+## 问题
+task 卡的 provides / expects_from 等字段由 agent 手填（taskcard 生成器默认不生成这些字段，生成器序列化无此问题），手写 flow 序列值里出现未加引号的方括号、全角括号、花括号时即非法 YAML。实证坏例（multi-agent-platform 仓三张卡，jsYaml 抛 missed comma between flow collection entries）：
+rpc_scope_audit_v2_fields: [rows[].cross_repo, repos[]（key/anchor{...}）]
+——方括号里的 rows[]. 与全角（）直接进 flow 序列。中文语境下全角括号尤其易踩：视觉不显眼但 YAML 语法非法。
+
+## 解法（作者侧规范）
+- 值含方括号 [ ]、全角括号（）、花括号 { } 等特殊字符时：给整个标量加引号，或改用块式列表（每项一行 - 前缀），不要写内联 flow 序列。
+- （工具侧兜底已就位）plan 门 feasibility 步骤 0b 对 frontmatter 非法 YAML 硬拦，报错带 文件:行:列 + js-yaml message + 本修复指引，坏卡过不了 plan gate。
+
+## 证据
+- test/fixtures/taskcard-bad-yaml/task-01.md:20 / task-02.md:22 / task-03.md:26（三张真实坏卡整卡拷贝夹具，坏行定位）
+- src/taskcard.js:57（生成器不生成手填字段的注释）；src/stages/plan-postcheck.js:1303-1316（0b 报错文案含修复指引）
+- 变更档案 changes/archive/2026-09-20-taskcard-yaml-hardgate/ 的 design.md 背景节
+
+## 适用条件
+agent 手写 task 卡 frontmatter（provides/expects_from 及其他含特殊字符的标量）时；存量手写坏卡在硬门禁上线后会于下次 plan gate 暴露，属预期 fail-closed 行为——先修卡再过门。
+
+## 解析器 catch 返回空默认值会让硬门禁空真过门——「无字段」与「解析失败」必须可区分
+
+## 问题
+解析函数在 catch 里返回空数组/空对象等「合法默认值」，下游校验无法区分「真的没有该字段」与「解析失败」：契约硬校验拿空集对账 → 零 consumer 可查 → 空真 pass（假阴性，门禁形同虚设）；渲染层则产出误导文案（卡明明有 acceptance，却因 YAML 坏被渲染成「卡无 acceptance——防御已拦」，而所谓防御的宽收正则根本拦不住这种坏法）。2026-09-20 实证三消费点各自静默吞错：src/stages/plan-postcheck.js 的 parseTaskContracts catch 返回空 → plan 契约门禁空真过门（P0）；src/verify-probes.js 的 parseTaskAcceptance catch 返回 [] → 探针 7 假防御文案。
+
+## 解法
+fail-closed + 显式透出解析失败态：
+- 入口硬校验：聚合门禁最先运行的可行性步骤（validatePlanFeasibility 步骤 0b）逐卡解析 frontmatter，非法 YAML 即 ERROR（带 文件:行:列 + js-yaml 原始 message + 修复指引），阻断先于一切下游消费。
+- 解析函数返回 additive 显式降级键：parseTaskContracts 坏卡返回 provides=[]、expectsFrom={} 之外多带 yamlError 非 null——既有解构式消费方零感知，独立消费方可判读真实态，不再用空数组冒充「无契约字段」。
+- 渲染侧三态契约：parseTaskAcceptance 从 数组|null 扩为 {status: no-frontmatter | invalid-yaml | ok, acceptance: 恒为数组, error: 仅 invalid-yaml 非 null}，文案区分「真无字段」与「frontmatter 非法 YAML」，并显式声明「若已过 plan 门仍见此行即门禁失效信号」。
+
+## 证据
+- src/stages/plan-postcheck.js（feasibility 步骤 0b 硬校验 :1303-1316；parseTaskContracts yamlError 键）
+- src/verify-probes.js（parseTaskAcceptance 三态；探针 7 fmError 渲染）
+- test/taskcard-frontmatter-hardgate.test.mjs:90（0b 恰 3 条 error）/ :212（yamlError 双路径）/ :249（三态）/ :268（渲染区分）
+- 变更档案 changes/archive/2026-09-20-taskcard-yaml-hardgate/ 的 proposal.md 三症状；提交 3f854037
+
+## 适用条件
+任何「解析结果喂给校验/渲染」的链路，尤其多个消费点各自 try/catch 吞错时——每个消费点吞一次，门禁就退化为对坏数据不设防；契约扩展优先 additive 键以保既有消费方零回归。

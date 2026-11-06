@@ -115,3 +115,5 @@
 | 2026-11-04 | 2026-11-04-doctor-injection-budget | doctor 常驻注入面体积预算告警 |
 | 2026-11-05 | 2026-11-05-knowledge-search-observability | 知识检索观测补盲与向量质量收口 |
 | 2026-11-06 | 2026-11-06-knowledge-body-recall | 2026-11-06-knowledge-body-recall |
+| 2026-11-06 | 2026-11-07-knowledge-accept-channel | 待审知识收口通道——proposed 可合并生效 |
+| 2026-11-06 | 2026-11-07-knowledge-k-shape-minimal | K 形态最小落地——accept 质量信号与目标集扩展 |

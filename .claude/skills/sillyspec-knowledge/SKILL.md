@@ -20,9 +20,20 @@ version: "3.19.2"
 | `sillyspec knowledge validate` | commit/archive 前校验健康度 | errors（broken_reference/empty_file 等）须先修复 |
 | `sillyspec knowledge refresh` | （已退役 2026-11-07）原从 scan 文档切块生成自动知识 | 切块为零消费死区已退库——该命令现仅输出废弃提示零写盘；scan 本体由 scan 流程维护，知识沉淀走 propose → accept |
 | `sillyspec knowledge propose --title "..." --category <分类> [--body-file <路径>\|--body "..."]` | 提议新知识 | 仅写 `proposed/` 供人工审核；`--from` 标来源；长中文正文用 `--body-file` 从文件读（绕开命令行传参误杀） |
-| `sillyspec knowledge accept --id proposed/<slug> [--file <目标>] [--dry-run]` | 合并待审提议为正式知识 | 用户确认条目后执行；自动追加目标文件+INDEX 注册+清源；category 有效（known-issues/patterns/conventions）可省 `--file` |
+| `sillyspec knowledge accept --id proposed/<slug> [--file <目标>] [--dry-run]` | 合并待审提议为正式知识 | 用户确认条目后执行；自动追加目标文件+INDEX 注册+清源；category 有效（known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas）可省 `--file` |
 
 zone 语义：`manual`（人工维护，可直接信任）/ `generated`（自动提取，需人工审核）/ `proposed`（待审，未合并）。
+
+## K 形态四段模板（有效知识最小结构，2026-11-07 起）
+
+提议新知识时按四段撰写（`propose` 的 body 段落结构）：
+
+1. `## 问题`——现象+根因（含至少一次实证：日期/变更名/提交号）
+2. `## 解法` / `## 规则` / `## 模式` / `## 约定`（任一）——可执行的 do/don't，禁止纯叙述
+3. 证据锚——文件路径+测试路径（服务结论而非替代结论）
+4. 适用边界——何时不适用/已知反例（可选但推荐）
+
+`accept` 合并时自动做结构完整度启发式检测：缺「问题」或解法类段标题会在输出列 `structuralWarnings`（advisory 提示不阻断合并）——见警告时建议先补段落再合。
 
 ## Agent 使用指南
 

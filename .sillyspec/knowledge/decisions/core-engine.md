@@ -681,3 +681,12 @@ supersedes：D-001@v1
 文件：src/knowledge-classify.js, src/knowledge-digest.js, src/stages/knowledge.js, test/knowledge-accept-channel.test.mjs
 最近确认：26e955214b2179a03f78992127ef72a125a97d31
 理由：proposed/ 待审区只进不出（CLI 侧核查实证：classify 只吃 uncategorized.md，proposed 零消费方，SKILL.md「仅用户明确要求才合并」指向不存在的命令）。方案：在 src/knowledge-classify.js 新增导出 `acceptProposedEntry` + CLI 入口 `cmdKnowledgeAccept`（stages/knowledge.js 二级路由挂 `accept` case）——读 proposed/<slug>.md 解析 frontmatter（category）/ `#` 标题 / 正文（剥 cmdPropose 生成的尾注分隔行），迁移原语全部复用 classify 既有私有件（normalizeTargetFile/categoryForTarget/resolveKeywords/detectEol/insertRouteLine + 同款追加块与 duplicate 判定，src/knowledge-classify.js:198-296），落盘顺序沿用「先追加后删除」（条目不丢可手工 revert），源清理=删除整个 proposed 文件（区别于 classify 删 uncategorized 段）。选复用而非改 classifyUncategorizedEntry 签名：该函数强耦合 uncategorized 寻址/删段（三通道寻址 qlId），扩参会牵动既有契约；平行函数共享私有件零回归。
+
+## D-core-engine-048@v1 2026-11-07-knowledge-k-shape-minimal——K 形态契约的完整字段化（独立发号/解析器/退役判据机器化）是更大设计，本变更只落三件最小事：①目标集扩展——knowledge-classify.js 的 C
+状态：implemented
+变更：2026-11-07-knowledge-k-shape-minimal
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-07-knowledge-k-shape-minimal/design.md
+文件：src/knowledge-classify.js, test/knowledge-k-shape-minimal.test.mjs
+最近确认：67ac73e82c0edf8c458673836c358f07472426a1
+理由：K 形态契约的完整字段化（独立发号/解析器/退役判据机器化）是更大设计，本变更只落三件最小事：①目标集扩展——knowledge-classify.js 的 CATEGORY_SECTIONS 与 ACCEPT_TARGETS 各加两行（sillyspec-gotchas/testing-gotchas），修掉「gotcha 知识被迫落 known-issues」的语义错位（昨日 6 条合入已现此妥协）；②accept 输出结构完整度 advisory——正文段标题机械检测（问题/解法类），缺失列 structuralWarnings 不阻断，作为 K 四段结构的质量信号面（不挡紧急合并，完整契约落地前的过渡形态）；③SKILL.md 补四段模板指引（propose 撰写参照）。选 advisory 而非硬校验：既有合入流（平台 merge/CLI accept 双端）格式已多元，硬门会把历史形态大量打回——advisory 先立信号，完整 K 契约变更再决定是否升硬门。

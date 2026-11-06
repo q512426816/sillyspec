@@ -954,3 +954,269 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-06-knowledge-propose-body-file
   status: active
+
+## FR-skills-docs-048 knowledge accept --id proposed/<slug> --file <目标> 完成：目标知识文件追加 ## 条目 + INDEX.md 对应分类段补路由行 + 源 proposed 文件删除，输出 JSON 含 anchor/keywords
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-01
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-01
+  tests: test/knowledge-accept-channel.test.mjs「T1: 主路径迁移+INDEX 注册+删源」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-049 category frontmatter 为有效目标（known-issues/patterns/conventions）时可省 --file 自动路由；category 无效或缺失时必须显式 --file，否则结构化报错不落盘
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：category 自动路由；category 无效且未传 --file
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-02
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-02
+  tests: test/knowledge-accept-channel.test.mjs「T2: category 自动路由与 target_file_required」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-050 同标题条目已存在于目标文件时幂等（跳过追加只做源文件清理收尾，skippedReason=duplicate-title）
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：重复合并
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-03
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-03
+  tests: test/knowledge-accept-channel.test.mjs「T3: duplicate-title 幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-051 --dry-run 只渲染计划零写盘
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：dry-run
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-04
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-04
+  tests: test/knowledge-accept-channel.test.mjs「T4: dry-run 零写盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-052 knowledge inbox 列出 proposed/ 待审清单（slug+标题+积压天数）；digest 含 proposed 积压信号（>0 可见）
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：inbox 待审清单
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-05
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-05
+  tests: test/knowledge-accept-channel.test.mjs「T5: inbox 待审清单 + digest 信号」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-053 SKILL.md proposed 规则更新为指向 accept 命令（用户确认后 agent 可代跑）
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：规则落地
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-06
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-06
+  tests: test/knowledge-accept-channel.test.mjs「T6: SKILL.md 文案同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-054 既有 classify/inbox/digest 测试面全绿 + 新增用例覆盖上述分支
+变更：2026-11-07-knowledge-accept-channel
+状态：active
+摘要：回归与边界
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-accept-channel/requirements.md#FR-07
+最近确认：26e955214b2179a03f78992127ef72a125a97d31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-accept-channel:flow:测试绑定FR-07
+  tests: test/knowledge-accept-channel.test.mjs「T7: 病态 proposed 文件报错不落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-accept-channel
+  status: active
+
+## FR-skills-docs-055 knowledge refresh 子命令改为废弃提示（输出说明切块已退役与 scan 本体位置），不再写任何文件
+变更：2026-11-07-knowledge-generated-retire
+状态：active
+摘要：废弃提示
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-generated-retire/requirements.md#FR-01
+最近确认：a319d6d38ad27e63073b8777c0c771ca9eda69fa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-generated-retire:flow:测试绑定FR-01
+  tests: test/knowledge-generated-retire.test.mjs「T1: refresh 废弃提示零写盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-generated-retire
+  status: active
+
+## FR-skills-docs-056 本仓 knowledge/generated/ 存量目录删除（34 文件）
+变更：2026-11-07-knowledge-generated-retire
+状态：active
+摘要：存量清理
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-generated-retire/requirements.md#FR-02
+最近确认：a319d6d38ad27e63073b8777c0c771ca9eda69fa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-generated-retire:flow:测试绑定FR-02
+  tests: test/knowledge-generated-retire.test.mjs「T2: validate/search 零回归（无 generated 前提）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-generated-retire
+  status: active
+
+## FR-skills-docs-057 既有 knowledge 测试面全绿 + 新增用例锁 refresh 废弃行为（零写盘）+ help/SKILL 文案同步
+变更：2026-11-07-knowledge-generated-retire
+状态：active
+摘要：文案一致
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-generated-retire/requirements.md#FR-03
+最近确认：a319d6d38ad27e63073b8777c0c771ca9eda69fa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-generated-retire:flow:测试绑定FR-03
+  tests: test/knowledge-generated-retire.test.mjs「T3: help 与 SKILL 废弃文案同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-generated-retire
+  status: active
+
+## FR-skills-docs-058 accept 与 classify 的目标文件白名单扩展：known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas 五目标（INDEX 段自动追加兼容）
+变更：2026-11-07-knowledge-k-shape-minimal
+状态：active
+摘要：gotcha 归位
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-k-shape-minimal/requirements.md#FR-01
+最近确认：67ac73e82c0edf8c458673836c358f07472426a1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-k-shape-minimal:flow:测试绑定FR-01
+  tests: test/knowledge-k-shape-minimal.test.mjs「T1: 五目标路由（含 gotchas 双目标）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-k-shape-minimal
+  status: active
+
+## FR-skills-docs-059 accept 输出新增结构完整度 advisory 键（检测正文含 问题 与 解法或规则 段标题，缺失列 structuralWarnings 不阻断合并）
+变更：2026-11-07-knowledge-k-shape-minimal
+状态：active
+摘要：advisory 两分支
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-k-shape-minimal/requirements.md#FR-02
+最近确认：67ac73e82c0edf8c458673836c358f07472426a1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-k-shape-minimal:flow:测试绑定FR-02
+  tests: test/knowledge-k-shape-minimal.test.mjs「T2: advisory 两分支」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-k-shape-minimal
+  status: active
+
+## FR-skills-docs-060 SKILL.md 补 K 形态四段模板指引（问题/解法规则/证据/适用边界——供 propose 撰写参照）
+变更：2026-11-07-knowledge-k-shape-minimal
+状态：active
+摘要：指引可见
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-k-shape-minimal/requirements.md#FR-03
+最近确认：67ac73e82c0edf8c458673836c358f07472426a1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-k-shape-minimal:flow:测试绑定FR-03
+  tests: test/knowledge-k-shape-minimal.test.mjs「T3: SKILL 四段指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-k-shape-minimal
+  status: active
+
+## FR-skills-docs-061 既有 accept/classify/inbox/digest 测试面全绿 + 新增用例覆盖五目标路由与 advisory 两分支
+变更：2026-11-07-knowledge-k-shape-minimal
+状态：active
+摘要：回归
+全文：.sillyspec/changes/archive/2026-11-07-knowledge-k-shape-minimal/requirements.md#FR-04
+最近确认：67ac73e82c0edf8c458673836c358f07472426a1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-knowledge-k-shape-minimal:flow:测试绑定FR-04
+  tests: test/knowledge-k-shape-minimal.test.mjs「T4: 既有面回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-knowledge-k-shape-minimal
+  status: active

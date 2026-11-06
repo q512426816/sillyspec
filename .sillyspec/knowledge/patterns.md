@@ -191,3 +191,39 @@ agent 模块测试跑 SQLite（aiosqlite），FOR UPDATE 语法不被支持（�
 涉及 src/mcp-server.js。
 
 claude.exe（2.1.x）spawn MCP server 子进程时 env 为「白名单基线（PATH/HOME 等 12 个）+ per-server env 覆盖合并」，不继承完整父环境。给 MCP server 注入自定义变量（如 MCP_SESSION_ID）必须放在 options.mcpServers['<server>'].env（daemon mcp-config.ts 的 server config env 字段），放 SDK 顶层 options.env 无效。证据链：repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:407 透传 → sdk.d.ts 的 McpStdioServerConfig.env（SDK 类型声明在 node_modules 依赖包内，行号随包版本漂移不入锚）→ sdk.mjs --mcp-config 全量序列化 → claude.exe StdioClientTransport.start spawn env 合并。来源：2026-08-22-team-session-unify spike-01。
+
+## 真实坏数据整卡转测试夹具：原样字节保留 + 行:列锁死断言；硬门禁暴露存量隐性坏数据时修数据不弱化断言
+
+## 问题
+①修复「解析器吞坏数据」类缺陷后，如何把 bug 钉死不回归——用构造的迷你样本测不出真实坏法的多样性；②给校验链路新增硬门禁后，存量隐性坏数据（旧门禁宽松漏过、新门禁整体解析后暴露）会浮出，容易诱发改测试断言或放宽门禁来「通过」。
+
+## 模式
+- 真实坏数据整卡拷贝为测试夹具（test/fixtures/ 下），不改一个字节——坏卡本身就是夹具，比手工构造的样本更真实；「修工具不修数据」，原仓坏卡归填写侧债务另修，不为本变更顺手改。
+- 断言锁死精确坐标：error.line === 20/22/26、error.column 精确值，把行号换算、解析行为一起钉死（防 off-by-one 回归）。
+- 新硬门禁暴露存量隐性坏夹具时：修夹具数据、不弱化断言、不放宽门禁。实证：test/plan-adopt-waves.test.mjs §4c 夹具 deps 原写了预引号，经 card() 模板再包引号成双重引号 = 真非法 YAML，旧门禁不整体解析漏过、0b 硬拦后暴露——去预引号修夹具（30/0 全绿），门禁与断言原样保留，该暴露恰是硬门禁的真实战果。
+
+## 证据
+- test/fixtures/taskcard-bad-yaml/task-01|02|03.md（三张原卡整卡拷贝）+ test/taskcard-frontmatter-hardgate.test.mjs:39（行:列锁死）
+- test/plan-adopt-waves.test.mjs（§4c 夹具修复）
+- 变更档案 changes/archive/2026-09-20-taskcard-yaml-hardgate/ 的 tasks/task-04.md（constraints：夹具保持原样字节）、verify-result.md 测试结果节与代码审查节；提交 3f854037
+
+## 适用条件
+解析器/门禁/容错类缺陷的回归测试设计；任何「加严校验后存量数据报警」的处置决策——默认修数据侧，校验与断言不动。
+
+## 门禁类校验落点选聚合路径的单点入口，下游门禁保持纯语义——同一信号不双维度重复报
+
+## 问题
+给已含多个下游校验步骤的聚合门禁（如 plan postcheck：可行性、契约对账、acceptance 存在性等）新增「数据合法性」类校验（如 frontmatter 非法 YAML）时，若塞进某个下游门禁做预检，会：①同一坏信号被多个维度重复上报刷屏；②下游门禁语义被污染（契约对账门禁兼职报 YAML 语法错）；③拦截覆盖依赖各门禁各自的调用路径，可能漏。
+
+## 模式
+- 落点选聚合器中先运行的入口步骤单点拦截：本例放 validatePlanFeasibility 步骤 0b——因 runPlanPostcheck 聚合路径里 1b 可行性先于 1c 契约校验同 pass 运行，入口拦截即全链路覆盖，「空真过门」在聚合路径上不可能发生。同先例：重复键检测（D-004@v1）也终裁在 feasibility 入口单点拦截。
+- 下游门禁保持纯语义：validateCrossTaskContracts 不加 YAML 预检，坏卡进对账循环时解析函数返回空集+显式 yamlError，不产生假阳性对账错误，阻断责任由入口独占。
+- 双报豁免（配合既有惯例「双维度报同一漂移信号时后加维度须豁免」）：入口新校验遇到与既有入口校验同信号的 case 跳过——0b 遇 message 含 duplicated mapping key 且该卡 dupKeys 非空时跳过（既有重复键检测的键名+行号文案更精确，独占上报）；嵌套重复键（顶格正则够不到）仍由新校验兜底，豁免不豁免掉盲区。
+
+## 证据
+- src/stages/plan-postcheck.js:1303-1316（0b 硬校验+双报豁免）；:1741-1760（聚合器 1b/1c 顺序）
+- test/taskcard-frontmatter-hardgate.test.mjs:104（顶层双报豁免）/ :136（嵌套重复键 0b 兜底）/ :237（契约门禁对坏卡零假阳性）
+- 变更档案 changes/archive/2026-09-20-taskcard-yaml-hardgate/ 的 decisions.md D-001@v2（supersedes v1 的「契约门禁预检」落点）；提交 3f854037
+
+## 适用条件
+向多步骤聚合门禁新增数据合法性/格式校验时；前提是聚合器顺序保证入口步骤先于下游同 pass 运行，否则须先调序或承认多处拦截。

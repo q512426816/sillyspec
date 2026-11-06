@@ -30,11 +30,16 @@ import { appendKnowledgeHit } from './knowledge-hits.js'
 // ── 常量与内部工具 ──
 
 // 目标文件（INDEX 相对 POSIX 路径）→ INDEX.md 分类段标题。
-// decisions/ 目录按前缀判定为 Decisions；四类之外的目标文件无处落路由行 → unknown_category。
+// decisions/ 目录按前缀判定为 Decisions；五类之外的目标文件无处落路由行 → unknown_category。
+// gotchas 双目标（2026-11-07-knowledge-k-shape-minimal）：工具/测试坑知识此前被迫落
+// known-issues 语义错位（2026-11-06 六条合入已现此妥协）——INDEX 无对应段时由
+// insertRouteLine 既有 EOF 追加语义兜底，不假设段名在场。
 const CATEGORY_SECTIONS = {
   'known-issues.md': 'Known Issues',
   'patterns.md': 'Patterns',
   'conventions.md': 'Conventions',
+  'sillyspec-gotchas.md': 'SillySpec Gotchas',
+  'testing-gotchas.md': 'Testing Gotchas',
 }
 
 // 标题行 qlId 标注形态：`## ql-20260604-001-7a4c | <标题>` 的首 token
@@ -301,7 +306,20 @@ export function classifyUncategorizedEntry({ knowledgeDir, qlId, targetFile, sec
  * 待审知识生效目标（--file 可省时的 category 自动路由白名单，INDEX 相对 basename）。
  * 与 CATEGORY_SECTIONS 同源——decisions/ 不收 proposed（决策走蒸馏管道，不走人工合入）。
  */
-const ACCEPT_TARGETS = new Set(['known-issues', 'patterns', 'conventions'])
+const ACCEPT_TARGETS = new Set(['known-issues', 'patterns', 'conventions', 'sillyspec-gotchas', 'testing-gotchas'])
+
+/**
+ * K 形态结构完整度启发式（2026-11-07-knowledge-k-shape-minimal FR-02）：有效知识最小
+ * 结构 = 「问题」段 + 解法类段（解法/规则/模式/约定任一）。标题措辞启发式检测——
+ * advisory 不阻断（历史形态多元，硬门留完整 K 契约变更裁决）。
+ */
+function structuralWarningsFor(body) {
+  const warnings = []
+  // 行首锚定已足（\b 在纯中文后失效——中文非 \w，词边界断言恒 false）
+  if (!/^#{1,3}\s*问题/m.test(body)) warnings.push('缺「问题」段标题（现象/根因宜以「## 问题」开头）')
+  if (!/^#{1,3}\s*(解法|规则|模式|约定)/m.test(body)) warnings.push('缺解法类段标题（「## 解法/规则/模式/约定」任一——可执行结论是有效知识的最小结构）')
+  return warnings
+}
 
 /**
  * 合并单个 proposed/ 待审条目到正式知识文件（proposed 收口通道 FR-01~04）。
@@ -347,6 +365,9 @@ export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, se
 
   const finalTitle = String(sectionTitle || '').trim() || entryTitle
   const anchor = finalTitle
+  // K 形态结构完整度 advisory（2026-11-07-knowledge-k-shape-minimal FR-02）：缺段列警告
+  // 不阻断——dry-run 与正式路径同携（见两处返回的 structuralWarnings 键）。
+  const structuralWarnings = structuralWarningsFor(body)
 
   // ③ 目标文件：--file 显式优先 > frontmatter category 自动路由（FR-02）
   let file = normalizeTargetFile(targetFile || '')
@@ -355,7 +376,7 @@ export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, se
     if (ACCEPT_TARGETS.has(cat)) file = `${cat}.md`
     else return fail('target_file_required', {
       category: fm.category || null,
-      message: 'category 无效或缺失，须显式 --file known-issues.md|patterns.md|conventions.md',
+      message: 'category 无效或缺失，须显式 --file（known-issues/patterns/conventions/sillyspec-gotchas/testing-gotchas 五目标）',
     })
   }
   const targetPath = join(knowledgeDir, file)
@@ -394,6 +415,7 @@ export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, se
     return {
       ok: true, dryRun: true, moved: false, appendedTo: file, indexUpdated: false,
       anchor, title: finalTitle, keywords: kws, skippedReason: skippedReason || undefined,
+      ...(structuralWarnings.length > 0 ? { structuralWarnings } : {}),
       plan: {
         appendToTarget: !duplicate,
         targetSectionHeading: `## ${finalTitle}`,
@@ -421,6 +443,7 @@ export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, se
     indexUpdated: newIndexNorm !== null,
     anchor, title: finalTitle, keywords: kws,
     skippedReason: skippedReason || undefined,
+    ...(structuralWarnings.length > 0 ? { structuralWarnings } : {}),
   }
 }
 
