@@ -17,6 +17,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { readFrBindings, resolveTestFileRel, testAnchorFile } from './test-bindings.js'
+import { listProposedPending } from './knowledge-classify.js'
 
 /** 伪域判定：auto- 前缀（scaffold 时代机器蒸馏域）或 unmapped 池 */
 const isPseudoDomain = (domain) => /^auto[-_]/.test(domain) || domain === 'unmapped'
@@ -160,6 +161,24 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
     mk('inbox', 'info', `知识收件箱 ${totals.inbox} 条待归类`, totals.inbox,
       inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
       'sillyspec knowledge inbox 看清单 → knowledge classify --ql <id> --file <known-issues.md|patterns.md|conventions.md> [--dry-run] 逐条归类')
+  }
+  // ③ proposed 待审积压（2026-11-07-knowledge-accept-channel FR-05）：此前 proposed 积压
+  // 零信号（本仓 6 条 46 天无人知）——与收件箱同款双档（info 可见 / 超阈 warn），阈值 6 取
+  // 本仓当前积压实证量级。
+  let proposedPending = []
+  const propDir = join(knowledgeRoot, 'proposed')
+  if (existsSync(propDir)) {
+    proposedPending = listProposedPending(knowledgeRoot)
+    totals.proposed = proposedPending.length
+  }
+  if (totals.proposed >= 6) {
+    mk('proposed', 'warn', `待审知识积压（proposed ${totals.proposed} 条 ≥ 6）`, totals.proposed,
+      proposedPending.slice(0, 5).map((p) => p.title).join('；') + (proposedPending.length > 5 ? ' 等' : ''),
+      'sillyspec knowledge inbox 看清单 → 确认后 knowledge accept --id proposed/<slug> 合并生效')
+  } else if (totals.proposed > 0) {
+    mk('proposed', 'info', `待审知识 ${totals.proposed} 条（proposed）`, totals.proposed,
+      proposedPending.slice(0, 5).map((p) => p.title).join('；') + (proposedPending.length > 5 ? ' 等' : ''),
+      '确认后 knowledge accept --id proposed/<slug> 合并生效')
   }
   if (totals.pseudo > 0) {
     mk('pseudo-domain', 'warn', `伪域在库（auto-*/unmapped 共 ${totals.pseudo} 条）`, totals.pseudo,

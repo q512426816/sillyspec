@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-knowledge-accept-channel",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T1: 主路径迁移+INDEX 注册+删源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T2: category 自动路由与 target_file_required」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T3: duplicate-title 幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T4: dry-run 零写盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T5: inbox 待审清单 + digest 信号」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-06",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T6: SKILL.md 文案同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-11-07-knowledge-accept-channel:flow:测试绑定FR-07",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T7: 病态 proposed 文件报错不落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-knowledge-accept-channel"
+    }
+  ]
+}

@@ -22,7 +22,7 @@
  * （uncategorized.md 可能 CRLF，主仓知识文件为 LF）。
  */
 
-import { appendFileSync, existsSync, readFileSync } from 'fs'
+import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'fs'
 import { basename, dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { appendKnowledgeHit } from './knowledge-hits.js'
@@ -295,7 +295,159 @@ export function classifyUncategorizedEntry({ knowledgeDir, qlId, targetFile, sec
   }
 }
 
-// ── CLI 入口（形态对齐 src/stages/knowledge.js 的 cmdSearch：JSON 输出 + args.indexOf 解析） ──
+// ── proposed 收口通道（2026-11-07-knowledge-accept-channel）─────────────────────
+
+/**
+ * 待审知识生效目标（--file 可省时的 category 自动路由白名单，INDEX 相对 basename）。
+ * 与 CATEGORY_SECTIONS 同源——decisions/ 不收 proposed（决策走蒸馏管道，不走人工合入）。
+ */
+const ACCEPT_TARGETS = new Set(['known-issues', 'patterns', 'conventions'])
+
+/**
+ * 合并单个 proposed/ 待审条目到正式知识文件（proposed 收口通道 FR-01~04）。
+ *
+ * 复用 classifyUncategorizedEntry 的全部迁移原语（追加块/duplicate 判定/INDEX 路由行/
+ * keywords 解析/EOL 检测），差异仅在源侧：读 proposed/<slug>.md（frontmatter category +
+ * `#` 标题 + 正文，剥 cmdPropose 生成的尾注块）→ 删除整个源文件（区别于 classify 删
+ * uncategorized 段）。落盘顺序对齐 classify：先追加后 INDEX 后删源（中断最坏态可幂等收敛）。
+ *
+ * 复活防线（2026-11-07-sync-proposed-no-revive）：accept 删本地源文件后，下次 spec-sync
+ * 按「服务器有本地无 → delete」自然下发删除，平台待审区同步清位——无复活面。
+ */
+export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, sectionTitle, dryRun, runtimeDir } = {}) {
+  const fail = (code, extra = {}) => ({
+    ok: false, moved: false, appendedTo: null, indexUpdated: false, anchor: '',
+    error: { code, ...extra },
+  })
+
+  // ① id 归一：proposed/<slug> 或裸 slug → 目录内文件名（拒绝路径穿越形态）
+  let slug = String(id || '').trim().replace(/\\/g, '/')
+  if (slug.startsWith('proposed/')) slug = slug.slice('proposed/'.length)
+  if (!knowledgeDir || !existsSync(knowledgeDir)) return fail('knowledge_dir_missing', { path: knowledgeDir || null })
+  if (!slug || slug.includes('/') || slug.includes('..') || slug === '.') return fail('proposed_invalid_id', { id })
+  const srcPath = join(knowledgeDir, 'proposed', `${slug}.md`)
+  if (!existsSync(srcPath)) return fail('proposed_not_found', { id })
+
+  // ② 解析 proposed 文件：frontmatter(category/proposed_at) + `#` 标题 + 正文（剥尾注块）
+  const norm = readFileSync(srcPath, 'utf8').replace(/\r\n/g, '\n')
+  const fm = {}
+  const fmBlock = norm.match(/^---\n([\s\S]*?)\n---\n/)
+  if (fmBlock) {
+    for (const line of fmBlock[1].split('\n')) {
+      const m = line.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/)
+      if (m) fm[m[1].toLowerCase()] = m[2].trim()
+    }
+  }
+  const titleMatch = norm.match(/^#\s+(.+)$/m)
+  if (!titleMatch) return fail('proposed_invalid', { id, reason: '缺少 # 标题行' })
+  const entryTitle = titleMatch[1].trim()
+  let body = norm.slice(norm.indexOf(titleMatch[0]) + titleMatch[0].length)
+  // 剥 cmdPropose 生成的尾注分隔块（'---\n> This is a proposed knowledge entry...'）
+  body = body.replace(/\n+---\s*\n>\s*This is a proposed knowledge entry[\s\S]*$/, '').trim()
+
+  const finalTitle = String(sectionTitle || '').trim() || entryTitle
+  const anchor = finalTitle
+
+  // ③ 目标文件：--file 显式优先 > frontmatter category 自动路由（FR-02）
+  let file = normalizeTargetFile(targetFile || '')
+  if (!file) {
+    const cat = String(fm.category || '').trim().replace(/\.md$/, '')
+    if (ACCEPT_TARGETS.has(cat)) file = `${cat}.md`
+    else return fail('target_file_required', {
+      category: fm.category || null,
+      message: 'category 无效或缺失，须显式 --file known-issues.md|patterns.md|conventions.md',
+    })
+  }
+  const targetPath = join(knowledgeDir, file)
+  if (!existsSync(targetPath)) return fail('target_file_missing', { targetFile: file, path: targetPath })
+
+  // ④ 追加块 + duplicate 幂等（口径逐字对齐 classifyUncategorizedEntry ②段）
+  const targetRaw = readFileSync(targetPath, 'utf8')
+  const targetEol = detectEol(targetRaw)
+  const dupRe = new RegExp(`^##\\s+${escapeRegExp(finalTitle)}\\s*$`, 'm')
+  const duplicate = dupRe.test(targetRaw.replace(/\r\n/g, '\n'))
+  let appendBlock = null
+  let skippedReason
+  if (!duplicate) {
+    const b = body ? body.replace(/\n/g, targetEol) : ''
+    appendBlock = ['', `## ${finalTitle}`, '', ...(b ? [b] : []), ''].join(targetEol)
+    if (targetRaw && !targetRaw.endsWith('\n')) appendBlock = targetEol + appendBlock
+  } else {
+    skippedReason = 'duplicate-title'
+  }
+
+  // ⑤ INDEX 路由行（口径对齐 classifyUncategorizedEntry ③段）
+  const category = categoryForTarget(file)
+  if (!category) return fail('unknown_category', { targetFile: file })
+  const indexPath = join(knowledgeDir, 'INDEX.md')
+  if (!existsSync(indexPath)) return fail('index_missing', { path: 'knowledge/INDEX.md' })
+  const indexRaw = readFileSync(indexPath, 'utf8')
+  const indexEol = detectEol(indexRaw)
+  const indexNorm = indexRaw.replace(/\r\n/g, '\n')
+  const kws = resolveKeywords(keywords, finalTitle)
+  const display = `${file}#${anchor}`
+  const routeLine = `- ${kws.join('|')} → [${display}](${display})`
+  const routeExists = indexNorm.split('\n').some((l) => l.includes(`](${display})`))
+  const newIndexNorm = routeExists ? null : insertRouteLine(indexNorm, category, routeLine)
+
+  if (dryRun) {
+    return {
+      ok: true, dryRun: true, moved: false, appendedTo: file, indexUpdated: false,
+      anchor, title: finalTitle, keywords: kws, skippedReason: skippedReason || undefined,
+      plan: {
+        appendToTarget: !duplicate,
+        targetSectionHeading: `## ${finalTitle}`,
+        indexRouteLine: routeExists ? null : routeLine,
+        removeFromProposed: `knowledge/proposed/${slug}.md`,
+      },
+    }
+  }
+
+  // 落盘顺序（对齐 classify 约束：先追加后删除，条目不丢内容、可手工搬运 revert）
+  if (appendBlock !== null) appendFileSync(targetPath, appendBlock, 'utf8')
+  if (newIndexNorm !== null) writeAtomicSync(indexPath, newIndexNorm.split('\n').join(indexEol))
+  rmSync(srcPath, { force: true })
+
+  const rt = runtimeDir || join(dirname(knowledgeDir), '.runtime')
+  appendKnowledgeHit(rt, {
+    type: 'accept',
+    targetFile: file,
+    title: finalTitle,
+    skippedReason: skippedReason || undefined,
+  })
+
+  return {
+    ok: true, moved: true, appendedTo: file,
+    indexUpdated: newIndexNorm !== null,
+    anchor, title: finalTitle, keywords: kws,
+    skippedReason: skippedReason || undefined,
+  }
+}
+
+/** 列出 proposed/ 待审清单（inbox 消费段 FR-05）：slug + 标题 + 积压天数。空目录返回 []。 */
+export function listProposedPending(knowledgeDir) {
+  const propDir = join(knowledgeDir, 'proposed')
+  if (!existsSync(propDir)) return []
+  const now = Date.now()
+  return readdirSync(propDir)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => {
+      const slug = f.replace(/\.md$/, '')
+      let title = slug
+      let ageDays = null
+      try {
+        const norm = readFileSync(join(propDir, f), 'utf8').replace(/\r\n/g, '\n')
+        title = norm.match(/^#\s+(.+)$/m)?.[1]?.trim() || slug
+        const at = norm.match(/^proposed_at:\s*(.+)$/m)?.[1]?.trim()
+        const ts = at ? Date.parse(at) : NaN
+        if (Number.isFinite(ts)) ageDays = Math.max(0, Math.floor((now - ts) / 86400000))
+      } catch { /* 单文件解析失败按 slug 兜底展示 */ }
+      return { slug, title, ageDays }
+    })
+    .sort((a, b) => (b.ageDays ?? 0) - (a.ageDays ?? 0))
+}
+
+
 
 function output(ok, data, error) {
   const result = { ok, ...data }
@@ -413,12 +565,24 @@ export async function cmdKnowledgeInbox(dir, args, opts = {}) {
     qlId: e.qlIdPrefix || null,
     summary: String(e.body || '').replace(/\s+/g, ' ').slice(0, 80),
   }))
+  // proposed 待审清单（2026-11-07-knowledge-accept-channel FR-05）：json 面恒挂键；文本面
+  // 非空渲染——渲染件在空收件箱早退**之前**（评审 P1 修复：早退吞清单致默认人读路径
+  // 违反 FR-05）。
+  const proposed = listProposedPending(knowledgeDir)
+  const renderProposed = () => {
+    if (proposed.length === 0) return
+    console.log(`📬 待审提议（proposed/ ${proposed.length} 条）——确认后 knowledge accept --id proposed/<slug> 合并生效：`)
+    proposed.forEach((p, i) => {
+      console.log(`  ${i + 1}. 《${p.title}》${p.ageDays !== null ? `（积压 ${p.ageDays} 天）` : ''}`)
+    })
+  }
   if (wantJson) {
-    output(true, { inbox: { count: entries.length, baseline, over, items } })
+    output(true, { inbox: { count: entries.length, baseline, over, items, proposed } })
     return
   }
   if (entries.length === 0) {
     console.log('📚 知识收件箱：空——uncategorized 无待审条目')
+    renderProposed()
     return
   }
   console.log(`📚 知识收件箱：待审 ${entries.length} 条${baseline !== null ? `（基线 ${baseline}${over ? '，已超 ⚠️' : ''}）` : ''}`)
@@ -427,4 +591,43 @@ export async function cmdKnowledgeInbox(dir, args, opts = {}) {
     if (it.summary) console.log(`     ${it.summary}`)
   })
   console.log('   归类：sillyspec knowledge classify --title "…" --file conventions|patterns|known-issues.md')
+  renderProposed()
+}
+
+/**
+ * `sillyspec knowledge accept` 子命令入口（2026-11-07-knowledge-accept-channel）：
+ * 合并单个 proposed/ 待审条目到正式知识文件（用户确认后由 agent/人执行）。
+ * 参数解析形态对齐 cmdSearch（args.indexOf + flag-as-value 防护）。
+ */
+export async function cmdKnowledgeAccept(dir, args, opts = {}) {
+  const base = opts.specDir || join(dir, '.sillyspec')
+  const knowledgeDir = join(base, 'knowledge')
+  const grab = (flag) => {
+    const i = args.indexOf(flag)
+    const v = i >= 0 ? args[i + 1] : ''
+    return v && !v.startsWith('--') ? v : ''
+  }
+  const id = grab('--id')
+  const targetFile = grab('--file')
+  const sectionTitle = grab('--section')
+  const kwRaw = grab('--keywords')
+  const dryRun = args.includes('--dry-run')
+  if (!id) {
+    output(false, {}, '--id is required（proposed/<slug>）')
+    return
+  }
+  const r = acceptProposedEntry({
+    knowledgeDir,
+    id,
+    targetFile: targetFile || undefined,
+    keywords: kwRaw ? kwRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
+    sectionTitle: sectionTitle || undefined,
+    dryRun,
+  })
+  if (r.ok) {
+    const { error: _e, ...data } = r
+    output(true, data)
+  } else {
+    output(false, {}, r.error)
+  }
 }

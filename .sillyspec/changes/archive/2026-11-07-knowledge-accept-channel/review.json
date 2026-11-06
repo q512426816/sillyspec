@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-knowledge-accept-channel",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "26e955214b2179a03f78992127ef72a125a97d31",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "F1 inbox 文本路径空收件箱早退吞 proposed 清单（FR-05 默认人读路径违反）",
+      "evidence": "src/knowledge-classify.js:573 早退在 proposed 段之前——uncategorized 缺席/0 条 + proposed ≥1 条时打印「收件箱：空」后 return，proposed 段永不执行；T5 原只测 --json 故 30/30 仍绿（测试盲区）",
+      "location": "src/knowledge-classify.js:573",
+      "resolution": "26e95521：listProposedPending 前移至分支分裂前（:571 纯读），renderProposed() 在空收件箱早退分支（:585）与非空分支尾部（:594）双点渲染，json 面逐字零变化（:580）；T5 新增文本路径断言（test:156-163）恰锁本场景，置空修复即红——增量复审亲核修复到位零回归"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "F2 help 机读 subcommands/available 两清单缺 accept",
+      "evidence": "src/stages/knowledge.js:743/933 机读数组无 'accept'，依赖机读清单的 agent 发现面看不到子命令存在",
+      "location": "src/stages/knowledge.js:743",
+      "resolution": "26e95521：两数组均补 'accept'（增量复审亲核在场）；预存在不同步项（743 缺 renumber、933 缺 scope）非本变更义务未动"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "F3 SKILL.md 与 help 行省略 --keywords/--section（实现在场文案未披露）",
+      "evidence": ".claude/skills/sillyspec-knowledge/SKILL.md:23 只列 --id/--file/--dry-run，design 接口契约明列五 flag；无幻影 flag（正向 cli-copy-selfsufficient 通过）；--keywords 只按半角逗号切分与 classify 的 /[,，]/ 口径不一致（非 FR 绑定项）",
+      "location": ".claude/skills/sillyspec-knowledge/SKILL.md:23",
+      "resolution": "裁决不阻断：SKILL 自带「参数细节跑无参命令可见用法」缓解条款，纯完整性 nit 留后续顺手清偿"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "F4 --file 侧路径穿越不设防（normalizeTargetFile 不拒 ../，可越出 knowledgeDir 追加库外已存在文件）",
+      "evidence": "src/knowledge-classify.js:55 与 classifyUncategorizedEntry 的 --file 完全同款（预存在面，本变更新增复刻入口）；design 盲维 Q4 对 --file 侧不完全成立（id 侧防护真实有效）",
+      "location": "src/knowledge-classify.js:55",
+      "resolution": "裁决不阻断：预存在 classify 同款面，修复属 normalizeTargetFile 单源作用域（一处改两命令同收），建议登记后续独立轻量变更统一收口"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "F5 FR-07 括注措辞张力（缺 frontmatter 且显式 --file 时正常合并不报错）",
+      "evidence": "requirements.md:63 括注「缺 frontmatter 的病态 proposed 文件结构化报错不落盘」——缺 frontmatter 未传 --file 确报 target_file_required（满足），显式 --file 正常合并（与字面有张力）；绑定场景与 T7 仅锁「无 # 标题」形态，按绑定口径无违反",
+      "location": ".sillyspec/changes/2026-11-07-knowledge-accept-channel/requirements.md:63",
+      "resolution": "裁决不阻断：纯 spec 行文张力无行为缺陷，留档防后续按字面追偿"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok（追加/判定块为 classify 逐字复制 :364-391 vs :224-254，TOCTOU 窗口与既有同源未引入新面；后到者读源已删→proposed_not_found 顺序语义成立）",
+    "切换": "ok（append→INDEX 原子写→删源，三条中断路径推演均收敛；审计在删源后，中断仅失审计行不损失数据）",
+    "作用域": "ok（id 侧穿越防护真实成立：反斜杠归一+剥前缀后拒 '/'、'..'；--file 侧为 classify 预存在同款面→F4 P3 open）"
+  },
+  "reviewerNotes": "增量复审 round 1（against 26e95521，scope=首轮阻断项 F1+F2 顺修+回归检查）：F1 修复到位（renderProposed 双点渲染 :585/:594、前移单次计算 :571、json 面逐字未动）；F2 两机读清单在场；回归零引入（31/31 绿 + inbox 面 5/5 亲测绿，新增断言恰锁 P1 场景具根因性）；F3/F4/F5 维持 P3 open 均裁决不阻断。verdictChange: changes_requested → approved。原始详细评审（含 failure_scenario 与逐维推演全文）见归档前该文件历史版本与评审代理回传记录。",
+  "reviewedAt": "2026-11-07T11:20:00+08:00"
+}
