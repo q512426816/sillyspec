@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-sync-proposed-no-revive",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-01",
+      "tests": [
+        "test/spec-sync-proposed-no-revive.test.mjs「T1: exists=false 残留不生成 add」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-sync-proposed-no-revive"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-02",
+      "tests": [
+        "test/spec-sync-proposed-no-revive.test.mjs「T2: 清理段删除本地残留+提示+幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-sync-proposed-no-revive"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-03",
+      "tests": [
+        "test/spec-sync-proposed-no-revive.test.mjs「T3: 新提议照常 add」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-sync-proposed-no-revive"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-04",
+      "tests": [
+        "test/spec-sync-proposed-no-revive.test.mjs「T4: 非 proposed exists=false 行为不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-sync-proposed-no-revive"
+    }
+  ]
+}

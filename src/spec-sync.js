@@ -17,7 +17,7 @@
 
 import { createHash } from 'crypto';
 import { timedAsync } from './timing.js';
-import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join, relative, sep } from 'path';
 import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
 import { runtimeStatePath } from './runtime-paths.js';
@@ -364,6 +364,12 @@ export function computeSpecOps(serverManifest, localFiles) {
   for (const p of localMap.keys()) {
     if (renamedNew.has(p)) continue;
     if (!serverSet.has(p)) {
+      // 平台已审候选不复活（2026-11-07-sync-proposed-no-revive）：平台知识页 merge/reject
+      // 待审候选后服务器软删（manifest 行 exists=false，不置墓碑）——此处若照常 add 会走
+      // 平台复活分支把已审条目推回待审区（2026-11-07 平台侧核查实证）。窄化判定：仅
+      // knowledge/proposed/ 前缀 + 软删行在场（平台处置的唯一可信证据；manifest 无行 =
+      // 从未同步的新提议，照常 add）。本地残留清理由 cleanupPlatformDisposedProposed 负责。
+      if (p.startsWith('knowledge/proposed/') && server[p]?.exists === false) continue;
       const localEntry = localMap.get(p);
       const content = (localEntry.buf ?? readFileSync(localEntry.absPath ?? join('.', p))).toString('base64');
       ops.push({
@@ -378,6 +384,39 @@ export function computeSpecOps(serverManifest, localFiles) {
   }
 
   return ops;
+}
+
+/**
+ * 平台已审候选的本地残留清理（2026-11-07-sync-proposed-no-revive FR-02）：
+ * 「本地 knowledge/proposed/ 文件 ∩ 服务器 manifest exists=false 行」= 平台侧已
+ * merge/reject 处置过的候选在本地留下的残件（computeSpecOps 已拦其 add 复活）——
+ * 此处删除本地文件并提示，防止残留永久滞留（每次 sync 重算，幂等；无残留零输出）。
+ * 删除安全性：服务器侧该路径已无活文件（软删行），删本地不产生两端不一致；误删窗口
+ * 仅「同 slug 复写新内容 + 平台恰已处置同路径」（发生率极低，见变更 design R-02）。
+ * @returns {string[]} 已清理的 spec 相对路径列表
+ */
+export function cleanupPlatformDisposedProposed(specRoot, serverManifest) {
+  const server = serverManifest || {};
+  const disposed = Object.keys(server).filter(
+    (p) => p.startsWith('knowledge/proposed/') && server[p]?.exists === false
+  );
+  if (disposed.length === 0) return [];
+  const removed = [];
+  for (const p of disposed) {
+    // spec 相对路径 → 本地绝对路径（walkSpecTree 同源根；路径来自服务器清单为 POSIX 形态）
+    const abs = join(specRoot, ...p.split('/'));
+    if (!existsSync(abs)) continue; // 本地不在场的处置行零动作零上报（只清真残件）
+    try {
+      rmSync(abs, { force: true });
+      removed.push(p);
+    } catch { /* 删除失败不阻断同步——下轮重算重试（幂等） */ }
+  }
+  if (removed.length > 0) {
+    console.log(
+      `[spec-sync] 已清理 ${removed.length} 个平台已审核（合并/拒绝）的本地待审候选残留（不再回推复活）: ${removed.slice(0, 5).join(', ')}${removed.length > 5 ? ' 等' : ''}`
+    );
+  }
+  return removed;
 }
 
 /**
@@ -892,6 +931,11 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
   // 2. walk/hash/diff
   const entries = walkSpecTree(specRoot);
   const localFiles = hashFiles(entries);
+  // 平台已审候选残留清理（2026-11-07-sync-proposed-no-revive FR-02）：computeSpecOps 已拦
+  // 其 add 复活，此处删本地残件+提示（幂等；walk 已完成，删除不影响本轮 diff 结果）。
+  try {
+    cleanupPlatformDisposedProposed(specRoot, serverManifest);
+  } catch { /* 清理 fail-soft——不阻断文件树同步 */ }
   let ops = computeSpecOps(serverManifest, localFiles);
 
   // 旧副本回推防护（并行会话一致性）：上次同步后本地从未改动的文件不回推覆盖服务器新内容。

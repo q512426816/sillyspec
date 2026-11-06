@@ -847,3 +847,79 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-11-04-sync-push-chunking
   status: active
+
+## FR-sync-053 服务器 manifest exists=false 的 knowledge/proposed/ 本地残留文件：computeSpecOps 不生成 add（不复活）
+变更：2026-11-07-sync-proposed-no-revive
+状态：active
+摘要：平台已审候选不复活
+全文：.sillyspec/changes/archive/2026-11-07-sync-proposed-no-revive/requirements.md#FR-01
+最近确认：a943bcc7e7ea26dd57041c0a51c158ce3145677a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-01
+  tests: test/spec-sync-proposed-no-revive.test.mjs「T1: exists=false 残留不生成 add」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-sync-proposed-no-revive
+  status: active
+
+## FR-sync-054 syncSpecTree 检测到此类残留时自动删除本地文件并输出一行提示（注明平台已审核合并/拒绝）
+变更：2026-11-07-sync-proposed-no-revive
+状态：active
+摘要：残留清理
+全文：.sillyspec/changes/archive/2026-11-07-sync-proposed-no-revive/requirements.md#FR-02
+最近确认：a943bcc7e7ea26dd57041c0a51c158ce3145677a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-02
+  tests: test/spec-sync-proposed-no-revive.test.mjs「T2: 清理段删除本地残留+提示+幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-sync-proposed-no-revive
+  status: active
+
+## FR-sync-055 从未同步的新 proposed 文件（manifest 无该行）照常生成 add（新提议上行通道不受影响）
+变更：2026-11-07-sync-proposed-no-revive
+状态：active
+摘要：新提议正常上行
+全文：.sillyspec/changes/archive/2026-11-07-sync-proposed-no-revive/requirements.md#FR-03
+最近确认：a943bcc7e7ea26dd57041c0a51c158ce3145677a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-03
+  tests: test/spec-sync-proposed-no-revive.test.mjs「T3: 新提议照常 add」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-sync-proposed-no-revive
+  status: active
+
+## FR-sync-056 非 proposed 路径的 exists=false 场景行为零变化（既有语义不动）+ 既有测试面全绿
+变更：2026-11-07-sync-proposed-no-revive
+状态：active
+摘要：非 proposed 软删行为不变
+全文：.sillyspec/changes/archive/2026-11-07-sync-proposed-no-revive/requirements.md#FR-04
+最近确认：a943bcc7e7ea26dd57041c0a51c158ce3145677a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-sync-proposed-no-revive:flow:测试绑定FR-04
+  tests: test/spec-sync-proposed-no-revive.test.mjs「T4: 非 proposed exists=false 行为不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-sync-proposed-no-revive
+  status: active

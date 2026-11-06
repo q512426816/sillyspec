@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-sync-proposed-no-revive",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a943bcc7e7ea26dd57041c0a51c158ce3145677a",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "design 盲维三称清理发生在 ops 计算之后，实际接线在 computeSpecOps 之前",
+      "evidence": "src/spec-sync.js:937 cleanupPlatformDisposedProposed 先于 :939 computeSpecOps；行为等价——localFiles 为 walk 后快照、add 拦截独立兜底，代码注释自证「walk 已完成，删除不影响本轮 diff 结果」，纯文档措辞与实现顺序不一致，无数据正确性影响",
+      "location": "src/spec-sync.js:937"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "proposed 残留经 rename 通道理论绕过拦截（复活漏网窄缝）",
+      "evidence": "renamedNew.has(p) 的 continue（:365）先于拦截判定（:372）：若某服务器 exists=true 旧路径本地缺失且 hash 与 proposed 残留逐字节相同，残留被消费为 rename 目标生成 rename op 绕过 add 拦截；前提为内容完全碰撞，发生率极低且属既有 rename 语义边角，非本变更引入",
+      "location": "src/spec-sync.js:365"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-02 的 syncSpecTree 端到端接线无自动化覆盖",
+      "evidence": "T2 直测 cleanupPlatformDisposedProposed 函数级行为（删除/提示/幂等全断言）；syncSpecTreeImpl 内 3 行接线（:936-938 try/catch fail-soft）仅经人工审查确认存在，无测试穿透——轻量规模下可接受，接线回归风险低",
+      "location": "src/spec-sync.js:936"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（判定基于当次 manifest 快照+路径前缀+exists===false 硬证据，hash/mtime/内容无关，与 design 作答一致）",
+    "并发": "ok（R-02 误删窄窗口如实披露，缓解=提示行真实存在 :955 同风格文案+平台备份/git 找回；边界已裁决：可接受）",
+    "切换": "finding（P3：design 称清理在 ops 计算后、实现在前——行为等价，快照+拦截双保险）",
+    "作用域": "ok（manifest 按本工作区拉取，前缀判定无跨仓语义；join(specRoot,...p.split('/')) 与 walkSpecTree 的 toPosix 路径同源同形态，Windows 兼容；边界已裁决：可接受）"
+  },
+  "reviewedAt": "2026-11-07T00:49:59+08:00"
+}
