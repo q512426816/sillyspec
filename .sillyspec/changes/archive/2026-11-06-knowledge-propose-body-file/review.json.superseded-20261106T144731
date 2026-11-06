@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-06-knowledge-propose-body-file",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f45e7f4f73cf7ef6a36de8d373f90999fd0ec0e8",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": ".claude/skills/sillyspec-knowledge/SKILL.md 未同步 --body-file 发现面",
+      "evidence": "SKILL.md 第 4 行 argument-hint 与第 22 行命令表仍只列 --body 形态；CLAUDE.md 规则 19 要求 src/stages/knowledge.js help 改动涉及对应 SKILL 时同步——agent 从 skill 学用法仍走会被策略层误杀的 argv 通道，本变核心动机对 skill 消费者未触达。非 FR 违诺（FR-05 只承诺 help+usage 两处且均已兑现）",
+      "location": ".claude/skills/sillyspec-knowledge/SKILL.md:4,22"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "design 盲维乱序作答对 indexOf 语义转述有误（『最后一次命中』实为第一次）",
+      "evidence": "design.md 乱序问写『同款重复参数「最后一次 indexOf 命中」既有语义保持』，实际 indexOf 取第一次出现处的值（如 --body a --body b 取 a）；纯文档措辞误差，实现与既有 --body 通道完全同款（knowledge.js:542-549 均 indexOf），无行为影响",
+      "location": ".sillyspec/changes/2026-11-06-knowledge-propose-body-file/design.md:26"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "T5 首条断言冗余弱（源码文本断言被实现代码自身字符串满足）",
+      "evidence": "kj.includes('--body-file') 在 help 行被删时仍因 cmdPropose 实现里 indexOf('--body-file') 字串而绿；但第二条『从文件读正文』字串唯一锚 help 行、第三条锚 index.js usage，且评审实跑 cmdKnowledge --help 输出确认含 --body-file 与从文件读正文语义（HELP_HAS_BODY_FILE=true），行为面已闭环",
+      "location": "test/knowledge-propose-body-file.test.mjs:237"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "usage 行 --category 呈必选形态与实际可选不符（既有沿袭非本变引入）",
+      "evidence": "src/index.js:159 propose 行 --category <name> 无方括号，实际缺省 uncategorized 可选（knowledge.js:541）；该 token 为变更前既有形态，本变未动它，本变新增的 [--body-file <路径>|--body <文本>] 互斥可选形态与实现判定一致",
+      "location": "src/index.js:159"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-06T14:45:51Z"
+}

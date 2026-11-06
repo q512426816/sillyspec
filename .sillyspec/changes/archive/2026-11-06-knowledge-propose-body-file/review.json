@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-06-knowledge-propose-body-file",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f1acc9d4f35f45560109db808cbebb5ae5a603e8",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "SKILL.md 未同步 --body-file 发现面（前轮 #1 复审）",
+      "evidence": "修复到位：.claude/skills/sillyspec-knowledge/SKILL.md 第 4 行 argument-hint 与第 22 行命令表示均已列 --body-file 并注明「长中文正文用 --body-file 从文件读（绕开命令行传参误杀）」，与实现一致，无回归。",
+      "location": ".claude/skills/sillyspec-knowledge/SKILL.md:4,22"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "design 盲维乱序作答对 indexOf 语义转述仍误写为「最后一次命中」（前轮 #2 复审：未修复）",
+      "evidence": "design.md 第 26 行仍写「同款重复参数『最后一次 indexOf 命中』既有语义保持」，而 knowledge.js:548/542 用 Array.prototype.indexOf 取的是第一次出现的 flag 及其值（重复参数首个值生效）——文字与代码语义相反；纯文档准确性问题，代码行为本身无乱序风险。",
+      "location": ".sillyspec/changes/2026-11-06-knowledge-propose-body-file/design.md:26"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "T5 首条断言仍为全源码文本匹配，被实现代码自身字符串满足（前轮 #3 复审：未修复）",
+      "evidence": "test 第 140 行 kj.includes('--body-file') 扫描整个 knowledge.js 源码，cmdPropose 解析段 args.indexOf('--body-file')（knowledge.js:548）自身即含该字符串，即便 help 文案删掉 --body-file 此断言仍绿；次条断言 kj.includes('从文件读正文') 锚定 help 行语义，部分兜住了漂移风险，故仍 P3 测试强度问题而非假测试。",
+      "location": "test/knowledge-propose-body-file.test.mjs:140"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "usage 行 --category 呈必选形态与实际可选不符（前轮 #4 复审：既有沿袭，接受）",
+      "evidence": "src/index.js:159 与 SKILL.md:4/22 的 propose 行 --category <name> 无方括号呈必选，实际 knowledge.js:541 缺省回落 'uncategorized'；属变更前既有沿袭的装饰性文案形态且同步传播面一致（index.js/帮助/SKILL 同形），无数据正确性风险，裁决为可接受。",
+      "location": "src/index.js:159"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-06T22:51:32+08:00"
+}

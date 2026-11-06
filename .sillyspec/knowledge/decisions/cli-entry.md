@@ -1096,3 +1096,12 @@ supersedes：D-010@v1
 文件：src/index.js, src/spec-sync.js, test/sync-fail-silent.test.mjs
 最近确认：cccdeb844f9bef0c44ac63b81acb1c926433bfdf
 理由：三处小修：① index.js platform sync 全树分支补 `r.ok === false` 判定——失败行+exit 1（既有 warn 已含原因链，此处只补结果语义与退出码）；② spec-sync.js 清单 GET 超时按形态分档——全量（无 since）取 120s、增量维持 10s（对齐 bundle 端点大小超时先例：大响应体独立档，非拍脑袋放大）；③ POST !res.ok 的 detail 提取扩一层——响应体 detail 字段含 op 级文本（path=…）时透传进 warn 行。三处共同根治「失败被成功横幅掩盖」：生产实证缓存漂移+慢链路+422 连坐三因叠加时，用户只见「0 个文件差异」，漏推不可见（2026-11-04 知识索引漏推确诊回执）。
+
+## D-cli-entry-013@v1 2026-11-06-knowledge-propose-body-file——在 `cmdPropose`（src/stages/knowledge.js:534-590）的参数解析段新增 `--body-file <路径>`：与既有 `
+状态：implemented
+变更：2026-11-06-knowledge-propose-body-file
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-06-knowledge-propose-body-file/design.md
+文件：src/index.js, src/stages/knowledge.js, test/knowledge-propose-body-file.test.mjs
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+理由：在 `cmdPropose`（src/stages/knowledge.js:534-590）的参数解析段新增 `--body-file <路径>`：与既有 `--title/--category/--body/--from` 同款 indexOf 取值，读文件（readFileSync utf8）作 body，后续 slug 生成/frontmatter 拼接/writeAtomicSync 落盘全部复用既有 --body 路径零改写。校验序前置：`--body` 与 `--body-file` 同给 → `body_source_conflict`；文件不存在 → `body_file_missing`；读抛错 → `body_file_read_failed`——三类错误全部在 `mkdirSync(proposedDir)` 之前返回，错误路径零目录创建零落盘。选该方案是因为它是平台会话工具反馈原话建议的形态（「支持 --body-file 从文件读正文，彻底绕开命令行传参」），且是唯一同时规避「命令行长度上限」与「策略层对命令行文本的误判」两个问题的通道——正文不经过 argv。

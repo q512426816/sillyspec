@@ -1,7 +1,7 @@
 ---
 name: sillyspec:knowledge
 description: Agent-safe knowledge base commands for SillySpec repositories. Search, inspect, validate, refresh, and propose knowledge entries.
-argument-hint: "search --query \"<text>\" --limit N | inspect --id \"<id>\" | validate | refresh | propose --title \"<title>\" --category <name>"
+argument-hint: "search --query \"<text>\" --limit N | inspect --id \"<id>\" | validate | refresh | propose --title \"<title>\" [--body-file <路径>|--body \"<text>\"] --category <name>"
 version: "3.19.2"
 ---
 
@@ -19,7 +19,7 @@ version: "3.19.2"
 | `sillyspec knowledge inspect --id "<id>"` | 读命中条目全文 | id 形如 `patterns` / `known-issues/xxx` / `generated/xxx` |
 | `sillyspec knowledge validate` | commit/archive 前校验健康度 | errors（broken_reference/empty_file 等）须先修复 |
 | `sillyspec knowledge refresh` | scan/archive 后从 scan 文档刷新自动知识 | 仅写 `generated/`，不碰 manual/ |
-| `sillyspec knowledge propose --title "..." --category <分类> --body "..."` | 提议新知识 | 仅写 `proposed/` 供人工审核；`--from` 标来源 |
+| `sillyspec knowledge propose --title "..." --category <分类> [--body-file <路径>\|--body "..."]` | 提议新知识 | 仅写 `proposed/` 供人工审核；`--from` 标来源；长中文正文用 `--body-file` 从文件读（绕开命令行传参误杀） |
 
 zone 语义：`manual`（人工维护，可直接信任）/ `generated`（自动提取，需人工审核）/ `proposed`（待审，未合并）。
 

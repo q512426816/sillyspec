@@ -541,6 +541,13 @@ export async function cmdPropose(dir, args, opts = {}) {
   const category = categoryIdx >= 0 && args[categoryIdx + 1] ? args[categoryIdx + 1] : 'uncategorized'
   const bodyIdx = args.indexOf('--body')
   const body = bodyIdx >= 0 && args[bodyIdx + 1] ? args[bodyIdx + 1] : ''
+  // --body-file 文件正文通道（2026-11-06-knowledge-propose-body-file）：中文长正文
+  // 经命令行 argv 传递会被策略层分词误杀（「斜杠+中文标点」序列误判路径，2026-11-06
+  // 平台会话双 shell 实证），文件通道彻底绕开 argv。相对路径按进程 cwd 解析
+  // （readFileSync 直读，不做 specDir 拼接）。
+  const bodyFileIdx = args.indexOf('--body-file')
+  const bodyFile = bodyFileIdx >= 0 && args[bodyFileIdx + 1] ? args[bodyFileIdx + 1] : ''
+  let bodyFromFile = ''
   const fromIdx = args.indexOf('--from')
   const from = fromIdx >= 0 && args[fromIdx + 1] ? args[fromIdx + 1] : ''
 
@@ -548,6 +555,40 @@ export async function cmdPropose(dir, args, opts = {}) {
     output(false, {}, '--title is required')
     return
   }
+
+  // 三类参数错误先于 mkdirSync/writeAtomicSync——错误路径零目录创建零落盘。
+  // 互斥按 flag 在场判定（值缺省同算同给，报冲突优于静默择一）。
+  if (bodyFileIdx >= 0 && bodyIdx >= 0) {
+    output(false, {}, {
+      code: 'body_source_conflict',
+      message: '--body 与 --body-file 互斥，只能提供一个正文来源',
+    })
+    return
+  }
+  if (bodyFileIdx >= 0) {
+    if (!bodyFile || bodyFile.startsWith('--')) {
+      output(false, {}, '--body-file requires a path')
+      return
+    }
+    if (!existsSync(bodyFile)) {
+      output(false, {}, { code: 'body_file_missing', path: bodyFile })
+      return
+    }
+    try {
+      // 文件通道逐字快照读：空文件落空正文（不走 argv 通道的 '(no body provided)'
+      // 兜底——FR-01 落盘与源文件一致）
+      bodyFromFile = readFileSync(bodyFile, 'utf8')
+    } catch (err) {
+      output(false, {}, {
+        code: 'body_file_read_failed',
+        path: bodyFile,
+        reason: String((err && err.message) || err),
+      })
+      return
+    }
+  }
+  const hasBodyFile = bodyFileIdx >= 0
+  const bodyText = hasBodyFile ? bodyFromFile : body
 
   mkdirSync(proposedDir, { recursive: true })
 
@@ -571,7 +612,8 @@ export async function cmdPropose(dir, args, opts = {}) {
     '',
     `# ${title}`,
     '',
-    body || '(no body provided)',
+    // argv 通道保持既有空兜底；文件通道逐字（空即空，见上方读取处注释）
+    hasBodyFile ? bodyText : (bodyText || '(no body provided)'),
     '',
     '---',
     '> This is a proposed knowledge entry. Review and merge into manual/ or generated/.',
@@ -690,7 +732,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  scope                 知识注入作用域现状与标记语法（always/repo/module/关键词；纯读）',
       '  stats                 覆盖率/死条目统计（纯读）',
       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
-      '  propose / classify / inbox / graph / stats / renumber',
+      '  propose --title "..." [--body "<文本>" | --body-file <路径>] [--category <名>] [--from <来源>]   提议新知识（长中文正文用 --body-file 从文件读正文，绕开命令行传参）',
       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
       '  redomain-unmapped [--face decisions|fr] [--apply]  unmapped 停车场存量批量清偿（文件锚/覆盖面投票目标域；dry-run 先行）',
       '',

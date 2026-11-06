@@ -1,0 +1,50 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  知识提议命令支持从文件读正文
+
+
+  动机与背景：平台会话实证（2026-11-06）——knowledge propose 的中文长正文经命令行传递被 Runtime Policy 朴素分词误杀：正文中 projects
+  编码目录写法后紧跟中文标点的「斜杠加中文标点」序列被策略层误判为一个不存在的假路径并拒绝整条命令，PowerShell 与 Bash 双中招（策略层分词问题，与 shell 无关）。改写措辞才能绕过。工具使用反馈明确建议：支持
+  --body-file 从文件读正文，彻底绕开命令行传参。现状 cmdPropose（src/stages/knowledge.js:534-590）--body 仅从命令行 argv 取值。
+
+
+  成功标准：
+
+  - knowledge propose --title X --body-file <路径> 从指定文件读全文作正文写入 proposed/ 条目，落盘内容与源文件一致
+
+  - --body 与 --body-file 同给时显式报错（互斥冲突），不静默择一
+
+  - --body-file 指向不存在或不可读文件时输出结构化错误（body_file_missing/body_file_read_failed），不落半成品文件
+
+  - 既有 --body 命令行传参路径行为零变化（既有测试全绿）
+
+  - 帮助文案（cmdKnowledge --help）与 src/index.js 顶部 usage 同步列出 --body-file
+autopilot: false
+prestage_ack: true
+baseline_commit: 138858a2bbcce7c946d59ba9d91613e2ac309ae6
+updatedAt: '2026-11-06T14:52:42.956Z'
+baseline_sha256: 565368f99c913fbf4fa6fdc5734dda7238f4f29e3a9686b0c334b3d351ee47f3
+spec_approved: true
+spec_approved_at: '2026-11-06T14:33:19.199Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js19)（6.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261106144030\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+

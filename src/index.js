@@ -156,7 +156,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec knowledge <search "<关键词>" [--limit N] [--include-resolved]（--query 等效）
                         | inspect --id "..."
                         | validate | refresh
-                        | propose --title "..." --category <name>
+                        | propose --title "..." [--body-file <路径>|--body <文本>] --category <name>
                         | inbox [--json]  （知识收件箱：uncategorized 待审清单+基线态）>
   sillyspec platform <connect <url> [--token <t>]
                       | disconnect

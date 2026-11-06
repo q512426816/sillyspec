@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-06-knowledge-propose-body-file",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-propose-body-file.test.mjs「T1: --body-file 主路径落盘与源文件一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-propose-body-file"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-propose-body-file.test.mjs「T2: --body 与 --body-file 互斥报错且零落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-propose-body-file"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-propose-body-file.test.mjs「T3: 缺失/不可读结构化错误码且零落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-propose-body-file"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-propose-body-file.test.mjs「T4: 既有 --body 形态零回归对照」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-propose-body-file"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-propose-body-file.test.mjs「T5: help 与 usage 文案同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-06-knowledge-propose-body-file"
+    }
+  ]
+}

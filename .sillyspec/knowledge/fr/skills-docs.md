@@ -859,3 +859,98 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-10-23-push-squash
   status: active
+
+## FR-skills-docs-043 knowledge propose --title X --body-file <路径> 从指定文件读全文作正文写入 proposed/ 条目，落盘内容与源文件一致
+变更：2026-11-06-knowledge-propose-body-file
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-propose-body-file/requirements.md#FR-01
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-01
+  tests: test/knowledge-propose-body-file.test.mjs「T1: --body-file 主路径落盘与源文件一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-propose-body-file
+  status: active
+
+## FR-skills-docs-044 --body 与 --body-file 同给时显式报错（互斥冲突），不静默择一
+变更：2026-11-06-knowledge-propose-body-file
+状态：active
+摘要：互斥冲突
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-propose-body-file/requirements.md#FR-02
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-02
+  tests: test/knowledge-propose-body-file.test.mjs「T2: --body 与 --body-file 互斥报错且零落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-propose-body-file
+  status: active
+
+## FR-skills-docs-045 --body-file 指向不存在或不可读文件时输出结构化错误（body_file_missing/body_file_read_failed），不落半成品文件
+变更：2026-11-06-knowledge-propose-body-file
+状态：active
+摘要：文件缺失；文件不可读
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-propose-body-file/requirements.md#FR-03
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-03
+  tests: test/knowledge-propose-body-file.test.mjs「T3: 缺失/不可读结构化错误码且零落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-propose-body-file
+  status: active
+
+## FR-skills-docs-046 既有 --body 命令行传参路径行为零变化（既有测试全绿）
+变更：2026-11-06-knowledge-propose-body-file
+状态：active
+摘要：既有形态对照
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-propose-body-file/requirements.md#FR-04
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-04
+  tests: test/knowledge-propose-body-file.test.mjs「T4: 既有 --body 形态零回归对照」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-propose-body-file
+  status: active
+
+## FR-skills-docs-047 帮助文案（cmdKnowledge --help）与 src/index.js 顶部 usage 同步列出 --body-file
+变更：2026-11-06-knowledge-propose-body-file
+状态：active
+摘要：文案同步
+全文：.sillyspec/changes/archive/2026-11-06-knowledge-propose-body-file/requirements.md#FR-05
+最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-06-knowledge-propose-body-file:flow:测试绑定FR-05
+  tests: test/knowledge-propose-body-file.test.mjs「T5: help 与 usage 文案同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-06-knowledge-propose-body-file
+  status: active
