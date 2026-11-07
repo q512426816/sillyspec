@@ -332,7 +332,7 @@ function structuralWarningsFor(body) {
  * 复活防线（2026-11-07-sync-proposed-no-revive）：accept 删本地源文件后，下次 spec-sync
  * 按「服务器有本地无 → delete」自然下发删除，平台待审区同步清位——无复活面。
  */
-export function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, sectionTitle, dryRun, runtimeDir } = {}) {
+function acceptProposedEntry({ knowledgeDir, id, targetFile, keywords, sectionTitle, dryRun, runtimeDir } = {}) {
   const fail = (code, extra = {}) => ({
     ok: false, moved: false, appendedTo: null, indexUpdated: false, anchor: '',
     error: { code, ...extra },
