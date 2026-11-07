@@ -112,6 +112,7 @@
 - mklink|junction|git bash|msys|powershell|new-item|cygpath|补链 → [Git Bash 下修 worktree node_modules junction：cmd mklink 传参必败，用 PowerShell New-Item Junction](sillyspec-gotchas.md#git-bash-下修-worktree-node_modules-junctioncmd-mklink-传参必败用-powershell-new-item-junction)
 - worktree|产物分裂|verify-result|主仓库|both-added|回写|回归任务 → [worktree 内执行回归/文档任务时 SillySpec 产物与主仓库分裂](sillyspec-gotchas.md#worktree-内执行回归文档任务时-sillyspec-产物与主仓库分裂)
 - quick|--done|危险文件|force-baseline|allow-new|并发会话|脏文件|判归属 → [quick --done 边界审计把并发会话的 .sillyspec 脏文件判危险（用 --force-baseline 但不暂存）](sillyspec-gotchas.md#quick---done-边界审计把并发会话的-sillyspec-脏文件判危险用---force-baseline-但不暂存)
+- 正则|词边界在纯中文后恒失效|中文段标题匹配禁用词边界改行首锚定 → [sillyspec-gotchas.md#正则 \b 词边界在纯中文后恒失效——中文段标题匹配禁用词边界改行首锚定](sillyspec-gotchas.md#正则 \b 词边界在纯中文后恒失效——中文段标题匹配禁用词边界改行首锚定)
 
 ## Testing Gotchas
 

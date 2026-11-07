@@ -1220,3 +1220,64 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-07-knowledge-k-shape-minimal
   status: active
+
+## FR-skills-docs-062 explore prompt 触发面含「状态机/流程/时序类歧义文字问答装不下」形态
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：状态机歧义触发提议
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-01
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-063 逻辑形含三要素（纯逻辑模块/状态面板每步重渲染/领域语言标注）+ 非 JS 项目复刻失真声明 + 不进变更目录（UI 契约件专属）
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：非 JS 项目生成逻辑原型
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-02
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-064 对比判据含结构性分歧要求（布局/信息层级/流转结构）与真实数据密度要求
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：多方案对比粗选
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-03
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-065 粗选件定位不变：手绘合法、不进变更目录、仅用户明确要求触发
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：定位回归
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-04
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-066 brainstorm.js 零改动；docs/prompt 提取与 explore.md 同步一致
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：提取一致性
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-05
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-067 .claude/skills/sillyspec-explore/SKILL.md 同步（含 description 触发词）
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：skill 触发词命中
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-06
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+## FR-skills-docs-068 explore 相关既有测试面跑绿（change-exists-validation / cli-top-level-aliases / default-no-dir-and-affinity）
+变更：2026-11-07-explore-logic-prototype
+状态：active
+摘要：行为回归
+全文：.sillyspec/changes/archive/2026-11-07-explore-logic-prototype/requirements.md#FR-07
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-07-explore-logic-prototype:flow:测试绑定FR-07
+  tests: test/change-exists-validation.test.mjs「explore 阶段豁免变更存在校验」 | test/cli-top-level-aliases.test.mjs「explore 顶层别名转发」 | test/default-no-dir-and-affinity.test.mjs「default 键不物化 + explore 亲和与完成重置」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-07-explore-logic-prototype
+  status: active

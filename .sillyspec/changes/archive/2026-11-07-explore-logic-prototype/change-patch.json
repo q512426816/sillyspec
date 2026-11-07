@@ -1,0 +1,95 @@
+{
+  "change": "2026-11-07-explore-logic-prototype",
+  "baseline": "3901f51373dae0a9442e6d5ca5bff1ead7b226c9",
+  "head": "7098403292e3eb3b9f6fd925a3209d8f7ac451c3",
+  "files": [
+    "docs/prompt/_extracted.json",
+    "docs/prompt/explore.md",
+    "src/stages/explore.js"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 10,
+    "deletions": 6
+  },
+  "savedAt": "2026-11-07T13:21:01.548Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3901f51373dae0a9442e6d5ca5bff1ead7b226c9",
+    "totals": {
+      "files": 4,
+      "additions": 10,
+      "deletions": 6
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/explore.md",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/explore.js",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-explore/SKILL.md",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "38d4e66a3a3ae52efbf8f36c04d33a0f20c16ff4e449c0d5b110413c36c4106c",
+  "patchStatus": "ok"
+}

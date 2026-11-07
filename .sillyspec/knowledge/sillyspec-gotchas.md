@@ -101,3 +101,22 @@ worktree doctor 静默失败后手动补链时（上一条 junction 坑的修复
 - 根因：`--done` 边界审计比对 step1 baseline 与当前 git status，凡 `.sillyspec/` 下非关联变更的脏文件都可能被判危险。CONCERNS.md 在 quick 启动时已是 24 个 baseline 脏文件之一（来源 change 流程）。审计说明「并发其他会话的 `.sillyspec/changes/<非关联变更>/` 放行」，但对 `docs/scan/` 这类共享路径无并发豁免。
 - 处置：确认归属（`git diff` 看是审计报告，含本 quick 的 3 个洞，是任务**来源**而非代码改动）后，重跑 `--done --force-baseline --allow-new` 仅压制危险路径判定让流程过；**绝不 `git add` 该文件**，也不删——留给那个 change/审计流程自己处理。
 - 通用坑：① 遇到 --done 危险文件拦截，先 `git diff <file>` 判归属：是本流程产物（force-baseline）还是他人/并发产物（force-baseline 但**别提交它**）。force-baseline 只解锁流程，不等于把该文件纳入本 quick 提交集。② `--allow-new` 与 `--force-baseline` 解耦：新建测试文件用前者，压制危险判定用后者，别为一个目的滥开另一个。
+
+## 正则 \b 词边界在纯中文后恒失效——中文段标题匹配禁用词边界改行首锚定
+
+## 问题
+
+JavaScript 正则的 `\b`（词边界）在**纯中文字符后恒为 false**——`\w` 只含 `[A-Za-z0-9_]`，中文不是 `\w`，两个非 `\w` 字符之间不存在词边界。因此 `^##\s*问题\b` 这类「中文关键词+词边界」的断言对 `## 问题\n` 永远匹配失败（「题」与换行符均为非 `\w`，边界不存在）。2026-11-07 实证：K 形态结构检测首版正则带 `\b`，对合法段标题全量漏判，测试 1/12 红。
+
+## 解法
+
+中文场景的段标题/关键词匹配**禁止使用 `\b` 词边界**，改用行首锚定（`^#{1,3}\s*问题`）或显式字符类（`问题(?=[\s:：]|$)`）替代；`\b` 仅在 ASCII 词两侧使用（如 `\bnode\b`）。
+
+## 证据
+
+- src/knowledge-classify.js structuralWarningsFor（2026-11-07-knowledge-k-shape-minimal 实现轮实证：去 \b 后 12/12 绿）
+- 本条由该变更 task-02 的先红后绿过程沉淀
+
+## 适用边界
+
+适用于 CJK 文本的正则断言；混合文本中 ASCII 词的边界判定不受影响。

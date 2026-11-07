@@ -41,3 +41,12 @@
 理由：是否把历史手写散值条目（risk/term/premise/design 等）批量迁移为正典值？
 否决理由：归档件是审计事实当时提名不追改（仓则）；散值条目本就解析保留不入选，清洗零收益且蒸馏行为难保零漂移，大面积改写归档件风险无限大
 复潮条件：知识库检索对散值条目产生真实召回需求且可证明增量收益时（须先出干跑对照）
+
+## D-docs-001@v1 2026-11-07-explore-logic-prototype——对照 mattpocock /prototype skill 三方分析（主分析+独立分析+证伪）终局结论：SillySpec 原型体系 UI-only，逻辑/状
+状态：implemented
+变更：2026-11-07-explore-logic-prototype
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-07-explore-logic-prototype/design.md
+文件：docs/prompt/_extracted.json, docs/prompt/explore.md, src/stages/explore.js
+最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
+理由：对照 mattpocock /prototype skill 三方分析（主分析+独立分析+证伪）终局结论：SillySpec 原型体系 UI-only，逻辑/状态模型类歧义缺「可交互证据」模态；但 brainstorm 侧不动（孤儿产物论证——下游 execute/gates/verify 三件套全是 UI 语义，逻辑原型在 brainstorm 生成无任何下游消费），explore 粗选件框架天然适配（手绘合法/不进变更目录/仅用户明确要求），零下游配套。 本变更只改 `src/stages/explore.js`「HTML 原型生成」节 prompt 三处：① 首句扩触发面（+状态机/流程/时序类歧义）；② 新增逻辑形 bullet（三要素+非 JS 复刻失真声明+不进变更目录）；③ 新增对比判据 bullet（结构性分歧+真实数据密度）。随后机械同步 docs/prompt 镜像与 skills 文档。

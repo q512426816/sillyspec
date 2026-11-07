@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-07-explore-logic-prototype",
+  "rows": [
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-11-07-explore-logic-prototype:flow:测试绑定FR-07",
+      "tests": [
+        "test/change-exists-validation.test.mjs「explore 阶段豁免变更存在校验」",
+        "test/cli-top-level-aliases.test.mjs「explore 顶层别名转发」",
+        "test/default-no-dir-and-affinity.test.mjs「default 键不物化 + explore 亲和与完成重置」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-07-explore-logic-prototype"
+    }
+  ]
+}

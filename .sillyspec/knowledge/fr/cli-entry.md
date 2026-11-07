@@ -9219,7 +9219,7 @@ superseded_by：FR-core-engine-142
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-05
-  tests: test/batch-tick-gate.test.mjs/sentinel-wiring.test.mjs
+  tests: test/sentinel-wiring.test.mjs
   reason: spec
   state: candidate
   discovery: machine
