@@ -4,10 +4,12 @@
  * 覆盖验收面：
  *   ① 指标计算正反例：首版快照→终稿行级 diff 比例（正例）；agent 只填槽/轻微编辑的
  *      真实形态回放 FP=0（反例）；无快照=零信号；CRLF/LF 归一不虚增比例；
- *   ② 阈值边界：designRewriteRatio >0.5（等于不过）/ tasksRewriteRatio >0.6 /
- *      blindDims ≥2 / testFailures ≥2 四路常量边界；
+ *   ② 阈值边界：designRewriteRatio >0.5（等于不过）/ blindDims ≥2 / testFailures ≥2 三路
+ *      常量边界；tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）——
+ *      单路任意值不标记、组合超阈 reasons 不含 tasks 字样；
  *   ③ 落库幂等：超阈整文件覆盖（per-repo 单条），无超阈不落库（marked:false）；
- *   ④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 含变更名与形态计数的「疑似」提示。
+ *   ④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 含变更名与形态计数的「疑似」提示；
+ *      旧格式标记（reasons 含 tasks 改写率、metrics 含 tasksRewriteRatio）读取渲染不崩。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,7 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  computeHindsightMetrics, markHindsight, readHindsightHint, snapshotBaseline, HINDSIGHT_THRESHOLDS,
+  computeHindsightMetrics, markHindsight, readHindsightHint, readHindsightMark, snapshotBaseline, HINDSIGHT_THRESHOLDS,
 } from '../src/route-hindsight.js'
 
 const CHANGE = '2026-09-28-c-x'
@@ -126,17 +128,17 @@ test('① CRLF 归一：首版 LF、终稿 CRLF，内容相同 → 比例 0（�
   rmSync(root, { recursive: true, force: true })
 })
 
-test('② 阈值边界：等于不过（> 口径）／超过即过——四路常量', () => {
+test('② 阈值边界：等于不过（> 口径）／超过即过——三路常量；tasks 改写率判定退役', () => {
   assert.equal(HINDSIGHT_THRESHOLDS.designRewriteRatio, 0.5)
-  assert.equal(HINDSIGHT_THRESHOLDS.tasksRewriteRatio, 0.6)
+  assert.equal('tasksRewriteRatio' in HINDSIGHT_THRESHOLDS, false, 'tasksRewriteRatio 判定键已退役（2026-11-08-hindsight-tasks-ratio-retire）')
   assert.equal(HINDSIGHT_THRESHOLDS.blindDims, 2)
   assert.equal(HINDSIGHT_THRESHOLDS.testFailures, 2)
   const mk = (root, metrics) => markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics })
   const cases = [
     [{ designRewriteRatio: 0.5 }, false], [{ designRewriteRatio: 0.51 }, true],
-    [{ tasksRewriteRatio: 0.6 }, false], [{ tasksRewriteRatio: 0.61 }, true],
     [{ blindDims: 1 }, false], [{ blindDims: 2 }, true],
     [{ testFailures: 1 }, false], [{ testFailures: 2 }, true],
+    [{ tasksRewriteRatio: 0.61 }, false], [{ tasksRewriteRatio: 1 }, false],
   ]
   for (const [metrics, expect] of cases) {
     const root = mkdtempSync(join(tmpdir(), 'rh-b-'))
@@ -145,6 +147,17 @@ test('② 阈值边界：等于不过（> 口径）／超过即过——四路�
     assert.equal(existsSync(join(root, '.runtime', 'route-hindsight.json')), expect)
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('② tasks 改写率判定退役：与 design 组合超阈时 reasons 只含 design 一路', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rh-r-'))
+  const r = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: { designRewriteRatio: 0.8, tasksRewriteRatio: 0.9, blindDims: 0, testFailures: 0 } })
+  assert.equal(r.marked, true, 'design 超阈仍标记')
+  assert.equal(r.reasons.length, 1, `reasons 只含一路（实测 ${JSON.stringify(r.reasons)}）`)
+  assert.ok(r.reasons[0].includes('design') && !r.reasons.join('').includes('tasks'), `reasons 不含 tasks 字样: ${JSON.stringify(r.reasons)}`)
+  const j = JSON.parse(readFileSync(join(root, '.runtime', 'route-hindsight.json'), 'utf8'))
+  assert.equal(j.metrics.tasksRewriteRatio, 0.9, 'metrics 字段照写（观测面保留）')
+  rmSync(root, { recursive: true, force: true })
 })
 
 test('③ 落库幂等：重复 mark 同内容整文件覆盖，字段齐全（per-repo 单条）', () => {
@@ -179,6 +192,23 @@ test('④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 疑
   assert.ok(hint.includes('90%'), `含 design 比例: ${hint}`)
   assert.ok(hint.includes('盲维') && hint.includes('3'), `含盲维计数: ${hint}`)
   assert.ok(hint.includes('2'), `含实测失败计数: ${hint}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('④ 旧标记兼容：存量标记（reasons 含 tasks 改写率、metrics 含 tasksRewriteRatio）读取渲染不崩', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rh-legacy-'))
+  mkdirSync(join(root, '.runtime'), { recursive: true })
+  writeFileSync(join(root, '.runtime', 'route-hindsight.json'), JSON.stringify({
+    change: CHANGE, marked_at: '2026-11-08T00:00:00.000Z',
+    metrics: { designRewriteRatio: 0, tasksRewriteRatio: 0.8, blindDims: 0, testFailures: 0 },
+    reasons: ['tasks 机器预填稿改写率 0.8 > 0.6'],
+  }))
+  const hint = readHindsightHint({ specBase: root })
+  assert.ok(typeof hint === 'string' && hint.includes(CHANGE), `旧标记 hint 正常渲染: ${hint}`)
+  assert.ok(hint.includes('疑似'), '措辞「疑似」非定罪')
+  const mark = readHindsightMark({ specBase: root })
+  assert.equal(mark.change, CHANGE)
+  assert.equal(mark.metrics.tasksRewriteRatio, 0.8, '额外字段不破坏结构化读取')
   rmSync(root, { recursive: true, force: true })
 })
 

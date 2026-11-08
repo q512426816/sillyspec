@@ -164,13 +164,13 @@ test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）', 
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 start 点名提示（best-effort 接线不阻断收口）', () => {
+test('④ 端到端：正常轻量变更收口不再因 tasks 改写率落标记 → 下次 start 不被同意门误拦（2026-11-08-hindsight-tasks-ratio-retire）', () => {
   const { cwd } = makeRepo()
   const c1 = '2026-09-01-fcp-loop'
-  // 三条成功标准（多行镜像面——tasks 改写率的分母是正文行，单行会被标题稀释到阈下）
+  // 三条成功标准（种子镜像面——tasks 改写率的分母是正文行）
   const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件并分别补齐测试\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
-  // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
+  // 干活：非代码文件（测试门 skip 保持轻量）
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02) (task-03)'], { cwd, stdio: 'pipe' })
@@ -178,36 +178,30 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
   const base = readFileSync(join(cwd, SPEC, '.runtime', 'state', `route-hindsight-baseline-${c1}.json`), 'utf8')
   assert.ok(JSON.parse(base).design.includes(designV1.split('\n')[0] || ''), '快照锚定起草时点（start 时点内容）')
-  // v2 触发器=tasks 改写率（2026-10-04-thin-docs-v2：design 四问是锚、proposal/requirements
-  // 书写是合法澄清——hindsight 的「规划翻churn」信号落在 tasks 镜像行大改 >0.6，阈值原生支持）。
-  // 镜像行全量改写为不同实现路径（保留 task-NN 行形态）。
+  // 协议正典形态：机器种子（=成功标准镜像行）全量改写为真实实现路径（保留 task-NN 行形态）
+  // ——thin-tasks-v3 契约明文要求，旧判定路（tasksRewriteRatio>0.6）在此形态下必误标（0.875/0.8 实证）。
   const tp = join(cd, 'tasks.md')
   writeFileSync(tp, readFileSync(tp, 'utf8')
-    .replace(/^- \[ \] (task-\d+): .*$/gm, '- [ ] $1: 形态已改写——另一条实现路径与另一组步骤（事后闭环指标触发形态）'))
+    .replace(/^- \[ \] (task-\d+): .*$/gm, '- [ ] $1: 真实实现路径——按工作分解契约改写（协议正典形态）'))
   // design 例行作答 + FR 行为句/绑定行（v2 正文书写面）+ spec 断点批准
   writeFileSync(join(cd, 'design.md'), readFileSync(join(cd, 'design.md'), 'utf8')
     .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：回路夹具——一行作答即合规'))
   const rp = join(cd, 'requirements.md')
   writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 使指标超阈标记落库（回路夹具行为句）')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 不因 tasks 改写率落标记（回路夹具行为句）')
     .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：回路夹具——无独立测试面'))
   const sap = cli(cwd, ['flow', 'approve', '--change', c1])
   assert.equal(sap.status, 0, `flow approve 失败: ${sap.stdout}\n${sap.stderr}`)
   const s2 = cli(cwd, ['flow', 'done', '--change', c1])
   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
+  // 判定退役：种子全量改写（旧口径 tasksRewriteRatio=1.0）+ design 锚零改写 + 零盲维零失败
+  // → 不落标记（旧断言曾要求落库——本变更起反转）
   const markPath = join(cwd, SPEC, '.runtime', 'route-hindsight.json')
-  assert.ok(existsSync(markPath), '超阈 → 标记落库')
-  const mark = JSON.parse(readFileSync(markPath, 'utf8'))
-  assert.equal(mark.change, c1)
-  // v2 触发路（2026-10-04-thin-docs-v2）：design 四问是锚不可改写——超阈信号走 tasks 改写率
-  assert.ok(mark.metrics.tasksRewriteRatio > 0.6, `tasks 改写率超阈: ${mark.metrics.tasksRewriteRatio}`)
-  assert.ok((mark.reasons || []).some((r) => r.includes('tasks')), `reasons 含 tasks 路: ${JSON.stringify(mark.reasons)}`)
-  assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
-  // 下次 start（新变更）被同意门拦下点名上个变更（2026-10-14-prestage-consent-gate：
-  // 标记在场 → exit 2 要求显式选道，不再是可无视的点名提示）
+  assert.ok(!existsSync(markPath), '正常改写形态不再落标记（tasks 改写率判定退役）')
+  assert.ok(!s2.stderr.includes('route-hindsight 标记'), 'done 输出无标记 warn')
+  // 下次 start（新变更）不被同意门拦——连续正常轻量变更零误拦（用户痛点回归锚）
   const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])
-  assert.equal(s3.status, 2, '标记在场 → 同意门 exit 2')
-  assert.match(s3.stdout + s3.stderr, new RegExp(`预段选道同意门：上个轻量变更「${c1}」`), '门文案点名上个变更')
-  assert.match(s3.stdout + s3.stderr, /--no-prestage/, '门文案含声明通道')
+  assert.equal(s3.status, 0, '无标记 → start 直过（不被同意门拦）')
+  assert.ok(!((s3.stdout + s3.stderr).includes('预段选道同意门')), '无门文案')
   rmSync(cwd, { recursive: true, force: true })
 })

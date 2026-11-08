@@ -15,8 +15,10 @@
  *   - 标记文件 route-hindsight.json：per-repo 单条，每次标记整文件覆盖——提示语义即
  *     「上个轻量变更」。
  *
- * 指标四元组（口径）：
- *   designRewriteRatio / tasksRewriteRatio：终稿 vs 首版快照的行级改写比——复用
+ * 指标口径（判定三元组 + 观测一路）：
+ *   designRewriteRatio（判定 >0.5）/ tasksRewriteRatio（仅观测，判定已退役
+ *     2026-11-08-hindsight-tasks-ratio-retire——种子=v3 成功标准转写，横幅明文要求改写，
+ *     正常与不清不可分离）：终稿 vs 首版快照的行级改写比——复用
  *     flow-draft.computeEditRatio 同款 LCS 口径（改写行/首版行数，纯增行不计入；CRLF/LF
  *     归一后比对）。diff 面先做结构归一：剔 frontmatter 块、HTML 注释标记行（<!--）、空行
  *     ——惰性脚手架行（机器稿里约占半数）会把真实换血稀释到阈值以下（实测整写机器段仅得
@@ -39,11 +41,15 @@ import { writeAtomicSync } from './fs-atomic.js'
 import { computeEditRatio } from './flow-draft.js'
 import { runtimeStatePath } from './runtime-paths.js'
 
-/** 超阈判定常量（可调；口径：比例两路为严格大于——恰等于阈值不算超，保守防误标 R-01；
- * 计数两路为大于等于——2 维/2 次即系统性信号）。 */
+/** 超阈判定常量（可调；口径：比例路为严格大于——恰等于阈值不算超，保守防误标 R-01；
+ * 计数两路为大于等于——2 维/2 次即系统性信号）。
+ * tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）：种子自
+ * 2026-10-07-thin-tasks-v3 起为成功标准逐条转写（验收句≠实现步骤，文体必然不同），
+ * 且 flow start 横幅明文要求「机器种子按真实实现路径改写、增删改随意」——正常改写与
+ * 需求不清的改写不可区分（0.875/0.8 两连误标实证），阈值无分离度。计算面保留为观测
+ * （computeHindsightMetrics 照算照返回），未来有证据可重定口径后再恢复判定。 */
 export const HINDSIGHT_THRESHOLDS = {
   designRewriteRatio: 0.5, // design 机器稿改写比 > 0.5（50% 首版行被改写）
-  tasksRewriteRatio: 0.6,  // tasks 机器预填稿改写率 > 0.6
   blindDims: 2,            // 评审盲维命中（dimensionNotes='finding'）≥ 2 维
   testFailures: 2,         // 收口实测失败记录 ≥ 2 次
 }
@@ -229,9 +235,8 @@ export function markHindsight({ cwd, specBase, change, metrics }) {
   if (num(m.designRewriteRatio) > HINDSIGHT_THRESHOLDS.designRewriteRatio) {
     reasons.push(`design 机器稿改写比 ${num(m.designRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.designRewriteRatio}`)
   }
-  if (num(m.tasksRewriteRatio) > HINDSIGHT_THRESHOLDS.tasksRewriteRatio) {
-    reasons.push(`tasks 机器预填稿改写率 ${num(m.tasksRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.tasksRewriteRatio}`)
-  }
+  // tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）——metrics 字段
+  // 仍随标记文件落盘（观测面，向后兼容读取），不再参与判定与 reasons。
   if (num(m.blindDims) >= HINDSIGHT_THRESHOLDS.blindDims) {
     reasons.push(`评审盲维命中 ${num(m.blindDims)} 维 ≥ ${HINDSIGHT_THRESHOLDS.blindDims}`)
   }

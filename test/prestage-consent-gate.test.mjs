@@ -51,9 +51,10 @@ function cli(cwd, args) {
 const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
 const MARK_PATH = (cwd) => join(cwd, SPEC, '.runtime', 'route-hindsight.json')
 
-/** 种一条「该走预段未走」标记（tasks 改写率超阈形态）。 */
+/** 种一条「该走预段未走」标记（design 改写比超阈形态——tasks 改写率判定已退役
+ * 2026-11-08-hindsight-tasks-ratio-retire，夹具走仍判定的 design 路）。 */
 function plantMark(cwd, change = '2026-09-01-prior-misroute') {
-  markHindsight({ cwd, specBase: join(cwd, SPEC), change, metrics: { tasksRewriteRatio: 0.9 } })
+  markHindsight({ cwd, specBase: join(cwd, SPEC), change, metrics: { designRewriteRatio: 0.8 } })
   assert.ok(existsSync(MARK_PATH(cwd)), '夹具：标记应已落盘')
 }
 
@@ -65,7 +66,7 @@ test('① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一，标
   const out = s.stdout + s.stderr
   assert.ok(out.includes('预段选道同意门'), '文案应含门名')
   assert.ok(out.includes('2026-09-01-prior-misroute'), '文案应含标记来源变更名')
-  assert.ok(out.includes('tasks 机器预填稿改写率'), '文案应含超阈原因')
+  assert.ok(out.includes('design 机器稿改写比'), '文案应含超阈原因')
   assert.ok(out.includes('--no-prestage'), '两选一应含声明通道')
   assert.ok(out.includes('run brainstorm'), '两选一应含预段指路')
   assert.ok(existsSync(MARK_PATH(cwd)), '被拦时标记不应被消费')
@@ -138,7 +139,7 @@ test('⑦ 单元面：readHindsightMark 结构化读取 / clearHindsightMark 幂
   const specBase = join(cwd, SPEC)
   assert.equal(readHindsightMark({ specBase }), null, '无文件 → null')
   assert.equal(clearHindsightMark({ specBase }), false, '无文件清除 → false 零副作用')
-  markHindsight({ cwd, specBase, change: '2026-09-01-x', metrics: { tasksRewriteRatio: 0.9 } })
+  markHindsight({ cwd, specBase, change: '2026-09-01-x', metrics: { designRewriteRatio: 0.9 } })
   const m = readHindsightMark({ specBase })
   assert.ok(m && m.change === '2026-09-01-x', '结构化读回应含 change')
   assert.ok(Array.isArray(m.reasons) && m.reasons.length > 0, '结构化读回应含 reasons')
