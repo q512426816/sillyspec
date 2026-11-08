@@ -1,0 +1,20 @@
+{
+  "written_at": "2026-11-04T23:35:19.196Z",
+  "stage": "bogus-stage-x",
+  "change": "no-such",
+  "envelope": {
+    "schema_version": 1,
+    "command": "gate",
+    "change": "no-such",
+    "ok": false,
+    "errors": [
+      "变更不存在: no-such"
+    ],
+    "warnings": [],
+    "generated_at": "2026-11-04T23:35:19.193Z",
+    "stage": "bogus-stage-x",
+    "codes": [
+      "change_not_found"
+    ]
+  }
+}

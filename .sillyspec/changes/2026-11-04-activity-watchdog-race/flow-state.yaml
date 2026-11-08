@@ -1,0 +1,39 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  活动看门狗触发竞态修复
+
+
+  动机与背景：2026-11-04 轮活动看门狗（f46448d31）触发路径 fireTurnActivityWatchdog 在守卫检查与状态复位之间 await interrupt()，await
+  后不复查守卫即无条件覆写会话态。引擎存活（假阳性软着陆路径）时 interrupt 触发 abort 收尾 → result 到达翻 active → backend 亚秒级自动派发排队消息 → 新 inject 置新轮
+  running；interrupt 才 resolve 后旧轮触发体把活轮 status 覆写回 active、清新轮排队计数、使新轮失去看门狗续防（续防要求 status=running），写通道仅剩 60min stale
+  宽限兜底。对照同族 fireTurnStartWatchdog（守卫后同步改状态无窗口）；现有测试 interrupt mock 为立即 resolve，交错未覆盖。
+
+
+  成功标准：
+
+  - fireTurnActivityWatchdog 在 await interrupt() 之后复查守卫（status=running 且 currentRunId 仍为布防轮），失配静默跳过：不覆写新轮 running
+  态、不清新轮排队计数、不回调 onTurnActivityTimeout
+
+  - 新增回归测试：interrupt 慢 resolve（受控 deferred）期间 result 收尾 + 新 inject 切轮交错，断言新轮 running 态保持、pendingInjectCount
+  保留、回调未触发；修复前该用例必红（状态被覆写）
+
+  - 既有 turn-activity-watchdog 测试组全部保持绿
+autopilot: false
+prestage_ack: true
+baseline_commit: 326f2942a944fbbf347fda2c6dbd20d28843a624
+updatedAt: '2026-11-03T23:23:40.621Z'
+baseline_sha256: 3852105a0a05dff9aa7dcce419781397839ac3598967b3f02ffc62aac4fa010f
+spec_approved: false
+spec_rejected: true
+spec_rejected_at: '2026-11-03T23:23:40.619Z'
+spec_rejected_reason: >-
+  无增量交付：竞态缺陷已被并行变更在 326f2942a 修复（fireTurnActivityWatchdog 在 await interrupt 后二次复核双守卫 + 回归用例锁定，评审 P2 同源发现）；本会话独立复跑
+  turn-activity-watchdog 测试组 16/16 全绿验证成立，勿重复实现
+spec_rejected_by: zcode-watchdog-race-fix
+spec_rejected_superseded_at: null
+

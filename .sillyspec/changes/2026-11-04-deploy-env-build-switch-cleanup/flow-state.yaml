@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  deploy.env 禁建库残留开关清理
+
+
+  动机与背景
+
+  2026-11-04 知识索引漏推故障（CLI 漏推 daemon.md）平台侧四查发现：仓库 deploy/.env:67-69 残留
+  KNOWLEDGE_SEARCH_SERVER_BUILD=0（2026-10-19-knowledge-build-switch-rollout 所设），但 docker-compose.yml 的 backend
+  environment 从未引用该变量，值从未传进生产容器；生产实际按代码默认 True 在容器内建库（日志实证 78s/110s 请求内差量重嵌入）。残留与生产实态矛盾，存在未来补 compose
+  引用或照抄部署时意外关建库的陷阱，按移交清单清理。
+
+
+  成功标准：
+
+  - deploy/.env 中 KNOWLEDGE_SEARCH_SERVER_BUILD=0 及其误导性注释块（67-69 行）删除，其余配置行不动
+
+  - docker-compose.yml 不改（显式传递列为后续建议不在本变更）
+
+  - 提交仅含 deploy/.env 单文件（显式 pathspec）
+autopilot: false
+prestage_ack: true
+baseline_commit: 63d3ff266d8f7974e916f8b12b47705cce6019d0
+updatedAt: '2026-11-04T02:56:42.931Z'
+baseline_sha256: 6540aee5e93024c60e4c69dc9fee81cf455b075e03f010d32544d64e9654a981
+spec_approved: false
+spec_rejected: true
+spec_rejected_at: '2026-11-04T02:56:42.928Z'
+spec_rejected_reason: >-
+  CLI 仓归属解析故障：cwd=multi-agent-platform 跑 flow start，变更目录被建到 sillyspec 仓（baseline_commit 锚的却是主仓 HEAD 63d3ff266）。目标交付文件
+  deploy/.env 在 multi-agent-platform 仓，变更材料错仓会导致 sync 污染（11-03 起同机制已污染 b97f8231，证据见平台侧确诊）。废弃本变更，deploy/.env 清理改由主仓显式
+  pathspec 提交手工执行并留痕，待 CLI 仓解析修复后无需重建。
+spec_rejected_by: platform-ws-cleanup-20261104
+spec_rejected_superseded_at: null
+
