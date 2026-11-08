@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  裸提交归属判定细分收窄冻结面
+
+
+  坑②裁决（multi-agent-platform/docs/sillyspec/2026-10-23-flow-done-shared-repo-multi-session-frictions.md
+  活跃余项）：baseline..HEAD 窗口内无变更名的裸提交（release/Merge/归档 chore 等）touch 的文件被判 own 穿透归属刀，污染本变更文件面/FR 域路由/冻结面（10-28
+  实证：release-record 归档提交的两个文件混入无关变更冻结面）。原 fail-closed 前提（自己的交付提交可能不带变更名）已过时——thin-tasks-v3 起交付提交必带 task-NN
+  token（收口哨兵核的证据面）。细分：无变更名且无 task token 的纯裸提交 touch → 判 foreign；带本变更名或 task token 的 → 恒 own。
+
+
+  成功标准：
+
+  - 纯裸提交（subject 无变更名括号且无 task-NN token）touch 的文件被剔除出 own 面（splitOwnVsForeignDiffFiles/attr
+  bufs）/冻结面（filterCommittedFace）/FR 域（attributedChangedFiles 同刀继承）
+
+  - 带本变更名或含 task-NN token 的提交 touch 的文件恒 own（交付协议证据，fail-closed 不变）
+
+  - 误剔兜底：收口既有「提交面夹带嫌疑 advisory」可点名漏声明文件（不改）
+
+  - test/commit-attribution-split.test.mjs 等既有归因测试面按新口径改写后全绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 88a93ec330042ed9bb39dfbf3c57f3a7c09de74f
+updatedAt: '2026-11-08T05:22:30.705Z'
+baseline_sha256: ffae6a1d89f7be0a4b3ea59d0533c9dad561f4ed26d52ba118615a629e3e0916
+spec_approved: true
+spec_approved_at: '2026-11-08T05:22:30.705Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

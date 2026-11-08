@@ -8,7 +8,9 @@
  *
  * 锁定三形态：
  *   ① 他侧归因改判：窗口内全部提交属他侧变更名 → foreignByCommit（ℹ️ 信息行、不计 ok 面）
- *   ② 裸提交维持：无后缀裸提交触碰的文件保持未归因（fail-closed 原口径）
+ *   ② 裸提交细分（2026-11-08-bare-commit-attribution-narrow）：纯裸（无名无 task token——
+ *      release 生成器/Merge/归档 chore 形态）touch 同判他侧归因（owners 空数组走纯裸渲染行）；
+ *      token 裸（task-NN 交付协议证据）保持未归因（fail-closed 原口径）
  *   ③ 切分不可得退化：归属切分失败（基线非法 → null）保持全量未归因，不放宽
  */
 import { test } from 'node:test'
@@ -41,7 +43,7 @@ function mkRepo() {
 const OWN = '2026-10-05-mine'
 const OTHER = '2026-10-05-archived-other'
 
-test('① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 裸提交维持', async () => {
+test('① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 纯裸提交同判他侧归因（细分口径）', async () => {
   const f = mkRepo()
   try {
     // 窗口三提交：own 后缀 / 他侧后缀（已归档变更——声明面不在场）/ 裸提交
@@ -51,23 +53,28 @@ test('① 他侧归因改判：他侧后缀交付不报未归因（信息行 + �
     git(f.cwd, ['add', 'f.js']); git(f.cwd, ['commit', '-qm', `fix: 他侧已归档交付 (${OTHER})`])
     writeFileSync(join(f.cwd, 'bare.js'), 'b\n')
     git(f.cwd, ['add', 'bare.js']); git(f.cwd, ['commit', '-qm', 'chore: 无后缀裸提交'])
-    const baseline = git(f.cwd, ['rev-parse', 'HEAD~3']).trim()
+    // token 裸（无名但有 task token——交付协议证据，fail-closed 保持未归因）
+    writeFileSync(join(f.cwd, 'tokened.js'), 't\n')
+    git(f.cwd, ['add', 'tokened.js']); git(f.cwd, ['commit', '-qm', 'feat: 交付 (task-01)'])
+    const baseline = git(f.cwd, ['rev-parse', 'HEAD~4']).trim()
     writeFileSync(join(f.changeDir, 'design.md'), `# 设计\n## 文件变更清单\n| 操作 | 路径 |\n|---|---|\n| 修改 | a.js |\n`)
 
     const r = await runHunkAttributionGate({
       cwd: f.cwd, specBase: f.specBase, changeName: f.changeName, baselineCommit: baseline,
-      committedFiles: ['a.js', 'f.js', 'bare.js'], gitFn: (c, a) => git(c, a), gate: 'warn',
+      committedFiles: ['a.js', 'f.js', 'bare.js', 'tokened.js'], gitFn: (c, a) => git(c, a), gate: 'warn',
     })
-    assert.deepEqual(r.unattributed.map((u) => u.file), ['bare.js'], `裸提交保持未归因（实际 ${JSON.stringify(r.unattributed)}）`)
+    assert.deepEqual(r.unattributed.map((u) => u.file), ['tokened.js'], `纯裸改判他侧归因；token 裸保持未归因（实际 ${JSON.stringify(r.unattributed)}）`)
     assert.ok(r.unattributed[0].hunks >= 1, `hunk 计数真实可得（评审 P3 处置：包装修复后不再恒 -1，实得 ${r.unattributed[0].hunks}）`)
-    assert.equal(r.foreignByCommit.length, 1, '他侧后缀交付改判他侧归因')
-    assert.equal(r.foreignByCommit[0].file, 'f.js')
-    assert.equal(r.foreignByCommit[0].owners[0], OTHER, '归属他侧变更名（提交事实）')
-    assert.equal(r.ok, false, 'ok 仍被裸提交阻断（未归因面非零）')
+    assert.equal(r.foreignByCommit.length, 2, '他侧后缀交付 + 纯裸提交均改判他侧归因')
+    assert.ok(r.foreignByCommit.some((x) => x.file === 'f.js' && x.owners[0] === OTHER), 'f.js 归属他侧变更名（提交事实）')
+    assert.ok(r.foreignByCommit.some((x) => x.file === 'bare.js' && x.owners.length === 0), 'bare.js 纯裸归因 owners 空（坑②污染源）')
+    assert.equal(r.ok, false, 'ok 仍被 token 裸阻断（未归因面非零——fail-closed 不误剔交付）')
     const lines = renderHunkAttributionLines(r).join('\n')
     assert.ok(lines.includes('他侧归因（提交事实）：`f.js` 窗口提交全部属 ' + OTHER), '渲染含他侧归因信息行（ℹ️ 非警告）')
-    assert.ok(lines.includes('声明面归因 1、他侧归因（提交事实）1、未归因 1'), `汇总行三计数（${lines.split('\n')[1]}）`)
+    assert.ok(lines.includes('`bare.js` 窗口内仅纯裸提交（无名无 task token'), '纯裸归因走专属渲染行（owners 空不渲染空尾巴）')
+    assert.ok(lines.includes('声明面归因 1、他侧归因（提交事实）2、未归因 1'), `汇总行三计数（${lines.split('\n')[1]}）`)
     assert.ok(!lines.includes('未归因：`f.js`'), 'f.js 不再出现在未归因警告行')
+    assert.ok(!lines.includes('未归因：`bare.js`'), 'bare.js 不再出现在未归因警告行')
   } finally { f.cleanup() }
 })
 

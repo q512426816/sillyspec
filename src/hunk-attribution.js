@@ -142,8 +142,10 @@ export async function runHunkAttributionGate({ cwd, specBase, changeName, baseli
     // 补 design 自声明」双误导（F-4 实证：他侧 546720ea 已归档交付被指为在途）。按提交 message
     // 变更名归属（commitAttributionForChange+isForeignByCommit，与 patch 冻结 filterCommittedFace
     // 同源）：窗口内全部提交均属他侧变更名 → 他侧归因（ℹ️ 信息行、不计 ok 阻断面）；
-    // 裸提交/本变更名提交触碰的文件保持未归因（fail-closed 原口径）。切分不可得（非 git/
-    // git 失败 → null）保持全量未归因，不放宽。
+    // 2026-11-08-bare-commit-attribution-narrow 细分：纯裸提交（无名无 task token——release
+    // 生成器/Merge/归档 chore 形态）touch 同判他侧归因（坑②污染源，owners 空数组——渲染走
+    // 纯裸分支）；token 裸/本变更名提交触碰的文件保持未归因（fail-closed 原口径）。切分不可得
+    // （非 git/git 失败 → null）保持全量未归因，不放宽。
     let attr = null
     let isForeign = null
     try {
@@ -195,7 +197,9 @@ export function renderHunkAttributionLines(r) {
   const attributed = r.faceCount - r.unattributed.length - (r.foreignByCommit || []).length
   L.push(`- ℹ️ 提交面 ${r.faceCount} 个交付文件对账：声明面归因 ${attributed}、他侧归因（提交事实）${(r.foreignByCommit || []).length}、未归因 ${r.unattributed.length}、跨变更竞争 ${r.contended.length}、在途残留 ${r.residue.length}`)
   for (const fb of (r.foreignByCommit || [])) {
-    L.push(`- ℹ️ 他侧归因（提交事实）：\`${fb.file}\` 窗口提交全部属 ${fb.owners.join('、')}——已归档他侧交付非本变更未归因，patch 冻结面同口径剔除`)
+    L.push((fb.owners || []).length > 0
+      ? `- ℹ️ 他侧归因（提交事实）：\`${fb.file}\` 窗口提交全部属 ${fb.owners.join('、')}——已归档他侧交付非本变更未归因，patch 冻结面同口径剔除`
+      : `- ℹ️ 他侧归因（提交事实）：\`${fb.file}\` 窗口内仅纯裸提交（无名无 task token——release 生成器/Merge/归档 chore 形态）触碰——坑②污染源剔除，patch 冻结面同口径剔除；若确属本变更交付，补 design 自声明或带 task token 重新提交`)
   }
   for (const u of r.unattributed) {
     L.push(`- ⚠️ 未归因：\`${u.file}\`（${u.hunks >= 0 ? `${u.hunks} hunk` : 'hunk 数不可得'}）不在 design 清单与 requirements 测试绑定——属并行会话在途交付则须显式 pathspec 隔离并协调归属；属本变更则补 design 自声明`)

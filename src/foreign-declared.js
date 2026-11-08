@@ -222,8 +222,14 @@ export function parseChangeNamesFromSubject(subject) {
 
 /**
  * git log 文本（--format=%x00%s --name-only，每提交 NUL+标题+文件行）→ 文件提交归属映射。
- * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过
- * （归属不明，消费端必须保守保留——fail-closed 不因裸提交剔文件）。
+ * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过；
+ * tokened=无名 touch 中存在带 task-NN token 者（`task-\d+`——交付协议证据，thin-tasks-v3
+ * 起勾选证据=task token 提交，收口哨兵按它逐格核）。2026-11-08-bare-commit-attribution-narrow
+ * 起细分：纯裸 touch（无名无 token——release 生成器/Merge/归档 chore 形态）不再保守保留
+ * （判 foreign，见 isForeignByCommit）；token 裸 touch 仍保守 own（task token 无变更名限定，
+ * 无法区分是谁的 task——fail-closed 不误剔交付）。原「unknown 恒 own」的 fail-closed 前提
+ * （自己的交付提交可能不带变更名）已随 token 协议过时——坑②（shared-repo multi-session
+ * frictions）10-28 实证：release-record 归档 chore 提交穿透冻结面。
  */
 export function buildCommitAttribution(logText) {
   const map = new Map()
@@ -234,9 +240,11 @@ export function buildCommitAttribution(logText) {
     for (const f of lines.slice(1)) {
       const file = f.replace(/\\/g, '/')
       let e = map.get(file)
-      if (!e) { e = { owners: new Set(), unknown: false }; map.set(file, e) }
-      if (names.length === 0) e.unknown = true
-      else for (const n of names) e.owners.add(n)
+      if (!e) { e = { owners: new Set(), unknown: false, tokened: false }; map.set(file, e) }
+      if (names.length === 0) {
+        e.unknown = true
+        if (/task-\d+/i.test(lines[0])) e.tokened = true
+      } else for (const n of names) e.owners.add(n)
     }
   }
   return map
@@ -266,9 +274,16 @@ export function commitAttributionForChange(cwd, specBase, currentChangeName, bas
   } catch { return null }
 }
 
-/** 纯他侧文件判定：有提交归属且全部提交均属他侧（无本变更名、无裸提交触碰）。 */
+/** 纯他侧文件判定（2026-11-08-bare-commit-attribution-narrow 细分）：
+ *  own 路径——①记录缺位（窗口外文件）②含本变更名 touch ③无名 touch 带 task-NN token
+ *    （交付协议证据，保守不误剔——token 无变更名限定，区分不了是谁的 task）。
+ *  foreign 路径——①纯他侧具名（旧语义）②纯裸 touch（无名无 token：release 生成器/
+ *    Merge/归档 chore 形态——坑②污染源；误剔由收口「提交面夹带嫌疑 advisory」点名兜底）。 */
 export function isForeignByCommit(entry, currentChangeName) {
-  return !!entry && !entry.unknown && entry.owners.size > 0 && !entry.owners.has(currentChangeName)
+  if (!entry) return false
+  if (entry.owners.has(currentChangeName)) return false
+  if (entry.tokened) return false
+  return entry.owners.size > 0 || entry.unknown === true
 }
 
 /**

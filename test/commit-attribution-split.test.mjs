@@ -10,7 +10,10 @@
  *
  * 锁定语义：
  *   1. 混窗集成：全部提交均属他侧变更名的文件 → 出 own 面（split）与 patch 冻结面（filter）
- *   2. 保守保留：本变更名提交 / 无后缀裸提交触碰 / design 清单声明的文件恒 own
+ *   2. 保守保留（2026-11-08-bare-commit-attribution-narrow 细分口径）：本变更名提交 /
+ *      带 task-NN token 的无名提交（交付协议证据）/ design 清单声明的文件恒 own；
+ *      纯裸提交（无名无 token——release 生成器/Merge/归档 chore 形态）touch → 判 foreign
+ *      （坑②污染源剔除；误剔由收口「提交面夹带嫌疑 advisory」点名兜底）
  *   3. 降级现状：非 git 仓 / 无 flow-state baseline / git 失败 → 行为与旧版一致
  */
 import { test } from 'node:test'
@@ -48,6 +51,7 @@ test('① 解析纯函数：标题变更名提取与归属聚合', () => {
     '\x00fix: 他侧交付 (OTHER)', 'src/other.js', '',
     `\x00feat: 我的交付 (${ME})`, 'src/mine.js', '',
     '\x00chore: misc', 'src/bare.js', '',
+    '\x00chore: 手滑快修 (task-01)', 'src/tokened.js', '',
     `\x00fix: 又一笔他侧 (OTHER)`, 'src\\win-path.js', '',
   ].join('\n').replaceAll('OTHER', `(${OTHER})`)
   const attr = buildCommitAttribution(log)
@@ -55,7 +59,12 @@ test('① 解析纯函数：标题变更名提取与归属聚合', () => {
   assert.equal(attr.get('src/other.js').unknown, false)
   assert.equal(isForeignByCommit(attr.get('src/other.js'), ME), true, '纯他侧 → foreign')
   assert.equal(isForeignByCommit(attr.get('src/mine.js'), ME), false, '含本变更名 → own')
-  assert.equal(isForeignByCommit(attr.get('src/bare.js'), ME), false, '裸提交触碰 → 保守 own')
+  // 2026-11-08-bare-commit-attribution-narrow：纯裸（无名无 token）判 foreign；token 裸保守 own
+  assert.equal(attr.get('src/bare.js').unknown, true)
+  assert.equal(attr.get('src/bare.js').tokened, false, '纯裸无 token 证据')
+  assert.equal(isForeignByCommit(attr.get('src/bare.js'), ME), true, '纯裸提交触碰 → foreign（坑②污染源剔除）')
+  assert.equal(attr.get('src/tokened.js').tokened, true, 'task token 证据在场')
+  assert.equal(isForeignByCommit(attr.get('src/tokened.js'), ME), false, 'token 裸提交触碰 → 保守 own（交付协议证据）')
   assert.equal(isForeignByCommit(attr.get('src/win-path.js'), ME), true, '反斜杠路径归一后命中')
   assert.equal(isForeignByCommit(undefined, ME), false, '无记录 → own')
 })
@@ -84,10 +93,12 @@ function mkMixedWindowRepo() {
   writeFileSync(join(d, 'src', 'mine.js'), 'mine')
   writeFileSync(join(d, 'src', 'declared.js'), 'declared')
   g('git add src/mine.js src/declared.js && git commit -q -m "feat(me): 我的交付 (ME)"'.replaceAll('ME', `(${ME})`))
-  // 裸提交（无变更名后缀）
+  // 裸提交双形态（2026-11-08-bare-commit-attribution-narrow）：纯裸（无名无 token——release/Merge/chore 形态）+ token 裸（交付协议证据）
   writeFileSync(join(d, 'src', 'bare.js'), 'bare')
   g('git add src/bare.js && git commit -q -m "chore: misc"')
-  const windowFiles = ['src/other.js', 'src-other.js', 'src/mine.js', 'src/declared.js', 'src/bare.js']
+  writeFileSync(join(d, 'src', 'tokened.js'), 'tokened')
+  g('git add src/tokened.js && git commit -q -m "feat(x): 交付 (task-01/02)"')
+  const windowFiles = ['src/other.js', 'src-other.js', 'src/mine.js', 'src/declared.js', 'src/bare.js', 'src/tokened.js']
   return { d, base, windowFiles }
 }
 
@@ -100,7 +111,8 @@ test('② 混窗集成：他侧提交文件出 own 面与 patch 冻结面', () =
     assert.equal(ownSet.has('src-other.js'), false, '他侧根级文件被提交归属剔除')
     assert.ok(r.foreign.some((x) => x.file === 'src/other.js' && x.owners.includes(OTHER)), `foreign 列表点名 owners: ${JSON.stringify(r.foreign)}`)
     assert.equal(ownSet.has('src/mine.js'), true, '我的提交文件保留')
-    assert.equal(ownSet.has('src/bare.js'), true, '裸提交文件保守保留')
+    assert.equal(ownSet.has('src/bare.js'), false, '纯裸提交文件剔除（坑②污染源——release/Merge/chore 形态）')
+    assert.equal(ownSet.has('src/tokened.js'), true, 'token 裸提交文件保守保留（交付协议证据）')
     assert.equal(ownSet.has('src/declared.js'), true, '声明面文件保留')
 
     const frozen = filterCommittedFace([...windowFiles, `${'.sillyspec/changes/' + ME}/design.md`, '.sillyspec/changes/2026-10-05-stranger/x.md'], `.sillyspec/changes/${ME}/`, { cwd: d })
@@ -108,7 +120,8 @@ test('② 混窗集成：他侧提交文件出 own 面与 patch 冻结面', () =
     assert.equal(fSet.has('src/other.js'), false, 'patch 冻结面剔除他侧纯提交文件')
     assert.equal(fSet.has('src-other.js'), false, 'patch 冻结面剔除他侧根级文件')
     assert.equal(fSet.has('src/mine.js'), true)
-    assert.equal(fSet.has('src/bare.js'), true, '裸提交文件不进剔除面（fail-closed）')
+    assert.equal(fSet.has('src/bare.js'), false, '纯裸提交文件剔除出冻结面（fail-closed 退役——坑② 10-28 实证形态）')
+    assert.equal(fSet.has('src/tokened.js'), true, 'token 裸提交文件保留（不误剔交付）')
     // FR-01 口径同步（2026-10-12-close-trace-freeze-integrity）：.sillyspec/changes/** 全滤除
     // （含本变更目录——对齐 execute --done 沉淀资产面，工件随归档目录本体留档）
     assert.equal(fSet.has(`.sillyspec/changes/${ME}/design.md`), false, '本变更治理面不入冻结面（FR-01）')
