@@ -19,3 +19,12 @@
 文件：src/spec-sync.js, test/spec-sync-proposed-no-revive.test.mjs
 最近确认：a943bcc7e7ea26dd57041c0a51c158ce3145677a
 理由：「候选复活」缺陷：平台知识页 merge/reject 待审候选后，服务器侧软删（manifest 行 exists=false、不置墓碑）；本地 `knowledge/proposed/` 残留文件在下次 spec-sync 按「本地有服务器无 → add」规则（src/spec-sync.js:364-374）推回平台，走平台 service.py 复活分支落盘（2026-11-07 平台侧子代理核查实证）——审核成果被下次同步冲掉。修复走 CLI 侧窄化拦截：`computeSpecOps` 的 add 生成处，对 `knowledge/proposed/` 前缀且服务器 manifest 该行 `exists === false`（平台处置过的唯一可信证据——软删行在场）的本地文件跳过 add；`syncSpecTree` 调用后检测此类残留并自动删除本地文件+一行提示。选 CLI 侧而非平台侧置墓碑：平台侧改 merge/reject 置 `platform_deleted` 墓碑会改变跨端删除语义（墓碑目前仅「平台删除变更目录」专用），影响面大；CLI 侧按路径前缀+软删行证据窄化判定，不动全局「本地为真相源」规则。
+
+## D-sync-003@v1 2026-11-08-hindsight-tasks-ratio-retire——单点退役判定通路：`src/route-hindsight.js` 的 `HINDSIGHT_THRESHOLDS` 删除 `tasksRewriteRatio
+状态：implemented
+变更：2026-11-08-hindsight-tasks-ratio-retire
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-08-hindsight-tasks-ratio-retire/design.md
+文件：src/route-hindsight.js, test/flow-clarity-probe.test.mjs, test/prestage-consent-gate.test.mjs, test/route-hindsight.test.mjs
+最近确认：2850892edcca44a141b08720646a19a96ba714b5
+理由：单点退役判定通路：`src/route-hindsight.js` 的 `HINDSIGHT_THRESHOLDS` 删除 `tasksRewriteRatio` 键、`markHindsight` 删除该路超阈判定与 reasons 拼装；`computeHindsightMetrics` 的 tasks 改写比**计算保留**（观测面，D-003 自校准回路未来重定阈的依据）。flow.js 侧零改动——收口接线（flow.js:2671-2675）与同意门渲染读的都是 markHindsight 产物与标记文件，判定退役后正常变更不再落标记，门自然不再被误拦。 选判定退役而非调阈值/删种子/降 advisory 的理由：现行种子形态（2026-10-07-thin-tasks-v3：成功标准逐条转写，验收句≠实现步骤）下正常改写与需求不清的改写不可区分——阈值无论调到多少都无法分离信号与噪音（0.875/0.8 的两次误报即实证）；种子回退破坏 v3「任务面归你」契约；降 advisory 留误报噪音仍污染提示面。design 改写比（种子=四问钉死模板，真需求不清会大改）/盲维/实测失败三路信号不受影响，保留。

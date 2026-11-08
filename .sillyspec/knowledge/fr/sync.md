@@ -923,3 +923,88 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-11-07-sync-proposed-no-revive
   status: active
+
+## FR-sync-057 markHindsight 不再因 tasks 改写率产生标记与 reasons；HINDSIGHT_THRESHOLDS 移除 tasksRewriteRatio
+变更：2026-11-08-hindsight-tasks-ratio-retire
+状态：active
+摘要：主路径；组合超阈
+场景正文：
+- 场景：主路径 — Given 收口时 tasksRewriteRatio=0.9 且其余三路均未超阈，When 调用 markHindsight，Then 返回 marked=false、不
+- 场景：组合超阈 — 
+全文：.sillyspec/changes/archive/2026-11-08-hindsight-tasks-ratio-retire/requirements.md#FR-01
+最近确认：2850892edcca44a141b08720646a19a96ba714b5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-01
+  tests: test/route-hindsight.test.mjs「阈值边界 + 标记判定（tasksRewriteRatio 通路退役）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-hindsight-tasks-ratio-retire
+  status: active
+
+## FR-sync-058 旧标记文件（含 tasksRewriteRatio 字段）被 readHindsightHint/readHindsightMark 读取渲染不崩
+变更：2026-11-08-hindsight-tasks-ratio-retire
+状态：active
+摘要：存量标记
+场景正文：
+- 场景：存量标记 — Given .runtime 下存在旧格式标记文件（含 tasksRewriteRatio），When flow start 读标记渲染同意门，Then 文案正常输出、门行
+全文：.sillyspec/changes/archive/2026-11-08-hindsight-tasks-ratio-retire/requirements.md#FR-02
+最近确认：2850892edcca44a141b08720646a19a96ba714b5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-02
+  tests: test/route-hindsight.test.mjs「readHindsightHint/readHindsightMark 旧标记兼容」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-hindsight-tasks-ratio-retire
+  status: active
+
+## FR-sync-059 computeHindsightMetrics 返回面不再以 tasksRewriteRatio 参与判定（计算与字段保留为观测面）
+变更：2026-11-08-hindsight-tasks-ratio-retire
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 有首版快照与终稿，When 调用 computeHindsightMetrics，Then 返回对象含 tasksRewriteRatio 数值（计算口径不变）
+全文：.sillyspec/changes/archive/2026-11-08-hindsight-tasks-ratio-retire/requirements.md#FR-03
+最近确认：2850892edcca44a141b08720646a19a96ba714b5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-03
+  tests: test/route-hindsight.test.mjs「computeHindsightMetrics 观测面保留（计算断言不变）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-hindsight-tasks-ratio-retire
+  status: active
+
+## FR-sync-060 test/route-hindsight.test.mjs、test/prestage-consent-gate.test.mjs、test/flow-clarity-probe.test.mjs 全绿
+变更：2026-11-08-hindsight-tasks-ratio-retire
+状态：active
+摘要：回归
+场景正文：
+- 场景：回归 — Given 判定面退役落盘，When 运行三测试文件，Then 全部用例通过。
+全文：.sillyspec/changes/archive/2026-11-08-hindsight-tasks-ratio-retire/requirements.md#FR-04
+最近确认：2850892edcca44a141b08720646a19a96ba714b5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-04
+  tests: test/flow-clarity-probe.test.mjs「收口实测不再因 tasks 改写率标记」 | test/prestage-consent-gate.test.mjs「同意门（design 通路构造）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-hindsight-tasks-ratio-retire
+  status: active

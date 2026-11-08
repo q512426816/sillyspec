@@ -22,3 +22,4 @@
 - 2026-11-04-junction-guard-rename-content | 跨仓错绑告警与 rename op 带内容两护栏
 - 2026-11-04-sync-push-chunking | spec 同步推送分批化根治大积压超时
 - 2026-11-07-sync-proposed-no-revive | 同步候选复活缺陷修复——平台已审条目不再回推
+- 2026-11-08-hindsight-tasks-ratio-retire | route-hindsight 任务改写率指标退役

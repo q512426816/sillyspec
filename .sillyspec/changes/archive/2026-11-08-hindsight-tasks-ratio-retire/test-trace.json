@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-08-hindsight-tasks-ratio-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-01",
+      "tests": [
+        "test/route-hindsight.test.mjs「阈值边界 + 标记判定（tasksRewriteRatio 通路退役）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-hindsight-tasks-ratio-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-02",
+      "tests": [
+        "test/route-hindsight.test.mjs「readHindsightHint/readHindsightMark 旧标记兼容」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-hindsight-tasks-ratio-retire"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-03",
+      "tests": [
+        "test/route-hindsight.test.mjs「computeHindsightMetrics 观测面保留（计算断言不变）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-hindsight-tasks-ratio-retire"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-08-hindsight-tasks-ratio-retire:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-clarity-probe.test.mjs「收口实测不再因 tasks 改写率标记」",
+        "test/prestage-consent-gate.test.mjs「同意门（design 通路构造）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-hindsight-tasks-ratio-retire"
+    }
+  ]
+}

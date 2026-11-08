@@ -1,0 +1,244 @@
+diff --git a/src/route-hindsight.js b/src/route-hindsight.js
+index 90e06ce2..fcd0350a 100644
+--- a/src/route-hindsight.js
++++ b/src/route-hindsight.js
+@@ -15,8 +15,10 @@
+  *   - 标记文件 route-hindsight.json：per-repo 单条，每次标记整文件覆盖——提示语义即
+  *     「上个轻量变更」。
+  *
+- * 指标四元组（口径）：
+- *   designRewriteRatio / tasksRewriteRatio：终稿 vs 首版快照的行级改写比——复用
++ * 指标口径（判定三元组 + 观测一路）：
++ *   designRewriteRatio（判定 >0.5）/ tasksRewriteRatio（仅观测，判定已退役
++ *     2026-11-08-hindsight-tasks-ratio-retire——种子=v3 成功标准转写，横幅明文要求改写，
++ *     正常与不清不可分离）：终稿 vs 首版快照的行级改写比——复用
+  *     flow-draft.computeEditRatio 同款 LCS 口径（改写行/首版行数，纯增行不计入；CRLF/LF
+  *     归一后比对）。diff 面先做结构归一：剔 frontmatter 块、HTML 注释标记行（<!--）、空行
+  *     ——惰性脚手架行（机器稿里约占半数）会把真实换血稀释到阈值以下（实测整写机器段仅得
+@@ -39,11 +41,15 @@ import { writeAtomicSync } from './fs-atomic.js'
+ import { computeEditRatio } from './flow-draft.js'
+ import { runtimeStatePath } from './runtime-paths.js'
+ 
+-/** 超阈判定常量（可调；口径：比例两路为严格大于——恰等于阈值不算超，保守防误标 R-01；
+- * 计数两路为大于等于——2 维/2 次即系统性信号）。 */
++/** 超阈判定常量（可调；口径：比例路为严格大于——恰等于阈值不算超，保守防误标 R-01；
++ * 计数两路为大于等于——2 维/2 次即系统性信号）。
++ * tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）：种子自
++ * 2026-10-07-thin-tasks-v3 起为成功标准逐条转写（验收句≠实现步骤，文体必然不同），
++ * 且 flow start 横幅明文要求「机器种子按真实实现路径改写、增删改随意」——正常改写与
++ * 需求不清的改写不可区分（0.875/0.8 两连误标实证），阈值无分离度。计算面保留为观测
++ * （computeHindsightMetrics 照算照返回），未来有证据可重定口径后再恢复判定。 */
+ export const HINDSIGHT_THRESHOLDS = {
+   designRewriteRatio: 0.5, // design 机器稿改写比 > 0.5（50% 首版行被改写）
+-  tasksRewriteRatio: 0.6,  // tasks 机器预填稿改写率 > 0.6
+   blindDims: 2,            // 评审盲维命中（dimensionNotes='finding'）≥ 2 维
+   testFailures: 2,         // 收口实测失败记录 ≥ 2 次
+ }
+@@ -229,9 +235,8 @@ export function markHindsight({ cwd, specBase, change, metrics }) {
+   if (num(m.designRewriteRatio) > HINDSIGHT_THRESHOLDS.designRewriteRatio) {
+     reasons.push(`design 机器稿改写比 ${num(m.designRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.designRewriteRatio}`)
+   }
+-  if (num(m.tasksRewriteRatio) > HINDSIGHT_THRESHOLDS.tasksRewriteRatio) {
+-    reasons.push(`tasks 机器预填稿改写率 ${num(m.tasksRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.tasksRewriteRatio}`)
+-  }
++  // tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）——metrics 字段
++  // 仍随标记文件落盘（观测面，向后兼容读取），不再参与判定与 reasons。
+   if (num(m.blindDims) >= HINDSIGHT_THRESHOLDS.blindDims) {
+     reasons.push(`评审盲维命中 ${num(m.blindDims)} 维 ≥ ${HINDSIGHT_THRESHOLDS.blindDims}`)
+   }
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+index 495f112f..717fd17d 100644
+--- a/test/flow-clarity-probe.test.mjs
++++ b/test/flow-clarity-probe.test.mjs
+@@ -164,13 +164,13 @@ test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）',
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+-test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 start 点名提示（best-effort 接线不阻断收口）', () => {
++test('④ 端到端：正常轻量变更收口不再因 tasks 改写率落标记 → 下次 start 不被同意门误拦（2026-11-08-hindsight-tasks-ratio-retire）', () => {
+   const { cwd } = makeRepo()
+   const c1 = '2026-09-01-fcp-loop'
+-  // 三条成功标准（多行镜像面——tasks 改写率的分母是正文行，单行会被标题稀释到阈下）
++  // 三条成功标准（种子镜像面——tasks 改写率的分母是正文行）
+   const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件并分别补齐测试\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+-  // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
++  // 干活：非代码文件（测试门 skip 保持轻量）
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02) (task-03)'], { cwd, stdio: 'pipe' })
+@@ -178,36 +178,30 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
+   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
+   const base = readFileSync(join(cwd, SPEC, '.runtime', 'state', `route-hindsight-baseline-${c1}.json`), 'utf8')
+   assert.ok(JSON.parse(base).design.includes(designV1.split('\n')[0] || ''), '快照锚定起草时点（start 时点内容）')
+-  // v2 触发器=tasks 改写率（2026-10-04-thin-docs-v2：design 四问是锚、proposal/requirements
+-  // 书写是合法澄清——hindsight 的「规划翻churn」信号落在 tasks 镜像行大改 >0.6，阈值原生支持）。
+-  // 镜像行全量改写为不同实现路径（保留 task-NN 行形态）。
++  // 协议正典形态：机器种子（=成功标准镜像行）全量改写为真实实现路径（保留 task-NN 行形态）
++  // ——thin-tasks-v3 契约明文要求，旧判定路（tasksRewriteRatio>0.6）在此形态下必误标（0.875/0.8 实证）。
+   const tp = join(cd, 'tasks.md')
+   writeFileSync(tp, readFileSync(tp, 'utf8')
+-    .replace(/^- \[ \] (task-\d+): .*$/gm, '- [ ] $1: 形态已改写——另一条实现路径与另一组步骤（事后闭环指标触发形态）'))
++    .replace(/^- \[ \] (task-\d+): .*$/gm, '- [ ] $1: 真实实现路径——按工作分解契约改写（协议正典形态）'))
+   // design 例行作答 + FR 行为句/绑定行（v2 正文书写面）+ spec 断点批准
+   writeFileSync(join(cd, 'design.md'), readFileSync(join(cd, 'design.md'), 'utf8')
+     .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：回路夹具——一行作答即合规'))
+   const rp = join(cd, 'requirements.md')
+   writeFileSync(rp, readFileSync(rp, 'utf8')
+-    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 使指标超阈标记落库（回路夹具行为句）')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 不因 tasks 改写率落标记（回路夹具行为句）')
+     .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：回路夹具——无独立测试面'))
+   const sap = cli(cwd, ['flow', 'approve', '--change', c1])
+   assert.equal(sap.status, 0, `flow approve 失败: ${sap.stdout}\n${sap.stderr}`)
+   const s2 = cli(cwd, ['flow', 'done', '--change', c1])
+   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  // 判定退役：种子全量改写（旧口径 tasksRewriteRatio=1.0）+ design 锚零改写 + 零盲维零失败
++  // → 不落标记（旧断言曾要求落库——本变更起反转）
+   const markPath = join(cwd, SPEC, '.runtime', 'route-hindsight.json')
+-  assert.ok(existsSync(markPath), '超阈 → 标记落库')
+-  const mark = JSON.parse(readFileSync(markPath, 'utf8'))
+-  assert.equal(mark.change, c1)
+-  // v2 触发路（2026-10-04-thin-docs-v2）：design 四问是锚不可改写——超阈信号走 tasks 改写率
+-  assert.ok(mark.metrics.tasksRewriteRatio > 0.6, `tasks 改写率超阈: ${mark.metrics.tasksRewriteRatio}`)
+-  assert.ok((mark.reasons || []).some((r) => r.includes('tasks')), `reasons 含 tasks 路: ${JSON.stringify(mark.reasons)}`)
+-  assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
+-  // 下次 start（新变更）被同意门拦下点名上个变更（2026-10-14-prestage-consent-gate：
+-  // 标记在场 → exit 2 要求显式选道，不再是可无视的点名提示）
++  assert.ok(!existsSync(markPath), '正常改写形态不再落标记（tasks 改写率判定退役）')
++  assert.ok(!s2.stderr.includes('route-hindsight 标记'), 'done 输出无标记 warn')
++  // 下次 start（新变更）不被同意门拦——连续正常轻量变更零误拦（用户痛点回归锚）
+   const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])
+-  assert.equal(s3.status, 2, '标记在场 → 同意门 exit 2')
+-  assert.match(s3.stdout + s3.stderr, new RegExp(`预段选道同意门：上个轻量变更「${c1}」`), '门文案点名上个变更')
+-  assert.match(s3.stdout + s3.stderr, /--no-prestage/, '门文案含声明通道')
++  assert.equal(s3.status, 0, '无标记 → start 直过（不被同意门拦）')
++  assert.ok(!((s3.stdout + s3.stderr).includes('预段选道同意门')), '无门文案')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/test/prestage-consent-gate.test.mjs b/test/prestage-consent-gate.test.mjs
+index dedae756..28629586 100644
+--- a/test/prestage-consent-gate.test.mjs
++++ b/test/prestage-consent-gate.test.mjs
+@@ -51,9 +51,10 @@ function cli(cwd, args) {
+ const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
+ const MARK_PATH = (cwd) => join(cwd, SPEC, '.runtime', 'route-hindsight.json')
+ 
+-/** 种一条「该走预段未走」标记（tasks 改写率超阈形态）。 */
++/** 种一条「该走预段未走」标记（design 改写比超阈形态——tasks 改写率判定已退役
++ * 2026-11-08-hindsight-tasks-ratio-retire，夹具走仍判定的 design 路）。 */
+ function plantMark(cwd, change = '2026-09-01-prior-misroute') {
+-  markHindsight({ cwd, specBase: join(cwd, SPEC), change, metrics: { tasksRewriteRatio: 0.9 } })
++  markHindsight({ cwd, specBase: join(cwd, SPEC), change, metrics: { designRewriteRatio: 0.8 } })
+   assert.ok(existsSync(MARK_PATH(cwd)), '夹具：标记应已落盘')
+ }
+ 
+@@ -65,7 +66,7 @@ test('① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一，标
+   const out = s.stdout + s.stderr
+   assert.ok(out.includes('预段选道同意门'), '文案应含门名')
+   assert.ok(out.includes('2026-09-01-prior-misroute'), '文案应含标记来源变更名')
+-  assert.ok(out.includes('tasks 机器预填稿改写率'), '文案应含超阈原因')
++  assert.ok(out.includes('design 机器稿改写比'), '文案应含超阈原因')
+   assert.ok(out.includes('--no-prestage'), '两选一应含声明通道')
+   assert.ok(out.includes('run brainstorm'), '两选一应含预段指路')
+   assert.ok(existsSync(MARK_PATH(cwd)), '被拦时标记不应被消费')
+@@ -138,7 +139,7 @@ test('⑦ 单元面：readHindsightMark 结构化读取 / clearHindsightMark 幂
+   const specBase = join(cwd, SPEC)
+   assert.equal(readHindsightMark({ specBase }), null, '无文件 → null')
+   assert.equal(clearHindsightMark({ specBase }), false, '无文件清除 → false 零副作用')
+-  markHindsight({ cwd, specBase, change: '2026-09-01-x', metrics: { tasksRewriteRatio: 0.9 } })
++  markHindsight({ cwd, specBase, change: '2026-09-01-x', metrics: { designRewriteRatio: 0.9 } })
+   const m = readHindsightMark({ specBase })
+   assert.ok(m && m.change === '2026-09-01-x', '结构化读回应含 change')
+   assert.ok(Array.isArray(m.reasons) && m.reasons.length > 0, '结构化读回应含 reasons')
+diff --git a/test/route-hindsight.test.mjs b/test/route-hindsight.test.mjs
+index 73f3c8d7..d89b97b0 100644
+--- a/test/route-hindsight.test.mjs
++++ b/test/route-hindsight.test.mjs
+@@ -4,10 +4,12 @@
+  * 覆盖验收面：
+  *   ① 指标计算正反例：首版快照→终稿行级 diff 比例（正例）；agent 只填槽/轻微编辑的
+  *      真实形态回放 FP=0（反例）；无快照=零信号；CRLF/LF 归一不虚增比例；
+- *   ② 阈值边界：designRewriteRatio >0.5（等于不过）/ tasksRewriteRatio >0.6 /
+- *      blindDims ≥2 / testFailures ≥2 四路常量边界；
++ *   ② 阈值边界：designRewriteRatio >0.5（等于不过）/ blindDims ≥2 / testFailures ≥2 三路
++ *      常量边界；tasksRewriteRatio 判定退役（2026-11-08-hindsight-tasks-ratio-retire）——
++ *      单路任意值不标记、组合超阈 reasons 不含 tasks 字样；
+  *   ③ 落库幂等：超阈整文件覆盖（per-repo 单条），无超阈不落库（marked:false）；
+- *   ④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 含变更名与形态计数的「疑似」提示。
++ *   ④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 含变更名与形态计数的「疑似」提示；
++ *      旧格式标记（reasons 含 tasks 改写率、metrics 含 tasksRewriteRatio）读取渲染不崩。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -15,7 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import {
+-  computeHindsightMetrics, markHindsight, readHindsightHint, snapshotBaseline, HINDSIGHT_THRESHOLDS,
++  computeHindsightMetrics, markHindsight, readHindsightHint, readHindsightMark, snapshotBaseline, HINDSIGHT_THRESHOLDS,
+ } from '../src/route-hindsight.js'
+ 
+ const CHANGE = '2026-09-28-c-x'
+@@ -126,17 +128,17 @@ test('① CRLF 归一：首版 LF、终稿 CRLF，内容相同 → 比例 0（
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
+-test('② 阈值边界：等于不过（> 口径）／超过即过——四路常量', () => {
++test('② 阈值边界：等于不过（> 口径）／超过即过——三路常量；tasks 改写率判定退役', () => {
+   assert.equal(HINDSIGHT_THRESHOLDS.designRewriteRatio, 0.5)
+-  assert.equal(HINDSIGHT_THRESHOLDS.tasksRewriteRatio, 0.6)
++  assert.equal('tasksRewriteRatio' in HINDSIGHT_THRESHOLDS, false, 'tasksRewriteRatio 判定键已退役（2026-11-08-hindsight-tasks-ratio-retire）')
+   assert.equal(HINDSIGHT_THRESHOLDS.blindDims, 2)
+   assert.equal(HINDSIGHT_THRESHOLDS.testFailures, 2)
+   const mk = (root, metrics) => markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics })
+   const cases = [
+     [{ designRewriteRatio: 0.5 }, false], [{ designRewriteRatio: 0.51 }, true],
+-    [{ tasksRewriteRatio: 0.6 }, false], [{ tasksRewriteRatio: 0.61 }, true],
+     [{ blindDims: 1 }, false], [{ blindDims: 2 }, true],
+     [{ testFailures: 1 }, false], [{ testFailures: 2 }, true],
++    [{ tasksRewriteRatio: 0.61 }, false], [{ tasksRewriteRatio: 1 }, false],
+   ]
+   for (const [metrics, expect] of cases) {
+     const root = mkdtempSync(join(tmpdir(), 'rh-b-'))
+@@ -147,6 +149,17 @@ test('② 阈值边界：等于不过（> 口径）／超过即过——四路
+   }
+ })
+ 
++test('② tasks 改写率判定退役：与 design 组合超阈时 reasons 只含 design 一路', () => {
++  const root = mkdtempSync(join(tmpdir(), 'rh-r-'))
++  const r = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: { designRewriteRatio: 0.8, tasksRewriteRatio: 0.9, blindDims: 0, testFailures: 0 } })
++  assert.equal(r.marked, true, 'design 超阈仍标记')
++  assert.equal(r.reasons.length, 1, `reasons 只含一路（实测 ${JSON.stringify(r.reasons)}）`)
++  assert.ok(r.reasons[0].includes('design') && !r.reasons.join('').includes('tasks'), `reasons 不含 tasks 字样: ${JSON.stringify(r.reasons)}`)
++  const j = JSON.parse(readFileSync(join(root, '.runtime', 'route-hindsight.json'), 'utf8'))
++  assert.equal(j.metrics.tasksRewriteRatio, 0.9, 'metrics 字段照写（观测面保留）')
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('③ 落库幂等：重复 mark 同内容整文件覆盖，字段齐全（per-repo 单条）', () => {
+   const root = mkdtempSync(join(tmpdir(), 'rh-m-'))
+   const metrics = { designRewriteRatio: 0.8, tasksRewriteRatio: 0.1, blindDims: 0, testFailures: 0, raw: {} }
+@@ -182,6 +195,23 @@ test('④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 疑
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
++test('④ 旧标记兼容：存量标记（reasons 含 tasks 改写率、metrics 含 tasksRewriteRatio）读取渲染不崩', () => {
++  const root = mkdtempSync(join(tmpdir(), 'rh-legacy-'))
++  mkdirSync(join(root, '.runtime'), { recursive: true })
++  writeFileSync(join(root, '.runtime', 'route-hindsight.json'), JSON.stringify({
++    change: CHANGE, marked_at: '2026-11-08T00:00:00.000Z',
++    metrics: { designRewriteRatio: 0, tasksRewriteRatio: 0.8, blindDims: 0, testFailures: 0 },
++    reasons: ['tasks 机器预填稿改写率 0.8 > 0.6'],
++  }))
++  const hint = readHindsightHint({ specBase: root })
++  assert.ok(typeof hint === 'string' && hint.includes(CHANGE), `旧标记 hint 正常渲染: ${hint}`)
++  assert.ok(hint.includes('疑似'), '措辞「疑似」非定罪')
++  const mark = readHindsightMark({ specBase: root })
++  assert.equal(mark.change, CHANGE)
++  assert.equal(mark.metrics.tasksRewriteRatio, 0.8, '额外字段不破坏结构化读取')
++  rmSync(root, { recursive: true, force: true })
++})
++
+ // ── ⑤ 勾选翻格归一（2026-10-05-hindsight-checkbox-noise）：v2 镜像任务行翻格=簿记非改写 ──
+ const TASKS_BASE = [
+   '# 任务注册表（Tasks）— 2026-10-05-c-x',
