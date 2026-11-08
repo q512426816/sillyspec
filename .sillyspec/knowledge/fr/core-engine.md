@@ -5154,3 +5154,88 @@
   confirmed_at: null
   source_change: 2026-11-04-doctor-injection-budget
   status: active
+
+## FR-core-engine-274 纯裸提交（subject 无变更名括号且无 task-NN token）touch 的文件被剔除出 own 面/冻结面/FR 域路由
+变更：2026-11-08-bare-commit-attribution-narrow
+状态：active
+摘要：主路径（坑② 10-28 实证复现）；Merge 提交
+场景正文：
+- 场景：主路径（坑② 10-28 实证复现） — Given baseline..HEAD 内存在他侧归档变更的 chore 提交（subject 如 `chore: gen release record`，无变更名括号、
+- 场景：Merge 提交 — Given 窗口内有 `Merge branch 'x'` 提交 touch 并行分支文件（无 token 无变更名），When 归属切分，Then 该文件判 foreig
+全文：.sillyspec/changes/archive/2026-11-08-bare-commit-attribution-narrow/requirements.md#FR-01
+最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-01
+  tests: test/commit-attribution-split.test.mjs「① 解析纯函数：标题变更名提取与归属聚合（细分断言）+ ② 混窗集成：纯裸剔除/token 保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-bare-commit-attribution-narrow
+  status: active
+
+## FR-core-engine-275 带本变更名或含 task-NN token 的提交 touch 的文件恒 own（fail-closed 不变）
+变更：2026-11-08-bare-commit-attribution-narrow
+状态：active
+摘要：本变更交付提交
+场景正文：
+- 场景：本变更交付提交 — Given 本变更交付提交 subject 为 `feat(x): 摘要 (task-01/02/03)`（无变更名括号），When 归属切分，Then 其 touch 的
+全文：.sillyspec/changes/archive/2026-11-08-bare-commit-attribution-narrow/requirements.md#FR-02
+最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-02
+  tests: test/commit-attribution-split.test.mjs「② 混窗集成：token 裸提交与具名提交文件保留 own」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-bare-commit-attribution-narrow
+  status: active
+
+## FR-core-engine-276 误剔兜底面保持——收口「提交面夹带嫌疑 advisory」不改
+变更：2026-11-08-bare-commit-attribution-narrow
+状态：active
+摘要：用户手动裸提交
+场景正文：
+- 场景：用户手动裸提交 — Given 用户手动提交了一个本变更交付文件但 subject 无 token 无变更名，When 收口，Then 该文件被判 foreign 剔出冻结面，且提交面对账 a
+全文：.sillyspec/changes/archive/2026-11-08-bare-commit-attribution-narrow/requirements.md#FR-03
+最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-03
+  tests: test/commit-attribution-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-bare-commit-attribution-narrow
+  status: active
+
+## FR-core-engine-277 既有归因测试面按新口径改写后全绿
+变更：2026-11-08-bare-commit-attribution-narrow
+状态：active
+摘要：回归
+场景正文：
+- 场景：回归 — Given 判定细分落盘，When 运行上述测试文件，Then 全部用例通过。
+全文：.sillyspec/changes/archive/2026-11-08-bare-commit-attribution-narrow/requirements.md#FR-04
+最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-04
+  tests: test/filter-committed-face.test.mjs | test/foreign-own-priority.test.mjs「归因消费面回归」 | test/hunk-gate-commit-attribution.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-bare-commit-attribution-narrow
+  status: active

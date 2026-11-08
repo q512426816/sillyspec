@@ -1,6 +1,14 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -27,11 +35,17 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: 88a93ec330042ed9bb39dfbf3c57f3a7c09de74f
-updatedAt: '2026-11-08T05:22:30.705Z'
+updatedAt: '2026-11-08T05:32:13.213Z'
 baseline_sha256: ffae6a1d89f7be0a4b3ea59d0533c9dad561f4ed26d52ba118615a629e3e0916
 spec_approved: true
 spec_approved_at: '2026-11-08T05:22:30.705Z'
 spec_approved_by: anon@DESKTOP-HJ0AM09
 spec_approved_channel: user-confirmed
 spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js9)（4.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261108053103\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 9 个
 

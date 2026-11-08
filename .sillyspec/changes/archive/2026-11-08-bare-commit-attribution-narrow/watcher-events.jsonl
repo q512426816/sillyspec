@@ -1,0 +1,24 @@
+{"ts":1794114037688,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1794114064740,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794114072702,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794114086809,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794115289370,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1794115460680,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/hunk-attribution.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794115604201,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1794115606629,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794115606629,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1794115619692,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1794115622330,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794115622330,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1794115623748,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1794115626129,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794115626129,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1794115628181,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1794115629734,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794115629734,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1794115646475,"kind":"commit","stage":null,"detail":"4f6a2394","provisional":true}
+{"ts":1794115766076,"kind":"gate-run","stage":"verify","detail":"门实测 failed（5.0s） · 20261108052925","provisional":true}
+{"ts":1794115796524,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/hunk-attribution-gate.test.mjs.tmp.27256.c2e9f0ac2fac——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794115800641,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/hunk-attribution-gate.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794115830938,"kind":"commit","stage":null,"detail":"f7a44cb9","provisional":true}
+{"ts":1794115864655,"kind":"gate-run","stage":"verify","detail":"门实测 passed（4.5s） · 20261108053103","provisional":true}

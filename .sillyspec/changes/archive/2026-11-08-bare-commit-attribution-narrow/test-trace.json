@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-08-bare-commit-attribution-narrow",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-01",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「① 解析纯函数：标题变更名提取与归属聚合（细分断言）+ ② 混窗集成：纯裸剔除/token 保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-bare-commit-attribution-narrow"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-02",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「② 混窗集成：token 裸提交与具名提交文件保留 own」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-bare-commit-attribution-narrow"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-03",
+      "tests": [
+        "test/commit-attribution-split.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-bare-commit-attribution-narrow"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-08-bare-commit-attribution-narrow:flow:测试绑定FR-04",
+      "tests": [
+        "test/filter-committed-face.test.mjs",
+        "test/foreign-own-priority.test.mjs「归因消费面回归」",
+        "test/hunk-gate-commit-attribution.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-bare-commit-attribution-narrow"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-08-bare-commit-attribution-narrow",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "f7a44cb911a1b61b99d9cd613ead38d7e02946e3",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "hunk-attribution-gate 夹具 feature 提交原为纯裸形态，新语义下三信号路径用例被实测门拦下",
+      "evidence": "收口实测 FAIL（not ok 9 未归因+竞争+残留三信号全路径）——夹具 feature 提交无 token，b.js 新语义判 foreign 致 unattributed 断言失败；修复：提交带 (task-01) 保留未归因信号路径，纯裸→foreign 新语义由 commit-attribution-split ①② 与 hunk-gate-commit-attribution ① 的专项断言承载（f7a44cb9，修复后实测面 25/25 绿）",
+      "location": "test/hunk-attribution-gate.test.mjs:52"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "他侧 agent 的 token 裸提交仍穿透（task token 无变更名限定，判 own）",
+      "evidence": "isForeignByCommit 对 tokened=true 恒 own（src/foreign-declared.js）——无法区分是谁的 task token，区分即误剔本变更交付；FR-02 禁止项明示该取舍，不劣于修复前（修复前一切裸提交都穿透），坑文件余项留观",
+      "location": "src/foreign-declared.js:isForeignByCommit"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a（按已发生提交 subject 静态文本判定，无时序假设）",
+    "并发": "n/a（纯读 git log 内存聚合，无落盘新面，无共享写）",
+    "切换": "n/a（无新持久化状态，重入重聚合幂等）",
+    "作用域": "ok（作用域段已答适用且防——本变更名+subject 锚定，跨仓各自窗口聚合；边界已裁决：可接受——他侧 token 穿透为已知保守面，误剔风险为零方向）"
+  },
+  "checklist": {
+    "FR实现测试三方一致": "pass——FR-01/02 在 commit-attribution-split ①（tokened/unknown 细分断言）②（split+冻结面双面剔除/保留）与 hunk-gate-commit-attribution ①（owners 空归因+token 未归因）兑现；FR-03 advisory 面零改动（diff 未触 flow.js 对账段）；FR-04 由 ledger 回执（passed，deps 面）与修复后 25/25 复跑覆盖",
+    "盲维四问真实性": "pass——diff 为纯判定函数细分（布尔标记+分支重排），无运行时状态/并发/生命周期面，n/a 成立",
+    "披露边界显式裁决": "边界已裁决：可接受——①用户手动裸提交被误剔出冻结面：三兜底在场（收口夹带嫌疑 advisory 点名、dirty 三选一门、AGENTS.md 规则 11 提交规范），且属可纠正错误（补 token 重提交即回own）；②他侧 token 提交穿透：不劣于现状（修复前全部裸提交穿透），see findings[1] accepted",
+    "防护声明核实": "pass——兜底 advisory（flow.js 提交面夹带嫌疑段）真实存在且本会话前两变更收口实证触发过，本 diff 未触碰",
+    "生成物同步": "不适用——无类型/契约文件",
+    "测试有效性与根因性": "pass——全部用例走真实临时 git 仓 e2e（提交序列+切分+冻结面），断言可观察行为非 mock 摆设；空实现判据不成立（isForeignByCommit 返回恒 false 时纯裸剔除断言即红）。根因修：判定语义细分，非吞错 guard。夹具扰动（hunk-attribution-gate 提交带 token）属信号路径拆分非隐藏失败——纯裸新语义有独立断言面（findings[0]）",
+    "probe:cli-copy-selfsufficient": "pass——新渲染行（owners 空分支）提到的补救路径真实存在（design 自声明=parseFileChangeList 消费、task token 提交=勾选证据协议）；文案与判定一致（owners 空 ↔ 纯裸分支渲染）",
+    "probe:config-absent-zero-regression": "不适用——未新增 local.yaml 消费键",
+    "probe:crossrepo-path-compat": "pass——判定面反斜杠归一保留（win-path.js 断言），未触及 worktree/repos 注册"
+  },
+  "reviewedAt": "2026-11-08T05:31:42Z"
+}

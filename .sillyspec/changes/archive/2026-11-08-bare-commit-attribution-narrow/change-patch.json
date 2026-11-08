@@ -1,0 +1,126 @@
+{
+  "change": "2026-11-08-bare-commit-attribution-narrow",
+  "baseline": "88a93ec330042ed9bb39dfbf3c57f3a7c09de74f",
+  "head": "f7a44cb911a1b61b99d9cd613ead38d7e02946e3",
+  "files": [
+    "src/foreign-declared.js",
+    "src/hunk-attribution.js",
+    "test/commit-attribution-split.test.mjs",
+    "test/hunk-attribution-gate.test.mjs",
+    "test/hunk-gate-commit-attribution.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 69,
+    "deletions": 27
+  },
+  "savedAt": "2026-11-08T05:31:23.311Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "88a93ec330042ed9bb39dfbf3c57f3a7c09de74f",
+    "totals": {
+      "files": 7,
+      "additions": 69,
+      "deletions": 27
+    },
+    "rows": [
+      {
+        "path": "src/foreign-declared.js",
+        "additions": 22,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hunk-attribution.js",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/commit-attribution-split.test.mjs",
+        "additions": 19,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/hunk-attribution-gate.test.mjs",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/hunk-gate-commit-attribution.test.mjs",
+        "additions": 17,
+        "deletions": 10,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/filter-committed-face.test.mjs",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "test/foreign-own-priority.test.mjs",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "355961504f5dabc81909de523e238eb7c06d3f0176aa82a9f77991a610f0f214",
+  "patchStatus": "ok"
+}

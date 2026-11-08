@@ -117,3 +117,4 @@
 | 2026-11-06 | 2026-11-06-knowledge-body-recall | 2026-11-06-knowledge-body-recall |
 | 2026-11-06 | 2026-11-07-knowledge-accept-channel | 待审知识收口通道——proposed 可合并生效 |
 | 2026-11-06 | 2026-11-07-knowledge-k-shape-minimal | K 形态最小落地——accept 质量信号与目标集扩展 |
+| 2026-11-08 | 2026-11-08-bare-commit-attribution-narrow | 裸提交归属判定细分收窄冻结面 |

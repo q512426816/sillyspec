@@ -690,3 +690,12 @@ supersedes：D-001@v1
 文件：src/knowledge-classify.js, test/knowledge-k-shape-minimal.test.mjs
 最近确认：67ac73e82c0edf8c458673836c358f07472426a1
 理由：K 形态契约的完整字段化（独立发号/解析器/退役判据机器化）是更大设计，本变更只落三件最小事：①目标集扩展——knowledge-classify.js 的 CATEGORY_SECTIONS 与 ACCEPT_TARGETS 各加两行（sillyspec-gotchas/testing-gotchas），修掉「gotcha 知识被迫落 known-issues」的语义错位（昨日 6 条合入已现此妥协）；②accept 输出结构完整度 advisory——正文段标题机械检测（问题/解法类），缺失列 structuralWarnings 不阻断，作为 K 四段结构的质量信号面（不挡紧急合并，完整契约落地前的过渡形态）；③SKILL.md 补四段模板指引（propose 撰写参照）。选 advisory 而非硬校验：既有合入流（平台 merge/CLI accept 双端）格式已多元，硬门会把历史形态大量打回——advisory 先立信号，完整 K 契约变更再决定是否升硬门。
+
+## D-core-engine-049@v1 2026-11-08-bare-commit-attribution-narrow——单点细分 `src/foreign-declared.js` 的提交归属判定：`buildCommitAttribution` 给每个文件 entry 增加 `
+状态：implemented
+变更：2026-11-08-bare-commit-attribution-narrow
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-08-bare-commit-attribution-narrow/design.md
+文件：src/foreign-declared.js, src/hunk-attribution.js, test/commit-attribution-split.test.mjs, test/hunk-attribution-gate.test.mjs, test/hunk-gate-commit-attribution.test.mjs
+最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
+理由：单点细分 `src/foreign-declared.js` 的提交归属判定：`buildCommitAttribution` 给每个文件 entry 增加 `tokened` 标记（任一 touch 该文件的提交 subject 含 `task-\d+` token 或变更名）；`isForeignByCommit` 语义从「unknown 恒 own」细分为「unknown 且无 token 证据且 owners 不含本变更名 → foreign，否则 own」。三消费面（splitOwnVsForeignDiffFiles 的 own/foreign 切分、flow-parity.filterCommittedFace 的冻结面过滤、flow.js attributedChangedFiles 的 FR 域/实测面）全部经由这两个函数单源，单点改全链生效，消费端零改动。 选 token 细分而非 `--fr-scope=declared` flag 或 unknown 全剔的理由：原 fail-closed（2026-10-05 引入「无后缀裸提交触碰恒 own」）的前提是「自己的交付提交可能不带变更名」——thin-tasks-v3（2026-10-07）起交付提交必带 task-NN token（勾选证据协议，收口哨兵逐格核 token），前提已过时；纯裸提交（release 生成器/Merge/归档 chore）恰是坑②实证的污染源形态。unknown 全剔会误剔本变更无 token 提交（协议只要求 token 不强制变更名），token 细分是唯一同时满足「剔污染源/保自己交付/他侧 token 提交不劣化（保守 own）」三约束的最小面。flag 方案默认噪音仍在、需每次显式携带，治标。
