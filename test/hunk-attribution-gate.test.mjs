@@ -40,7 +40,10 @@ function makeScenario({ withForeignChange = true, designList, requirements } = {
   writeFileSync(join(cwd, 'b.js'), 'b1\nb2\n')
   writeFileSync(join(cwd, 'c.js'), 'c1\nc2-改\n')
   git(cwd, ['add', '.'])
-  git(cwd, ['commit', '-qm', 'feature'])
+  // 2026-11-08-bare-commit-attribution-narrow：feature 提交带 task token（交付形态）——
+  // 保持 b.js 未归因信号路径（纯裸→foreign 新语义由 commit-attribution-split 与
+  // hunk-gate-commit-attribution 两文件覆盖，本夹具不混测）
+  git(cwd, ['commit', '-qm', 'feature (task-01)'])
   const baseline = git(cwd, ['rev-parse', 'HEAD~1']).trim()
 
   const specBase = join(cwd, '.sillyspec')
