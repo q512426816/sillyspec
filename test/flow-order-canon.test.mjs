@@ -69,10 +69,12 @@ test('① flow start 横幅：【你要做的】正典顺序句 + 断点纪律�
   assert.equal(s.status, 0)
   const todoIdx = s.stdout.indexOf('【你要做的】')
   assert.ok(todoIdx !== -1, '【你要做的】标记在场（flow-clarity-probe 切点不得破坏）')
-  const todoSeg = s.stdout.slice(todoIdx, todoIdx + 400)
+  const todoSeg = s.stdout.slice(todoIdx, todoIdx + 700)
   assert.ok(todoSeg.includes('先答 spec 面'), '首义=先答 spec 面')
   assert.ok(todoSeg.includes('flow approve') || todoSeg.includes('批准'), '含批准环节')
   assert.ok(todoSeg.includes('才动码') || todoSeg.includes('才干活'), '动码后置')
+  // 2026-11-08-flow-askuser-confirm：断点①要求 AskUserQuestion 呈现摘要与选项
+  assert.ok(todoSeg.includes('AskUserQuestion'), '断点①要求工具问询')
   assert.ok(!s.stdout.includes('直接干活：改代码、写测试'), '旧首行动指令退役')
   assert.match(s.stdout, /三断点纪律（顺序纪律：①未过不动码/, '断点纪律标题=顺序语义')
   assert.ok(!s.stdout.includes('动码前后顺手'), '横幅无顺手作答措辞')
@@ -88,6 +90,8 @@ test('② 恢复简报：spec 批准状态行在场，未批准时下一步指�
   assert.match(r.stdout, /未批准/, '未批准状态如实显示')
   const nextLine = r.stdout.split(/\r?\n/).find((l) => l.includes('下一步'))
   assert.ok(nextLine && nextLine.includes('flow approve'), `下一步指向补批，实际：${nextLine}`)
+  // 2026-11-08-flow-askuser-confirm：补批指引同样指向 AskUserQuestion 呈请批准
+  assert.ok(nextLine && nextLine.includes('AskUserQuestion'), `补批指引要求工具问询，实际：${nextLine}`)
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -135,12 +139,14 @@ test('⑤ 命令卡与 SKILL.md：生命周期含补 spec 面 → 批准 → 干
   assert.ok(card.includes('补 spec 面'), '命令卡含补 spec 面环节')
   assert.ok(card.includes('flow approve'), '命令卡含 approve 环节')
   assert.ok(card.includes('批准'), '命令卡含批准环节')
+  assert.ok(card.includes('AskUserQuestion'), '命令卡断点①要求工具问询')
   assert.ok(card.includes('按层适用'), '按层适用限定保留（tdd-scope-guidance 锚）')
   assert.ok(!card.includes('# ② 直接干活'), '步骤②不再是直接干活')
 
   const skill = read('.claude/skills/sillyspec-flow/SKILL.md')
   assert.ok(skill.includes('补 spec 面'), 'skill 含补 spec 面环节')
   assert.ok(skill.includes('flow approve'), 'skill 含 approve 环节')
+  assert.ok(skill.includes('AskUserQuestion'), 'skill 断点①含工具问询')
   assert.ok(skill.includes('动码前'), 'design 四节期限=动码前')
   assert.ok(!skill.includes('直接干活（改代码写测试）'), 'description 不再以直接干活概括第②步')
 })

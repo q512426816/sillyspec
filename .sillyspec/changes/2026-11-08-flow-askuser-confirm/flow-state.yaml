@@ -1,0 +1,34 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量变更确认环节改用工具问询
+
+
+  用户反馈：轻量变更 flow start 后的确认/批准环节，agent 用纯文字提问让用户回复，未触发 AskUserQuestion 工具。完整流程 wait 机制已有结构化问询（run --wait
+  --json），轻量变更缺同款约束。改为在 CLI 输出与 sillyspec-flow skill 中明确要求：向用户确认/选择时使用 AskUserQuestion 呈现选项。
+
+
+  成功标准：
+
+  - flow start 输出的断点①（批准）提示明确要求用 AskUserQuestion 呈现摘要与选项，而非纯文字等回复
+
+  - 三断点纪律（①批准 / ②执行 / ③归档）均写明用 AskUserQuestion 征询用户
+
+  - sillyspec-flow SKILL.md 断点①段落写明 AskUserQuestion 用法（批准/需要调整/否决选项）
+
+  - test/flow-order-canon.test.mjs 与 test/flow-checkpoints.test.mjs 全绿
+autopilot: false
+prestage_ack: true
+baseline_commit: fc553fa4118f954bb4df14ae974107e8eca7cfc1
+updatedAt: '2026-11-08T03:22:17.179Z'
+baseline_sha256: 9d3fbba07943dcf5205a69afdd5ffefcda7bdb6f8c0a195b41b4de536b7eb9e3
+spec_approved: true
+spec_approved_at: '2026-11-08T03:22:17.178Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

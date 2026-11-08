@@ -21,7 +21,8 @@ sillyspec flow start --change <变更名> --input "<一句 10-30 字中文概括
 # ② 补 spec 面（动码前）：requirements FR 行为句（强度词）+ 测试绑定行、design.md 四节作答
 #    （空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；tasks.md 改写为工作队列
 #    ——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态）。
-#    然后过断点①：摘要给用户看 → 用户运行 sillyspec flow approve --change <名>（批准留痕；
+#    然后过断点①：用 AskUserQuestion 把摘要与选项（批准开始实现/需要调整/否决）呈现给用户
+#    ——不要用纯文字提问等回复；用户批准后运行 sillyspec flow approve --change <名>（批准留痕；
 #    用户显式说「直接跑完」→ 重跑 start --autopilot 豁免）。批准是动码前置义务，不是收口补救。
 # ③ 干活（已批准）：写测试、改代码（按层适用——纯逻辑先写、行为契约断用户所见、样式/纯配置不写）；
 #    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN

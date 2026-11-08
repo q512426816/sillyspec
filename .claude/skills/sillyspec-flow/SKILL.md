@@ -50,7 +50,7 @@ sillyspec flow start --change <变更名> --input "<一句 10-30 字中文概括
 
 ### ③ 断点①：批准后才动码
 
-把 FR 条目+design 四节摘要给用户看 → 用户运行 `sillyspec flow approve --change <名>`（agent 代跑如实声明通道 `--user-confirmed` / `--self-approved`，无 flag 按 unattested 留痕）；用户明确说「直接跑完/不用问我」→ 重跑 `flow start --autopilot` 声明豁免（用户显式授权，非 agent 自选补救）。未批准且未声明 --autopilot 时 flow done 拒收。
+用 AskUserQuestion 把 FR 条目+design 四节摘要与选项（批准开始实现 / 需要调整 / 否决）呈现给用户——不要用纯文字提问等回复 → 用户批准后运行 `sillyspec flow approve --change <名>`（agent 代跑如实声明通道 `--user-confirmed` / `--self-approved`，无 flag 按 unattested 留痕）；用户明确说「直接跑完/不用问我」→ 重跑 `flow start --autopilot` 声明豁免（用户显式授权，非 agent 自选补救）。未批准且未声明 --autopilot 时 flow done 拒收。
 
 ### ④ 干活（已批准）
 

@@ -37,6 +37,9 @@ test('① 简报含三断点纪律', () => {
   assert.match(s.stdout, /执行断点/, '② 执行断点')
   assert.match(s.stdout, /归档断点/, '③ 归档断点')
   assert.match(s.stdout, /flow status/, 'status 命令指引')
+  // 2026-11-08-flow-askuser-confirm：三断点均要求 AskUserQuestion 征询，不用纯文字等回复
+  assert.match(s.stdout, /AskUserQuestion/, '断点纪律要求工具问询')
+  assert.match(s.stdout, /不要用纯文字提问等回复/, '纯文字提问被禁止')
   rmSync(cwd, { recursive: true, force: true })
 })
 
