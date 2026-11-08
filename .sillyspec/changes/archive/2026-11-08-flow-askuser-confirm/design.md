@@ -43,3 +43,14 @@ created_at: 2026-11-08T03:17:55.344Z
 风险：文案约束对不读 CLI 输出的 Agent 无效；缓解为同时落到 skill 与命令卡，三面覆盖。另一风险是文案变长挤占测试切片窗口（flow-order-canon ① 用 400 字符切片），需同步放大切片并确保既有断言仍命中。
 
 放弃方案：① 给 flow 增加 `--wait --json` 式结构化问询——需引入 flow 级 wait 状态机，属功能级改造、超出本次小调整范围；② 只改 skill 不改 CLI 文案——实证 Agent 常直接跑 CLI 不加载 skill，约束会落空；③ 提升为项目通用规则（CLAUDE.md/AGENTS.md）——影响面超出轻量变更，且用户需求限定轻量变更确认/批准环节。
+
+## 文件变更清单
+
+| 操作 | 路径 | 说明 |
+|------|------|------|
+| 修改 | src/flow.js | 断点① / 【你要做的】/ 三断点纪律 ①②③ / 恢复简报 / adopt 路径 / verify-drafts / flow done 拦截 / 归档断点 / 拒绝通道文案注入 AskUserQuestion 约束 |
+| 修改 | assets/command-cards/flow.md | 命令卡断点①说明补 AskUserQuestion 与三选项 |
+| 修改 | .claude/skills/sillyspec-flow/SKILL.md | skill 断点①段落补 AskUserQuestion 用法 |
+| 修改 | test/flow-order-canon.test.mjs | 新增横幅/恢复简报/命令卡/skill 含 AskUserQuestion 断言，切片 400→700 |
+| 修改 | test/flow-checkpoints.test.mjs | 新增三断点纪律含 AskUserQuestion 与禁纯文字断言 |
+

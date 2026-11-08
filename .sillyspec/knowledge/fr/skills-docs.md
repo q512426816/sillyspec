@@ -1281,3 +1281,88 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-07-explore-logic-prototype
   status: active
+
+## FR-skills-docs-069 flow start 输出的断点①（批准）提示明确要求用 AskUserQuestion 呈现摘要与选项，而非纯文字等回复
+变更：2026-11-08-flow-askuser-confirm
+状态：active
+摘要：主路径；恢复简报
+场景正文：
+- 场景：主路径 — Given 用户完成 flow start 立项，When 读取 flow start 输出中的断点①提示，Then 文案含「AskUserQuestion」且给出选项示例
+- 场景：恢复简报 — Given 变更未批准且重入 flow start，When 读取恢复简报的「下一步」，Then 补批指引同样指向 AskUserQuestion 征询用户。
+全文：.sillyspec/changes/archive/2026-11-08-flow-askuser-confirm/requirements.md#FR-01
+最近确认：a556e11727995f1b448dbe20ffeb2a6b4cb7bbea
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-flow-askuser-confirm:flow:测试绑定FR-01
+  tests: test/flow-order-canon.test.mjs「① flow start 横幅：【你要做的】正典顺序句 + 断点纪律顺序语义」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-flow-askuser-confirm
+  status: active
+
+## FR-skills-docs-070 三断点纪律（①批准 / ②执行 / ③归档）均写明用 AskUserQuestion 征询用户
+变更：2026-11-08-flow-askuser-confirm
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 用户运行 flow start，When 读取三断点纪律段，Then ① ② ③ 三条均出现 AskUserQuestion 字样。
+全文：.sillyspec/changes/archive/2026-11-08-flow-askuser-confirm/requirements.md#FR-02
+最近确认：a556e11727995f1b448dbe20ffeb2a6b4cb7bbea
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-flow-askuser-confirm:flow:测试绑定FR-02
+  tests: test/flow-checkpoints.test.mjs「① 简报含三断点纪律」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-flow-askuser-confirm
+  status: active
+
+## FR-skills-docs-071 sillyspec-flow SKILL.md 断点①段落写明 AskUserQuestion 用法（批准/需要调整/否决选项）
+变更：2026-11-08-flow-askuser-confirm
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given Agent 加载 sillyspec-flow skill，When 阅读断点①段落，Then 能看到 AskUserQuestion 与三个选项的明确用法。
+全文：.sillyspec/changes/archive/2026-11-08-flow-askuser-confirm/requirements.md#FR-03
+最近确认：a556e11727995f1b448dbe20ffeb2a6b4cb7bbea
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-flow-askuser-confirm:flow:测试绑定FR-03
+  tests: test/flow-order-canon.test.mjs「⑤ 命令卡与 SKILL.md：生命周期含补 spec 面 → 批准 → 干活」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-flow-askuser-confirm
+  status: active
+
+## FR-skills-docs-072 test/flow-order-canon.test.mjs 与 test/flow-checkpoints.test.mjs 全绿
+变更：2026-11-08-flow-askuser-confirm
+状态：active
+摘要：回归
+场景正文：
+- 场景：回归 — Given 文案与 skill 改动落盘，When 运行两测试文件，Then 全部用例通过。
+全文：.sillyspec/changes/archive/2026-11-08-flow-askuser-confirm/requirements.md#FR-04
+最近确认：a556e11727995f1b448dbe20ffeb2a6b4cb7bbea
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-08-flow-askuser-confirm:flow:测试绑定FR-04
+  tests: test/flow-checkpoints.test.mjs「①」 | test/flow-order-canon.test.mjs「①⑤」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-08-flow-askuser-confirm
+  status: active

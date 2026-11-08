@@ -110,3 +110,4 @@
 | 2026-11-04 | 2026-11-04-sync-fail-silent-fix | platform sync 失败静默与慢链路全量对账修复 |
 | 2026-11-05 | 2026-11-05-knowledge-search-observability | 知识检索观测补盲与向量质量收口 |
 | 2026-11-06 | 2026-11-06-knowledge-propose-body-file | 知识提议命令支持从文件读正文 |
+| 2026-11-08 | 2026-11-08-flow-askuser-confirm | 轻量变更确认环节改用工具问询 |

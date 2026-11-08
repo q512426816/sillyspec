@@ -96,3 +96,12 @@ supersedes：D-005@v1
 理由：选 A（用户简报显式委托方案期定夺——原话「形态 brainstorm 定」「缺省行为、本仓自举表、两消费面切换、向后兼容（无声明项目）都在方案期落决策」；本条 agent 按委托选定，可 --reopen 否决）。理由：①与 blast 管道同构（D-008 先例：map 主声明进 git 可评审、modules rebuild --force 未知顶层段通用回插已覆盖 span_risk、装载容错立场「坏段跳过不拦截」现成）；②B 被等价问题显式否决过——local.yaml gitignore 每机一份当共享价目表（D-008 evidence 原文「local.yaml 当共享价目表」被否）；③C 与 blast「未配置禁止回退」（D-008）正面冲突且让全宇宙表活在缺省路径，违反知识库 conventions「判级/定价/门禁输入必须项目声明，禁全宇宙词表」口径真相源条目。覆盖决策：符合 D-001（价目表公式零改动）、不违 D-002（不触碰 blast 段）。
 故障面：①无声明项目静默失去六域网（auth/billing 路径不再触发 span S2 / quick L2）——以 known-issues/文档登记 + 本仓自举表示范对冲，blast 迁移同款取舍；②token 写错（拼错/过宽）静默失配——token 为纯字面量可评审，装载数量进 reasons 审计。
 退役判据：若 span 轴改结构化输入或 pattern 声明并入 blast 段 schema 升版，本段形态随之退役。
+
+## D-setup-004@v1 2026-11-08-flow-askuser-confirm——轻量变更目前没有完整流程的 wait 机制（`run <stage> --wait --json`），断点①②③只提示「把结果给用户看」，Agent 于是用纯文
+状态：implemented
+变更：2026-11-08-flow-askuser-confirm
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-08-flow-askuser-confirm/design.md
+文件：assets/command-cards/flow.md, src/flow.js, test/flow-checkpoints.test.mjs, test/flow-order-canon.test.mjs
+最近确认：a556e11727995f1b448dbe20ffeb2a6b4cb7bbea
+理由：轻量变更目前没有完整流程的 wait 机制（`run <stage> --wait --json`），断点①②③只提示「把结果给用户看」，Agent 于是用纯文字提问等回复。本变更只在教导面（CLI 输出文案 + skill + 命令卡）补强约束：凡向用户征询确认/选择，必须用 AskUserQuestion 工具呈现选项，禁止纯文字问答。 改动面四处：`src/flow.js` 主 start 横幅（断点①、【你要做的】、三断点纪律、恢复简报）与 adopt 路径断点①；`assets/command-cards/flow.md` 的断点①说明；`.claude/skills/sillyspec-flow/SKILL.md` 断点①段落；两测试文件补文案断言。不改流程状态机、不新增 CLI 参数、不新增 JSON 契约。

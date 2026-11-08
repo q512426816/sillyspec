@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-08-flow-askuser-confirm",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "a556e11727995f1b448dbe20ffeb2a6b4cb7bbea",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design 初次未含「文件变更清单」节，收口提交面自声明缺失",
+      "evidence": "flow done 提交面夹带嫌疑提示命中 assets/command-cards/flow.md 与 src/flow.js；已补 design「## 文件变更清单」逐条自声明，非并行会话在途文件",
+      "location": ".sillyspec/changes/2026-11-08-flow-askuser-confirm/design.md"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a（纯教导面文案，不承载状态，任何时点读取均为同一静态指引）",
+    "并发": "n/a（无共享数据写入；文案改动显式 pathspec 提交隔离并行会话）",
+    "切换": "n/a（不改 flow 生命周期状态机；approve/实测机器门行为不变）",
+    "作用域": "n/a（项目内全局文案，无跨仓/跨工作区数据）"
+  },
+  "checklist": {
+    "FR实现测试三方一致": "pass——4 条 FR 均在 change.patch 兑现；FR-01/02/03 绑定断言分别位于 test/flow-order-canon.test.mjs（①/⑤）与 test/flow-checkpoints.test.mjs（①），diff 中可见 AskUserQuestion 断言；FR-04 由 ledger 实测回执（passed exit=0，64s，module[]+deps js30）覆盖",
+    "盲维四问真实性": "pass——diff 无运行时逻辑/数据写入，四问 n/a 成立（见 dimensionNotes）",
+    "披露边界显式裁决": "边界已裁决：可接受——design 风险段披露「文案约束对不读 CLI 输出的 Agent 无效」，缓解为 CLI 输出+skill+命令卡三面覆盖；属已知局限非数据正确性风险",
+    "防护声明核实": "无防护机制声明（纯文案），不适用",
+    "生成物同步": "pass——命令卡 assets/command-cards/flow.md 与 skill SKILL.md 与 src/flow.js 文案同步落地",
+    "测试有效性": "pass——断言读取 CLI stdout 并检查 AskUserQuestion/禁纯文字字样，属可观察行为；非 mock 摆设。根因判据：文案直接对应诉求，无吞崩溃/藏失败 guard",
+    "probe:cli-copy-selfsufficient": "pass——文案提及命令/flag（flow approve、flow start --autopilot、task tick、verify-drafts）均真实存在；断点门判定逻辑未改，文案与代码判定一致",
+    "probe:config-absent-zero-regression": "不适用——未新增 local.yaml 消费键",
+    "probe:crossrepo-path-compat": "不适用——未触及 worktree/deps/跨仓代码"
+  },
+  "reviewedAt": "2026-11-08T03:37:44Z"
+}

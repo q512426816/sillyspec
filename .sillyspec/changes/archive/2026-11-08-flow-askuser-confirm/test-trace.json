@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-08-flow-askuser-confirm",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-08-flow-askuser-confirm:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-order-canon.test.mjs「① flow start 横幅：【你要做的】正典顺序句 + 断点纪律顺序语义」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-flow-askuser-confirm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-08-flow-askuser-confirm:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-checkpoints.test.mjs「① 简报含三断点纪律」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-flow-askuser-confirm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-08-flow-askuser-confirm:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-order-canon.test.mjs「⑤ 命令卡与 SKILL.md：生命周期含补 spec 面 → 批准 → 干活」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-flow-askuser-confirm"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-08-flow-askuser-confirm:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-checkpoints.test.mjs「①」",
+        "test/flow-order-canon.test.mjs「①⑤」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-08-flow-askuser-confirm"
+    }
+  ]
+}
