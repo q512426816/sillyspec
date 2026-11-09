@@ -1,0 +1,278 @@
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index fe7f97b9..8667f5a2 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -36,7 +36,8 @@ import { pruneTimestampedEntries } from './runtime-hygiene.js';
+ import { CHECK_SEVERITY } from './constants.js';
+ import { readGateSnapshotLedger, selectStaleSnapshots } from './run/gate-snapshot-ledger.js'
+ import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
+-import { readFrictionLedger } from './friction-ledger.js';
++import { readFrictionLedger } from './friction-ledger.js'
++import { archiveLandedInHeadTree } from './run/complete-handlers.js';
+ // FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
+ // fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
+ import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
+@@ -872,6 +873,60 @@ export function detectInjectionBudget(cwd) {
+  * .sillyspec/.runtime/worktrees（worktree.js:24——勿用 runtimeRoot，平台模式分离只影响
+  * execute-runs 族）。
+  */
++// ── 2026-11-09-archive-landing-visibility FR-02：归档提交残留（半归档半态）──────────
++// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：flow done 归档子步把归档件
++// 补暂存后由 agent 手工提交（设计内交接，共享仓竞态 + hook 纪律）——交接被漏时归档件
++// 滞留共享暂存区（pull/清理/index 手术可丢），且 flow done 输出已翻篇无从发现。本检查
++// 只读兜底：暂存区条目（src/dst 任一侧）落在 changes/<名>/ 或 changes/archive/<名>/
++// 且该变更未落 HEAD 树 → WARNING + 修复命令。复用 archiveLandedInHeadTree 判定；
++// 含他人半归档残留（complete-handlers othersResidual 只在归档时刻可见，此处常驻可见）。
++export function detectArchiveCommitResidue(cwd) {
++  const base = { name: 'archive_commit_residue', label: '归档提交残留（staged 未落库）', safe_actions: [] }
++  try {
++    // 非 git 仓显式判定（gitQuiet 失败不抛错而是空返回，靠 catch 抓不到非仓态）。
++    const insideRepo = String(gitQuiet(cwd, ['rev-parse', '--is-inside-work-tree']) || '').trim()
++    if (insideRepo !== 'true') {
++      return { ...base, findings: ['非 git 仓（或 git 不可用）——skipped'], pass: true, severity: null, skipped: true }
++    }
++    const stagedRaw = String(gitQuiet(cwd, ['diff', '--cached', '--name-status']) || '')
++    if (!stagedRaw.trim()) {
++      return { ...base, findings: ['暂存区无归档相关条目'], pass: true, severity: CHECK_SEVERITY.PASSED }
++    }
++    const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
++    const owners = new Set()
++    // 解析口径对齐 resolveArchiveCommitPathspecs（--name-status：R 行 src<TAB>dst
++    // 两格、A/M/D 单格——TAB 分隔逐格取，勿用 porcelain 的 ' -> ' 形态）。
++    for (const line of stagedRaw.split('\n')) {
++      if (!line.trim()) continue
++      for (const cell of line.split('\t').slice(1)) {
++        const raw = cell.trim().replace(/^"|"$/g, '')
++        if (!raw) continue
++        const m = /^\.sillyspec\/changes\/(?:archive\/)?([^/]+)\//.exec(raw)
++        if (m && m[1] !== 'archive') owners.add(m[1])
++      }
++    }
++    const residue = []
++    for (const owner of owners) {
++      if (!archiveLandedInHeadTree({ headTreeFiles, changeName: owner })) residue.push(owner)
++    }
++    if (residue.length === 0) {
++      return { ...base, findings: ['暂存区归档相关条目均已落 HEAD（无半归档残留）'], pass: true, severity: CHECK_SEVERITY.PASSED }
++    }
++    const findings = residue.map((owner) =>
++      `半归档残留：变更 ${owner} 的归档条目已进暂存区但 HEAD 树无 archive/${owner}/——pull/清理/index 手术会丢归档件`,
++    )
++    base.safe_actions.push({
++      action: residue.map((owner) =>
++        `git commit -m "chore(archive): ${owner} 归档留档" -- .sillyspec/changes/${owner} .sillyspec/changes/archive/${owner}`,
++      ).join(' ; '),
++      risk: 'low',
++    })
++    return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
++  } catch (e) {
++    return { ...base, findings: [`探测降级（git 不可用或非仓库：${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
++  }
++}
++
+ export function detectWorktreeHealth(cwd) {
+   const base = { name: 'worktree_health', label: 'worktree 隔离健康', safe_actions: [] }
+   try {
+@@ -1744,7 +1799,9 @@ export async function runDoctorDiagnostics({ cwd }) {
+   // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
+   // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
+   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
+-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
++  // 2026-11-09-archive-landing-visibility FR-02：归档提交残留（只读 WARNING）
++  const archiveCommitResidue = detectArchiveCommitResidue(cwd)
++  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
+ 
+   return {
+     dimensions,
+diff --git a/src/flow.js b/src/flow.js
+index 3639e0da..2b49c4a8 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2922,6 +2922,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：flow done 到此 =
+   // 变更已归档，文件树推送失败不再静默半态（🚨 告警 + 自救命令 + exit 1）
+   try { await triggerSyncTerminalStrict(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
++  // 2026-11-09-archive-landing-visibility FR-01：归档落库终态尾块——输出最后内容。
++  // 动机：runArchiveChain 内的「🚨 未落库」打在中段，尾部消费（agent tail/人扫尾行）只见
++  // 「✅ flow done 完成」假成功，归档件滞留共享暂存区（并行 index 手术可丢，同日三变更实证）。
++  // 此处独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效）；
++  // exit code 保持 0（未落库属设计内人工交接，不与收口失败的 exit≠0 语义混用）。
++  try {
++    const { computeArchiveLanding, renderArchiveLandingEpilogue } = await import('./run/complete-handlers.js')
++    console.log(renderArchiveLandingEpilogue(computeArchiveLanding({ cwd, changeName: change })))
++  } catch { /* 尾块 best-effort，不阻断协议面 */ }
+   return { change, substeps: doneList }
+ }
+ 
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 8780cb80..5e4e9b69 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -862,6 +862,43 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir,
+  * @param {{headTreeFiles:string, changeName:string}} p
+  * @returns {boolean}
+  */
++// ── 2026-11-09-archive-landing-visibility FR-01：终态归档落库重算 + 渲染 ──────────
++// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：runArchiveChain 内的「🚨 归档提交
++// 未落库」打在输出中段，最后一行是「✅ flow done 完成」——agent/人尾部消费（tail）得到假
++// 成功，归档件滞留共享暂存区（并行 index 手术可丢）。flow.js 终态打印时用 computeArchiveLanding
++// 独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效），渲染结果作为输出
++// 最后内容。归档提交执行主体不变（agent 手工执行，共享仓竞态 + hook 纪律见上方注释）。
++export function computeArchiveLanding({ cwd, changeName }) {
++  const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
++  const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
++  const landed = archiveLandedInHeadTree({ headTreeFiles, changeName })
++  let commitCommand = null
++  if (!landed) {
++    const { pathspecs } = resolveArchiveCommitPathspecs({
++      changeName,
++      stagedNameStatus: String(stagedRaw || ''),
++      headTreeFiles,
++      existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
++    })
++    if (pathspecs.length > 0) {
++      commitCommand = `git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`
++    }
++  }
++  return { landed, commitCommand }
++}
++
++/** FR-01 渲染纯函数：落库 → 单行确认；未落库 → 🚨 尾块（作为 flow done 输出最后内容）。 */
++export function renderArchiveLandingEpilogue({ landed, commitCommand }) {
++  if (landed) return '✅ 归档提交已落库（HEAD 树含本变更归档路径）。'
++  const lines = [
++    '🚨 归档提交尚未落库：归档件停在暂存区——pull/清理/工作区重置会丢归档（终态重算判定）。',
++    '   立即执行（幂等；pathspec 限本变更面）：',
++  ]
++  if (commitCommand) lines.push(`   ${commitCommand}`)
++  lines.push('   执行后核对：git log --oneline -1 应见「chore(archive): <变更名> 归档留档」。')
++  return lines.join('\n')
++}
++
+ export function archiveLandedInHeadTree({ headTreeFiles, changeName }) {
+   const prefix = '.sillyspec/changes/archive/'
+   const name = String(changeName || '')
+diff --git a/test/archive-landing-epilogue.test.mjs b/test/archive-landing-epilogue.test.mjs
+new file mode 100644
+index 00000000..ee92a748
+--- /dev/null
++++ b/test/archive-landing-epilogue.test.mjs
+@@ -0,0 +1,118 @@
++/**
++ * 2026-11-09-archive-landing-visibility 回归：归档落库终态可见性与 doctor 残留检查。
++ *
++ * 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：flow done 的「🚨 归档提交
++ * 未落库」打在输出中段、末行是「✅ flow done 完成」——尾部消费假成功，归档件滞留
++ * 共享暂存区可被并行 index 手术冲掉。
++ *
++ * 覆盖：
++ *   ① renderArchiveLandingEpilogue：落库 → 单行确认；未落库 → 🚨 尾块含后果+命令+核对行
++ *   ② computeArchiveLanding（临时 git 仓）：staged 未提交 → landed=false + commitCommand
++ *      含 archive/ pathspec；提交后 → landed=true
++ *   ③ detectArchiveCommitResidue（临时 git 仓）：半归档残留 → WARNING 点名变更 + safe_actions
++ *      修复命令；提交后 → PASSED；非 git 仓 → skipped
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { execFileSync } from 'node:child_process'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { renderArchiveLandingEpilogue, computeArchiveLanding } = await import(
++  pathToFileURL(join(ROOT, '..', 'src', 'run', 'complete-handlers.js')).href
++)
++const { detectArchiveCommitResidue } = await import(
++  pathToFileURL(join(ROOT, '..', 'src', 'doctor-diagnostics.js')).href
++)
++
++const CHANGE = '2026-11-09-landing-x'
++
++function git(dir, args) {
++  return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
++    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
++  }).trim()
++}
++
++function cleanup(dir) {
++  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch { /* 留待系统清理 */ }
++}
++
++function buildRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'alep-'))
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'user.name', 't'])
++  const c = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(c, { recursive: true })
++  writeFileSync(join(c, 'design.md'), 'design v1\n')
++  git(cwd, ['add', '-A', '--', '.sillyspec'])
++  git(cwd, ['commit', '-qm', 'base'])
++  return cwd
++}
++
++test('① renderArchiveLandingEpilogue：落库单行确认 / 未落库 🚨 尾块', () => {
++  const ok = renderArchiveLandingEpilogue({ landed: true })
++  assert.ok(ok.includes('归档提交已落库'), '落库态含确认')
++  assert.ok(!ok.includes('🚨'), '落库态无 🚨')
++
++  const warn = renderArchiveLandingEpilogue({ landed: false, commitCommand: `git commit -m "chore(archive): ${CHANGE} 归档留档" -- x y` })
++  assert.ok(warn.startsWith('🚨'), '未落库态以 🚨 开头')
++  assert.ok(warn.includes('会丢归档'), '含后果提示')
++  assert.ok(warn.includes(`git commit -m "chore(archive): ${CHANGE} 归档留档" -- x y`), '含可执行命令')
++  assert.ok(warn.includes('执行后核对'), '含核对行')
++
++  const noCmd = renderArchiveLandingEpilogue({ landed: false, commitCommand: null })
++  assert.ok(noCmd.includes('🚨') && !noCmd.includes('git commit -m'), '无命令态不伪造命令')
++})
++
++test('② computeArchiveLanding：staged 未提交 false+命令 / 提交后 true', () => {
++  const cwd = buildRepo()
++  try {
++    // 半归档：git mv 到 archive/ 后停在暂存区（未 commit）。
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', CHANGE)
++    mkdirSync(arch, { recursive: true })
++    git(cwd, ['mv', `.sillyspec/changes/${CHANGE}/design.md`, `.sillyspec/changes/archive/${CHANGE}/design.md`])
++    let r = computeArchiveLanding({ cwd, changeName: CHANGE })
++    assert.equal(r.landed, false, '未提交 → landed=false')
++    assert.ok(r.commitCommand && r.commitCommand.includes(`archive/${CHANGE}`), '命令含归档侧 pathspec')
++
++    git(cwd, ['commit', '-qm', `chore(archive): ${CHANGE} 归档留档`])
++    r = computeArchiveLanding({ cwd, changeName: CHANGE })
++    assert.equal(r.landed, true, '提交后 → landed=true')
++    assert.equal(r.commitCommand, null, '落库态不产命令')
++  } finally {
++    cleanup(cwd)
++  }
++})
++
++test('③ detectArchiveCommitResidue：残留 WARNING / 提交后 PASSED / 非仓 skipped', () => {
++  const cwd = buildRepo()
++  try {
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', CHANGE)
++    mkdirSync(arch, { recursive: true })
++    git(cwd, ['mv', `.sillyspec/changes/${CHANGE}/design.md`, `.sillyspec/changes/archive/${CHANGE}/design.md`])
++    let r = detectArchiveCommitResidue(cwd)
++    assert.equal(r.pass, false, '半归档 → 不通过')
++    assert.equal(r.severity, 'warning', '严重度 WARNING（常量小写形态）')
++    assert.ok(r.findings.some((f) => f.includes(CHANGE)), 'findings 点名变更')
++    assert.ok(r.safe_actions.some((a) => a.action.includes(`chore(archive): ${CHANGE}`) && a.action.includes(`archive/${CHANGE}`)), 'safe_actions 含修复命令')
++
++    git(cwd, ['commit', '-qm', `chore(archive): ${CHANGE} 归档留档`])
++    r = detectArchiveCommitResidue(cwd)
++    assert.equal(r.pass, true, '落库后 → PASSED')
++
++    const notRepo = mkdtempSync(join(tmpdir(), 'alep-norepo-'))
++    try {
++      const skipped = detectArchiveCommitResidue(notRepo)
++      assert.equal(skipped.skipped, true, '非 git 仓 → skipped')
++      assert.notEqual(skipped.severity, 'ERROR', '非仓不判红')
++    } finally {
++      cleanup(notRepo)
++    }
++  } finally {
++    cleanup(cwd)
++  }
++})

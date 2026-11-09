@@ -91,3 +91,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-02-quicklog-inject-retire | quicklog 检索注入面下线
 - 2026-11-02-constraint-mechanize | 约束力机制化：规约 00 反例与事故转写字段
 - 2026-11-09-terminal-sync-background | 终态同步后台化三态marker补报免卡前台
+- 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查

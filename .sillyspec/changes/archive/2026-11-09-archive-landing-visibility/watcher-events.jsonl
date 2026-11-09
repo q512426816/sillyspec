@@ -1,0 +1,31 @@
+{"ts":1794206140794,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1794206199492,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794206299369,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/run/complete-handlers.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206429831,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206467914,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/doctor-diagnostics.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206832472,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206889876,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/final-sync-marker.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206964039,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/final-sync.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794206979443,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794206979443,"kind":"commit","stage":null,"detail":"811c6b05","provisional":true}
+{"ts":1794206979724,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207001129,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1794207003687,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794207003687,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1794207003937,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207006524,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1794207008123,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794207008123,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1794207011771,"kind":"commit","stage":null,"detail":"fd3daac5","provisional":true}
+{"ts":1794207012021,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207032347,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-09-archive-landing-visibility/flow-state.yaml、test/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207045810,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/shared.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207073050,"kind":"gate-run","stage":"verify","detail":"门实测 passed（18.1s） · 20261109065112","provisional":true}
+{"ts":1794207113309,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/bg-sync.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207400320,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/.sillyspec/.runtime/temp/auto-pull-throttle.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207404252,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/.sillyspec/.runtime/verify-runs/gate-bogus-stage-x-no-such.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207839112,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/final-sync.js、src/run/bg-sync.js、src/run/shared.js、test/final-sync-marker.test.mjs、test/terminal-sync-strict.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794207895522,"kind":"commit","stage":null,"detail":"aae92f72","provisional":true}
+{"ts":1794208470669,"kind":"commit","stage":null,"detail":"b2543362","provisional":true}
+{"ts":1794208507582,"kind":"commit","stage":null,"detail":"e6d755d8","provisional":true}
+{"ts":1794208838583,"kind":"commit","stage":null,"detail":"a2ff988a","provisional":true}

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-09-archive-landing-visibility",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "fd3daac5b05f63d0d02c19c1860aa7efb5a3ef4d",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "detectArchiveCommitResidue 对「仅活跃侧暂存」子场景的措辞与修复命令失准（fail-safe，命令被 git 整体拒绝）",
+      "evidence": "临时仓实证：活跃变更（从未归档）文件 staged 即触发 WARNING「半归档残留：…归档条目已进暂存区但 HEAD 树无 archive/<名>/」，safe_action 命令含不存在的 archive 侧 pathspec；执行该命令 git 报 pathspec did not match、整笔提交中止（exit 1，无部分提交）。触发面按 FR-02 字面（changes/<名>/ 或 changes/archive/<名>/）属规格内广度，主设计场景（两侧均 staged 的真半归档）命令可执行且已被测试覆盖。",
+      "location": "src/doctor-diagnostics.js detectArchiveCommitResidue（findings 措辞 + safe_actions 命令构成）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "既有 JSDoc 因插入点错位——archiveLandedInHeadTree 的文档块现在视觉上挂在 computeArchiveLanding 之上",
+      "evidence": "src/run/complete-handlers.js 857-864 行的 JSDoc（@param {{headTreeFiles, changeName}} @returns {boolean}）原属 archiveLandedInHeadTree，新代码块插在两者之间，参数签名与 computeArchiveLanding（{cwd, changeName}→{landed, commitCommand}）不符。纯编辑性问题，无行为影响。",
+      "location": "src/run/complete-handlers.js:857-865"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "computeArchiveLanding 在 git 读失败（gitQuiet 返回 null）时判 landed=false 渲染 🚨——误报方向与声明一致但场景未在 design 四问中点名",
+      "evidence": "gitQuiet 失败返回 null 而非抛错（git-helper.js:256），catch 抓不到；ls-tree 失败 → headTreeFiles='' → archiveLandedInHeadTree=false → 🚨 无命令块。误报方向属 design Q1 已声明的「无害误报」（agent 执行幂等命令时 git 拒绝空提交/路径不匹配即发现），且 flow done 走到此点前自身大量 git 操作已先行失败，实际不可达。无测试覆盖此分支，可接受。",
+      "location": "src/run/complete-handlers.js computeArchiveLanding"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "多变更残留各自点名已实证可用但无套件用例；doctor --json 任意 WARNING→exit 1 为既有全局口径，新检查使活跃变更暂存窗口也进入 exit 1 面",
+      "evidence": "临时仓双变更实证：findings 逐名点名、safe_actions 按名各一条命令（' ; ' 连接）——design Q4 声明成立，但 test 仅覆盖单变更。index.js:3020 process.exitCode = overall_status==='pass'?0:1 是既有语义（gate_snapshot_leak 等所有 WARNING 维度同门），本变更未改动，仅拓宽 WARNING 触发面（按 FR-02 字面属设计内）。",
+      "location": "test/archive-landing-epilogue.test.mjs（多变更用例缺席）；src/index.js:3020（既有）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-01「进程 exit 0」以结构性验证成立，无端到端断言",
+      "evidence": "尾块位于 triggerSyncTerminalStrict 之后、return {change, substeps} 之前，整体 try/catch 包裹，无 process.exit/exitCode 写入，返回值不变——结构性成立。新测试未跑 cmdFlowDone 端到端断言退出码（既有 archive-commit-suggest-race ② 的 exit 0 断言针对中段命令而非新尾块）。可接受。",
+      "location": "src/flow.js:2930-2934；test/archive-landing-epilogue.test.mjs"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-09T15:05:18+08:00",
+  "reviewerContext": {
+    "head": "fd3daac5b05f63d0d02c19c1860aa7efb5a3ef4d",
+    "frozenPatch": ".sillyspec/changes/2026-11-09-archive-landing-visibility/change.patch（与 74f35c1e..fd3daac5 提交 diff 逐行一致，已核对）",
+    "spec": [
+      "design.md（盲维四问+文件清单）",
+      "requirements.md（FR-01/02/03）"
+    ],
+    "note": "活树存在并行会话未提交变更（2026-11-09-terminal-sync-background：src/run/bg-sync.js、src/run/shared.js、src/final-sync.js 等），与本变更四文件零重叠；本变更四文件与 HEAD 逐字一致（git diff HEAD 为空）"
+  }
+}

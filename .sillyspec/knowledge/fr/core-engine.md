@@ -5344,3 +5344,60 @@
   confirmed_at: null
   source_change: 2026-11-09-terminal-sync-background
   status: active
+
+## FR-core-engine-283 flow done 终态输出携带归档落库状态：已落库 → 成功行注明；未落库 → 输出末尾（最终可见行）高亮 🚨 与待执行 commit 命令（幂等 pathspec），退出码保持 0（exit≠0 语义已被测试门/收口失败占用，防 fail-closed 消费者误判）
+变更：2026-11-09-archive-landing-visibility
+状态：active
+摘要：主路径（未落库 → 尾部高亮）；已落库
+全文：.sillyspec/changes/archive/2026-11-09-archive-landing-visibility/requirements.md#FR-01
+最近确认：a2ff988adc92c46be407c9f6d8d4e108b5df424a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-archive-landing-visibility:flow:测试绑定FR-01
+  tests: test/archive-landing-epilogue.test.mjs「renderArchiveLandingEpilogue 未落库态尾部含 🚨 与命令、落库态单行确认」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-archive-landing-visibility
+  status: active
+
+## FR-core-engine-284 doctor 新增「归档提交残留」检查项：暂存区存在指向 changes/<名>/ 或 changes/archive/<名>/ 的条目且该变更未落 HEAD 树 → WARNING + 修复命令建议（只读 advisory，复用 archiveLandedInHeadTree 判定）
+变更：2026-11-09-archive-landing-visibility
+状态：active
+摘要：主路径（残留命中）；干净/非仓
+全文：.sillyspec/changes/archive/2026-11-09-archive-landing-visibility/requirements.md#FR-02
+最近确认：a2ff988adc92c46be407c9f6d8d4e108b5df424a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-archive-landing-visibility:flow:测试绑定FR-02
+  tests: test/archive-landing-epilogue.test.mjs「detectArchiveCommitResidue 残留命中 WARNING/干净 PASSED/非仓 skipped」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-archive-landing-visibility
+  status: active
+
+## FR-core-engine-285 新增测试：终态渲染（落库/未落库两态）与 doctor 检查（残留命中/干净/非仓跳过）；既有 archive-commit-suggest-race 回归全绿
+变更：2026-11-09-archive-landing-visibility
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-09-archive-landing-visibility/requirements.md#FR-03
+最近确认：a2ff988adc92c46be407c9f6d8d4e108b5df424a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-archive-landing-visibility:flow:测试绑定FR-03
+  tests: test/archive-commit-suggest-race.test.mjs「既有竞态回归全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-archive-landing-visibility
+  status: active

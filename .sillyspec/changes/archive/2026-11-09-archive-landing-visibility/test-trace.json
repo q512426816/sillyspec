@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-09-archive-landing-visibility",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-09-archive-landing-visibility:flow:测试绑定FR-01",
+      "tests": [
+        "test/archive-landing-epilogue.test.mjs「renderArchiveLandingEpilogue 未落库态尾部含 🚨 与命令、落库态单行确认」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-archive-landing-visibility"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-09-archive-landing-visibility:flow:测试绑定FR-02",
+      "tests": [
+        "test/archive-landing-epilogue.test.mjs「detectArchiveCommitResidue 残留命中 WARNING/干净 PASSED/非仓 skipped」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-archive-landing-visibility"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-09-archive-landing-visibility:flow:测试绑定FR-03",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「既有竞态回归全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-archive-landing-visibility"
+    }
+  ]
+}

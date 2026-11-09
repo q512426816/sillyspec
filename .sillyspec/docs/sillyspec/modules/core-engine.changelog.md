@@ -119,3 +119,4 @@
 | 2026-11-06 | 2026-11-07-knowledge-k-shape-minimal | K 形态最小落地——accept 质量信号与目标集扩展 |
 | 2026-11-08 | 2026-11-08-bare-commit-attribution-narrow | 裸提交归属判定细分收窄冻结面 |
 | 2026-11-09 | 2026-11-09-terminal-sync-background | 终态同步后台化三态marker补报免卡前台 |
+| 2026-11-09 | 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查 |

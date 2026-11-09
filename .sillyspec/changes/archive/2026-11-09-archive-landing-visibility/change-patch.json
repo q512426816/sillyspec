@@ -1,0 +1,108 @@
+{
+  "change": "2026-11-09-archive-landing-visibility",
+  "baseline": "74f35c1ee7134b3d41224d4aabcd78d1edf08217",
+  "head": "fd3daac5b05f63d0d02c19c1860aa7efb5a3ef4d",
+  "files": [
+    "src/doctor-diagnostics.js",
+    "src/flow.js",
+    "src/run/complete-handlers.js",
+    "test/archive-landing-epilogue.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 223,
+    "deletions": 2
+  },
+  "savedAt": "2026-11-09T06:51:35.284Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "74f35c1ee7134b3d41224d4aabcd78d1edf08217",
+    "totals": {
+      "files": 4,
+      "additions": 223,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/doctor-diagnostics.js",
+        "additions": 59,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 9,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete-handlers.js",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-landing-epilogue.test.mjs",
+        "additions": 118,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7500865673a3b3ee0606e105e35d7a740ec14e659bd980c9ca6cf7735e6c3398",
+  "patchStatus": "ok"
+}

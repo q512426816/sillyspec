@@ -699,3 +699,12 @@ supersedes：D-001@v1
 文件：src/foreign-declared.js, src/hunk-attribution.js, test/commit-attribution-split.test.mjs, test/hunk-attribution-gate.test.mjs, test/hunk-gate-commit-attribution.test.mjs
 最近确认：f7a44cb911a1b61b99d9cd613ead38d7e02946e3
 理由：单点细分 `src/foreign-declared.js` 的提交归属判定：`buildCommitAttribution` 给每个文件 entry 增加 `tokened` 标记（任一 touch 该文件的提交 subject 含 `task-\d+` token 或变更名）；`isForeignByCommit` 语义从「unknown 恒 own」细分为「unknown 且无 token 证据且 owners 不含本变更名 → foreign，否则 own」。三消费面（splitOwnVsForeignDiffFiles 的 own/foreign 切分、flow-parity.filterCommittedFace 的冻结面过滤、flow.js attributedChangedFiles 的 FR 域/实测面）全部经由这两个函数单源，单点改全链生效，消费端零改动。 选 token 细分而非 `--fr-scope=declared` flag 或 unknown 全剔的理由：原 fail-closed（2026-10-05 引入「无后缀裸提交触碰恒 own」）的前提是「自己的交付提交可能不带变更名」——thin-tasks-v3（2026-10-07）起交付提交必带 task-NN token（勾选证据协议，收口哨兵逐格核 token），前提已过时；纯裸提交（release 生成器/Merge/归档 chore）恰是坑②实证的污染源形态。unknown 全剔会误剔本变更无 token 提交（协议只要求 token 不强制变更名），token 细分是唯一同时满足「剔污染源/保自己交付/他侧 token 提交不劣化（保守 own）」三约束的最小面。flag 方案默认噪音仍在、需每次显式携带，治标。
+
+## D-core-engine-050@v1 2026-11-09-archive-landing-visibility——生产实证（multi-agent-platform 仓 2026-11-09 三变更）：flow done 归档子步把「未落库 🚨 警告」打在输出中段，最后一
+状态：implemented
+变更：2026-11-09-archive-landing-visibility
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-09-archive-landing-visibility/design.md
+文件：src/doctor-diagnostics.js, src/flow.js, src/run/complete-handlers.js, test/archive-landing-epilogue.test.mjs
+最近确认：a2ff988adc92c46be407c9f6d8d4e108b5df424a
+理由：生产实证（multi-agent-platform 仓 2026-11-09 三变更）：flow done 归档子步把「未落库 🚨 警告」打在输出中段，最后一行是「✅ flow done 完成」——尾部消费（agent tail / 人扫一眼）得到假成功，归档件滞留共享暂存区（并行 index 手术曾丢提交）。归档提交由 agent 手工执行是既有设计（共享仓竞态 + pre-commit hook 纪律，complete-handlers.js 注释论证），本变更不动它，补两处： - **终态可见性**：flow.js 在终态成功行打印时独立重算落库状态（git ls-tree HEAD + archiveLandedInHeadTree），新增导出纯函数 `renderArchiveLandingEpilogue`（complete-handlers.js，落库→单行确认 / 未落库→🚨 尾块含 resolveArchiveCommitPathspecs 构成的幂等命令）作为输出最后内容；exit code 保持 0。 - **doctor 兜底**：doctor-diagnostics.js 新增只读检查项 `detectArchiveCommitResidue`——暂存区条目（src/dst 任一侧）落在 changes/<名>/ 或 changes/archive/<名>/ 且该名未落 HEAD → WARNING + safe_actions 修复命令；干净 PASSED、非仓 skipped。
