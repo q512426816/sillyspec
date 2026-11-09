@@ -5239,3 +5239,108 @@
   confirmed_at: null
   source_change: 2026-11-08-bare-commit-attribution-narrow
   status: active
+
+## FR-core-engine-278 flow done/complete/change-delete 终态同步不再内联等待:写 pending marker+转后台,命令秒级收尾,exit code 不因终态推送未确认置 1
+变更：2026-11-09-terminal-sync-background
+状态：active
+摘要：终态转后台秒回
+场景正文：
+- 场景：终态转后台秒回 — Given 平台已连接且本地 DB 该变更为 archived，When flow done 调用终态强校验且后台通道 spawn 成功，Then 命令不等待推送完成即返回
+全文：.sillyspec/changes/archive/2026-11-09-terminal-sync-background/requirements.md#FR-01
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-terminal-sync-background:flow:测试绑定FR-01
+  tests: test/terminal-sync-strict.test.mjs「终态+后台可用→pending marker+delegated background+不置 exitCode」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-terminal-sync-background
+  status: active
+
+## FR-core-engine-279 SILLYSPEC_SYNC_BG=0 逃生阀保留内联强校验旧行为;后台 spawn 异常降级内联
+变更：2026-11-09-terminal-sync-background
+状态：active
+摘要：逃生阀与降级
+场景正文：
+- 场景：逃生阀与降级 — Given `SILLYSPEC_SYNC_BG=0` 且终态推送通道失败，When 终态强校验执行，Then 行为与改造前完全一致（🚨 + 自救命令 + exitCod
+全文：.sillyspec/changes/archive/2026-11-09-terminal-sync-background/requirements.md#FR-02
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-terminal-sync-background:flow:测试绑定FR-02
+  tests: test/terminal-sync-strict.test.mjs「SYNC_BG=0 内联旧语义回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-terminal-sync-background
+  status: active
+
+## FR-core-engine-280 bg 子进程轮后对 pending marker 补推并按 sync treeOk 写 ok/failed;pending 超 10min 无更新按失败补报
+变更：2026-11-09-terminal-sync-background
+状态：active
+摘要：后台收敛与悬挂自愈
+场景正文：
+- 场景：后台收敛与悬挂自愈 — Given 存在 pending marker 且 bg 子进程完成主轮同步，When 子进程收敛扫描执行，Then marker 按真实推送结果写 ok/failed；G
+全文：.sillyspec/changes/archive/2026-11-09-terminal-sync-background/requirements.md#FR-03
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-terminal-sync-background:flow:测试绑定FR-03
+  tests: test/final-sync-marker.test.mjs「bg 收敛按 treeOk 写 ok/failed」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-terminal-sync-background
+  status: active
+
+## FR-core-engine-281 下一条命令扫 marker:ok 静默清理;failed/超时 pending 打横幅+自救命令
+变更：2026-11-09-terminal-sync-background
+状态：active
+摘要：补报消费
+场景正文：
+- 场景：补报消费 — 
+全文：.sillyspec/changes/archive/2026-11-09-terminal-sync-background/requirements.md#FR-04
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-terminal-sync-background:flow:测试绑定FR-04
+  tests: test/final-sync-marker.test.mjs「ok 静默清理/failed 横幅+自救命令+清理」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-terminal-sync-background
+  status: active
+
+## FR-core-engine-282 sillyspec 仓全量测试绿
+变更：2026-11-09-terminal-sync-background
+状态：active
+摘要：全量回归门
+场景正文：
+- 场景：全量回归门 — Given 改造合入后，When 跑 sillyspec 仓全量测试，Then 退出码 0 零失败。
+全文：.sillyspec/changes/archive/2026-11-09-terminal-sync-background/requirements.md#FR-05
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-terminal-sync-background:flow:测试绑定FR-05
+  tests: test/run-tests.mjs「sillyspec 全量 node --test 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-terminal-sync-background
+  status: active

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-09-terminal-sync-background",
+  "reviewer": "subagent",
+  "reviewedAgainst": "aae92f7287cc8a74923a07996ca916846cc22339",
+  "reviewedAt": "2026-11-09T15:13:09+08:00",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "声明的 _module-map.yaml sync 模块登记未提交，HEAD 不含该交付件",
+      "detail": "评审任务书交付面列出 .sillyspec/docs/sillyspec/modules/_module-map.yaml（sync 模块登记 src/final-sync.js），但 aae92f72 的提交 stat 不含该文件，git diff 显示登记（+ src/final-sync.js 行）仅存在于工作区未提交态。工作区该文件为 dirty（M 状态），多 agent 并行仓下有被 reset/覆盖丢失的风险；module map 是治理登记件，丢失会使 src/final-sync.js 脱离模块卡索引。建议尽快以显式 pathspec 补提交该文件。",
+      "evidence": "git show aae92f72 --stat 无 _module-map.yaml；git diff -- .sillyspec/docs/sillyspec/modules/_module-map.yaml 显示 +      - src/final-sync.js（未提交，位于 _module-map.yaml:231）"
+    },
+    {
+      "severity": "P3",
+      "title": "测试用例数声明与实际不符：称 24 例（强校验 15 例）实为 23 例（14 例）",
+      "detail": "提交信息与任务声明称 terminal-sync-strict 15 例 + marker 9 例 = 24 例；实测 git show aae92f72 两文件 grep '^test(' 计数为 14 + 9 = 23，node --test 输出 tests 23 / pass 23 / fail 0。属声明数字虚高 1 例（非缺功能——4 例新增后台化用例与 9 例 marker 用例均在场且全绿），但提交信息作为审计锚点应与实际一致。",
+      "evidence": "git show aae92f72:test/terminal-sync-strict.test.mjs | grep -c '^test(' = 14；node --test test/final-sync-marker.test.mjs test/terminal-sync-strict.test.mjs → tests 23, pass 23, fail 0"
+    },
+    {
+      "severity": "P3",
+      "title": "consume 的超时 pending 验证性同步在前台内联执行，慢链路下给下一条命令附加有界延迟",
+      "detail": "consumeFinalSyncMarkers 挂在 triggerSyncImpl 后台化分支内且被 await：对超 TTL 的 pending marker 走默认 syncImpl 真网络验证（sync.js 自身预算，非独立短超时），慢平台下该命令前台需等验证完成。发生条件苛刻（marker 存活超 10min 且 bg 已死）且有界（sync 内部预算封顶），不违背 FR-04「容错不阻断」（异常被 catch、不超预算），但与「命令秒级收尾」的主路径定位存在张力。可接受，如后续收紧可为验证性 sync 注入短窗预算。",
+      "evidence": "src/final-sync.js consumeFinalSyncMarkers 内 syncImpl(m.change) 无独立 timeout；src/run/shared.js triggerSyncImpl 中 await consumeFinalSyncMarkers(cwd, platformOpts) 先于 spawnBackgroundSync"
+    },
+    {
+      "severity": "P3",
+      "title": "spawn 成功后 marker 落盘失败时，后台推送若最终失败将无补报（静默半态窗口）",
+      "detail": "triggerSyncTerminalStrictImpl 中 writeFinalSyncMarker 在 spawn 成功后 catch 吞掉（注释称「残留无 marker 的推送由 bg 轮自愈」）——自愈仅指收敛，marker 缺失时 bg 轮照常推送但推送失败后无 consume 补报入口，半态暴露回到无人知晓状态。触发前提是 temp 目录 mkdir/writeFileSync 失败（磁盘满/权限），概率极低且逃生阀 platform sync 可手动兜底，记 P3 不阻断。",
+      "evidence": "src/run/shared.js 新增分支 catch { /* marker 落盘失败不阻断后台化 */ }"
+    },
+    {
+      "severity": "P3",
+      "title": "SILLYSPEC_SYNC_BG=0 逃生阀期间 consume 不运行，历史 marker 在阀开启期永不消费",
+      "detail": "consumeFinalSyncMarkers 仅挂在 triggerSyncImpl 的后台化分支内（条件含 SILLYSPEC_SYNC_BG !== '0'），用户开逃生阀后，阀开启前遗留的 pending/failed marker 不再被任何命令消费，永久滞留 temp/final-sync/（无害文件残留；新终态操作走内联路径自身带 🚨 显性化，暴露契约未失守）。可在阀分支也挂 consume 或依赖 temp 清理策略，非必须。",
+      "evidence": "src/run/shared.js triggerSyncImpl：consumeFinalSyncMarkers 调用点位于 if (... SILLYSPEC_SYNC_BG !== '0' && !SILLYSPEC_BG_SYNC_CWD) 分支内"
+    }
+  ],
+  "blindSpotAnswers": "盲维四问复核：①并发写——marker 为整文件 JSON 覆写，状态机单向 pending→ok|failed 成立：前台只写 pending、bg finalize 只写 ok/failed、consume 只删不改；最坏互覆（pending 覆 ok/failed）落在 TTL 验证路径，验证性 sync 幂等可再收敛，无死锁无悬挂放大，design.md 预设成立。②崩溃残留——bg 崩溃/detached 早退残留 pending 由 consume 的 10min TTL 验证路径闭环（ok 静默删/failed 🚨+自救后删），FR-03 有对应用例（超 TTL 验证 ok 删除、验证失败补报）覆盖；闭环成立。③降级链——terminalInline 闭包与 git show aae92f72~1 旧版内联实现逐字一致（timeoutMs=max(env,45s)/raceWithAbort/signal 形状注释/conflict skip/treeOk fail-closed/🚨+自救+exitCode=1 全保留）；三条降级触发（env=0、spawn 抛异常、未知 status）均正确 fall-through 到 terminalInline，各有测试断言（syncImpl 被调/delegated undefined/exit 1/横幅文本）。④作用域——final-sync.js resolveRoot 与 bg-sync.js:145/256 使用同一 resolveRuntimeRoot 表达式，bg 子进程经 SILLYSPEC_BG_SYNC_RUNTIME_ROOT env 回填 platformOpts.runtimeRoot，同一仓同区解析；marker 文件名经 [^A-Za-z0-9._-] sanitize；rmSync(join(dir, m.__file)) 的 __file 取自 readdirSync 目录列表而非 JSON 内容，无路径穿越，删除严格限 <runtimeRoot>/temp/final-sync/ 内（RUNTIME_TEMP_DIRNAME='temp' 已核对）。危险原语扫描：全 diff 无 git reset/--force/全量删除；rmSync 仅 4 处限 marker 文件 + 测试 tmpdir 自清理。",
+  "declaredSurfaceNotes": "声明面异常两项核实：①声明外 4 文件（src/doctor-diagnostics.js、src/flow.js、src/run/complete-handlers.js、test/archive-landing-epilogue.test.mjs）——git show 811c6b05 --stat 证实全部来自该提交，提交属并行活跃变更 2026-11-09-archive-landing-visibility（其 tasks.md/flow-state.yaml 同提交，提交信息含该变更名 task-01）；freeze 窗口 baseline=74f35c1e 早于 811c6b05（14:49），aae92f72（15:04）晚于它，git diff --name-only 74f35c1e..aae92f72 全 25 文件中恰含此 4 文件——确系冻结窗口夹带，非本变更产物，结论成立。②「声明文件 sync.md 不在冻结面」——git show aae92f72 --stat 证实 .sillyspec/docs/sillyspec/modules/sync.md（9 行变更）与 sync.changelog.md 确实被 aae92f72 提交，且 change-patch.json files[] 与 modules(sync, docTouched:true) 均在册；矛盾根源是 change-patch.json modules[].doc 记录为 docs/sillyspec/modules/sync.md（缺 .sillyspec/ 前缀），若 CLI 以该口径对实际路径判定即误报「不在冻结面」——确认为 CLI path 解析口径问题，如实记录，非交付缺陷。"
+}

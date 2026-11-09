@@ -400,3 +400,12 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：84407be4
 理由：仅 required-evidence 与 target_files 对账两门（纯 git/文档事实）前移到实测门前并入 R16 聚合；PASS 封顶/parity/超时降档等消费实测结果的门不动。evidence：本案 13:33 与 14:00-14:10 每轮先付 3.5 分钟实测再被对账门拦实证；两门调用链已核对无实测数据依赖。风险护栏：执行期调用链复核，发现隐藏依赖即回退该门原位记录在案。
+
+## D-runtime-024@v1 2026-11-09-terminal-sync-background——复用既有 detached 后台通道（bg-sync）承载终态推送，前台只落 marker 不等待。
+状态：implemented
+变更：2026-11-09-terminal-sync-background
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-09-terminal-sync-background/design.md
+文件：src/doctor-diagnostics.js, src/final-sync.js, src/flow.js, src/run/bg-sync.js, src/run/complete-handlers.js, src/run/shared.js, test/archive-landing-epilogue.test.mjs, test/final-sync-marker.test.mjs, test/terminal-sync-strict.test.mjs
+最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
+理由：复用既有 detached 后台通道（bg-sync）承载终态推送，前台只落 marker 不等待。三件套： 1. **新模块 `src/final-sync.js`**：终态 marker 的读写与两段消费逻辑。marker 落 `runtimeTempPath(runtimeRoot, 'final-sync/<change>.json')`（temp 分层，可随时删），内容 `{change, status:'pending'|'ok'|'failed', ts, detail}`。导出 `writeFinalSyncMarker` / `readFinalSyncMarkers` / `finalizePendingFinalSyncMarkers`（bg 子进程侧：对 pending 逐个调 `sync()` 按 `treeOk` 写 ok/failed）/ `consumeFinalSyncMarkers`（命令侧：ok 静默删；failed 打 🚨+自救命令后删；pending 超 `FINAL_SYNC_PENDING_TTL_MS=10min` 做一次验证性 sync，成功删、失败报后删——解析失败/IO 异常一律跳过不阻断主命令）。 2. **`src/run/shared.js` 终态强校验分支改造**：`triggerSyncTerminalStrictImpl` 终态路径先判 `SILLYSPEC_SYNC_BG==='0'` 或后台不可用 → 走原内联路径（原代码原样保留，含 raceWithAbort/🚨/exitCode=1）；否则写 pending marker → 显式调 `bg.spawnBackgroundSync`（经 `opts.bgImpl` 注入缝，对齐 syncImpl 惯例）→ `spawned`/`coalesced` 返回 `{confirmed:false, delegated:'background'}`（不设 exitCode），其余结果/抛异常 → 降级内联旧路径。 3. **`src/run/bg-sync.js` 子进程收敛**：`runBgSyncFromEnv` 主轮结束后（终态补推段旁）调 `finalizePendingFinalSyncMarkers`——主轮 triggerSync 已把树推完，此处对 pending marker 的补推通常为增量 no-op、仅取 `treeOk` 结果收敛 marker。 不卡前台的关键：内联等待（45s 预算 race）只保留在逃生阀与降级路径；主路径前台只做本地文件写 + spawn，毫秒级。大 patch（MB 级，多会话并行仓常规态）传输在后台子进程完成（总预算 150s，2026-11-09 实证 5.8MB@1Mbps≈45-80s 可容纳）；超预算残留由 pending marker 的下条命令验证/重试闭环兜住。

@@ -112,3 +112,4 @@
 | 2026-11-06 | 2026-11-06-knowledge-propose-body-file | 知识提议命令支持从文件读正文 |
 | 2026-11-08 | 2026-11-08-flow-askuser-confirm | 轻量变更确认环节改用工具问询 |
 | 2026-11-08 | 2026-11-08-bare-commit-attribution-narrow | 裸提交归属判定细分收窄冻结面 |
+| 2026-11-09 | 2026-11-09-terminal-sync-background | 终态同步后台化三态marker补报免卡前台 |

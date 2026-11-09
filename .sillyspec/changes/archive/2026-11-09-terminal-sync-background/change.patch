@@ -1,0 +1,875 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.changelog.md b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+index 6b997183..abcd0eee 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+@@ -1,3 +1,4 @@
++- 2026-11-09-terminal-sync-background | 终态同步后台化免卡前台：flow done/complete/change-delete 终态强校验（原内联 max(env,45s)，多会话并行仓 change.patch MB 级时必熔断 exit 1——2026-11-09 生产实证 5.66MB×1Mbps）改走既有 detached 后台通道，前台落三态 marker（pending→bg 子进程按 sync treeOk 收敛 ok/failed，超 10min TTL 验证自愈），下一条命令消费补报（ok 静默清理/failed 🚨+自救命令）；SILLYSPEC_SYNC_BG=0 逃生阀与 spawn 失败降级保留内联旧语义（🚨+exit1 契约不变），平台 backend 零改动。新增 src/final-sync.js；测试锚 test/final-sync-marker.test.mjs（9 例）+ test/terminal-sync-strict.test.mjs 改造（15 例）
+ - ql-20260912-009-06b4 | computeSpecOps rename 检测 O(N×M)→hash 索引；hashFiles buf 随行携带消除变更文件双读
+ - ql-20260914-007-fcb7 | sync-noise.js 加变更级 change_deleted 回执噪音闸（syncChangeDeletedLog/Warn/noteChangeDeletedResolved，按变更名 marker 窗口）；sync() 三处回执行走闸 + 成功精清 + platform sync manual 旁路
+ - 2026-09-28-archive-timeline-bake | 归档链时间线烤制：runArchiveChain rename 后把合成时间线烤为 archive/<变更名>/timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面；fail-open 不阻断归档）——事件流机本位（.runtime gitignore）不随 .runtime 存活消失，归档包进 git 跨机可读；readWatcherEvents 增 path 直读形态（坏行容忍同语义）；watcher timeline CLI 在本机 .runtime 无事件流时回退读归档副本并注记事件来源（副本也缺失保持既有 exit 2）。测试锚 test/archive-timeline-bake.test.mjs
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index 1c9d1e97..d3dc7d67 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -4,10 +4,11 @@ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # sync
+-> 最后更新：2026-10-13
+-> 最近变更：2026-10-13-sync-ledger-tombstone（thin，删除台账+台账墓碑——事故 2026-10-13-new-change-e5a27813 幽灵变更：DB 行被外部物理清除后 X1 墓碑链失源、platform sync --change 假成功 exit 0，平台行永挂 active。新增 src/deleted-ledger.js（.runtime/deleted-changes.jsonl 终态追加账本，fail-open/latest-wins/坏行容错）；deleteChange/unregisterChange 事务后落账；sync() 行缺失分支查台账命中终态即 _pushLedgerTombstone 合成最小载荷补推墓碑（deleted→location=deleted、archived→location=archive，base_ts 缺失按平台契约无条件接受，quick-* 豁免）；index.js platform sync --change 失败 exit 1 修假成功。测试锚：test/deleted-ledger.test.mjs（7 例））
+-> 前次变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件：husky pre-commit 调 src/commit-guard.js，S1 声明面对账+S2 跨变更目录检测，fail-open exit 恒 0 + write-audit.jsonl 法证链）
+-> 模块路径：src/sync.js、src/deleted-ledger.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
++> 最后更新：2026-11-09
++> 最近变更：2026-11-09-terminal-sync-background（终态同步后台化免卡前台：triggerSyncTerminalStrict 主路径改走 detached 后台通道+三态 marker（pending→bg 按 treeOk 收敛 ok/failed→下条命令 consume 补报），SILLYSPEC_SYNC_BG=0/降级保留内联旧语义；新增 src/final-sync.js）
++> 前次变更：2026-10-13-sync-ledger-tombstone（thin，删除台账+台账墓碑——事故 2026-10-13-new-change-e5a27813 幽灵变更：DB 行被外部物理清除后 X1 墓碑链失源、platform sync --change 假成功 exit 0，平台行永挂 active。新增 src/deleted-ledger.js（.runtime/deleted-changes.jsonl 终态追加账本，fail-open/latest-wins/坏行容错）；deleteChange/unregisterChange 事务后落账；sync() 行缺失分支查台账命中终态即 _pushLedgerTombstone 合成最小载荷补推墓碑（deleted→location=deleted、archived→location=archive，base_ts 缺失按平台契约无条件接受，quick-* 豁免）；index.js platform sync --change 失败 exit 1 修假成功。测试锚：test/deleted-ledger.test.mjs（7 例））
++> 更前变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件：husky pre-commit 调 src/commit-guard.js，S1 声明面对账+S2 跨变更目录检测，fail-open exit 恒 0 + write-audit.jsonl 法证链）
++> 模块路径：src/sync.js、src/deleted-ledger.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js、src/final-sync.js（write-audit 见法证链注记）
+ 
+ ## 职责
+ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index fe7f97b9..8667f5a2 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -36,7 +36,8 @@ import { pruneTimestampedEntries } from './runtime-hygiene.js';
+ import { CHECK_SEVERITY } from './constants.js';
+ import { readGateSnapshotLedger, selectStaleSnapshots } from './run/gate-snapshot-ledger.js'
+ import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
+-import { readFrictionLedger } from './friction-ledger.js';
++import { readFrictionLedger } from './friction-ledger.js'
++import { archiveLandedInHeadTree } from './run/complete-handlers.js';
+ // FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
+ // fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
+ import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
+@@ -872,6 +873,60 @@ export function detectInjectionBudget(cwd) {
+  * .sillyspec/.runtime/worktrees（worktree.js:24——勿用 runtimeRoot，平台模式分离只影响
+  * execute-runs 族）。
+  */
++// ── 2026-11-09-archive-landing-visibility FR-02：归档提交残留（半归档半态）──────────
++// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：flow done 归档子步把归档件
++// 补暂存后由 agent 手工提交（设计内交接，共享仓竞态 + hook 纪律）——交接被漏时归档件
++// 滞留共享暂存区（pull/清理/index 手术可丢），且 flow done 输出已翻篇无从发现。本检查
++// 只读兜底：暂存区条目（src/dst 任一侧）落在 changes/<名>/ 或 changes/archive/<名>/
++// 且该变更未落 HEAD 树 → WARNING + 修复命令。复用 archiveLandedInHeadTree 判定；
++// 含他人半归档残留（complete-handlers othersResidual 只在归档时刻可见，此处常驻可见）。
++export function detectArchiveCommitResidue(cwd) {
++  const base = { name: 'archive_commit_residue', label: '归档提交残留（staged 未落库）', safe_actions: [] }
++  try {
++    // 非 git 仓显式判定（gitQuiet 失败不抛错而是空返回，靠 catch 抓不到非仓态）。
++    const insideRepo = String(gitQuiet(cwd, ['rev-parse', '--is-inside-work-tree']) || '').trim()
++    if (insideRepo !== 'true') {
++      return { ...base, findings: ['非 git 仓（或 git 不可用）——skipped'], pass: true, severity: null, skipped: true }
++    }
++    const stagedRaw = String(gitQuiet(cwd, ['diff', '--cached', '--name-status']) || '')
++    if (!stagedRaw.trim()) {
++      return { ...base, findings: ['暂存区无归档相关条目'], pass: true, severity: CHECK_SEVERITY.PASSED }
++    }
++    const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
++    const owners = new Set()
++    // 解析口径对齐 resolveArchiveCommitPathspecs（--name-status：R 行 src<TAB>dst
++    // 两格、A/M/D 单格——TAB 分隔逐格取，勿用 porcelain 的 ' -> ' 形态）。
++    for (const line of stagedRaw.split('\n')) {
++      if (!line.trim()) continue
++      for (const cell of line.split('\t').slice(1)) {
++        const raw = cell.trim().replace(/^"|"$/g, '')
++        if (!raw) continue
++        const m = /^\.sillyspec\/changes\/(?:archive\/)?([^/]+)\//.exec(raw)
++        if (m && m[1] !== 'archive') owners.add(m[1])
++      }
++    }
++    const residue = []
++    for (const owner of owners) {
++      if (!archiveLandedInHeadTree({ headTreeFiles, changeName: owner })) residue.push(owner)
++    }
++    if (residue.length === 0) {
++      return { ...base, findings: ['暂存区归档相关条目均已落 HEAD（无半归档残留）'], pass: true, severity: CHECK_SEVERITY.PASSED }
++    }
++    const findings = residue.map((owner) =>
++      `半归档残留：变更 ${owner} 的归档条目已进暂存区但 HEAD 树无 archive/${owner}/——pull/清理/index 手术会丢归档件`,
++    )
++    base.safe_actions.push({
++      action: residue.map((owner) =>
++        `git commit -m "chore(archive): ${owner} 归档留档" -- .sillyspec/changes/${owner} .sillyspec/changes/archive/${owner}`,
++      ).join(' ; '),
++      risk: 'low',
++    })
++    return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
++  } catch (e) {
++    return { ...base, findings: [`探测降级（git 不可用或非仓库：${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
++  }
++}
++
+ export function detectWorktreeHealth(cwd) {
+   const base = { name: 'worktree_health', label: 'worktree 隔离健康', safe_actions: [] }
+   try {
+@@ -1744,7 +1799,9 @@ export async function runDoctorDiagnostics({ cwd }) {
+   // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
+   // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
+   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
+-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
++  // 2026-11-09-archive-landing-visibility FR-02：归档提交残留（只读 WARNING）
++  const archiveCommitResidue = detectArchiveCommitResidue(cwd)
++  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
+ 
+   return {
+     dimensions,
+diff --git a/src/final-sync.js b/src/final-sync.js
+new file mode 100644
+index 00000000..caa5b9d6
+--- /dev/null
++++ b/src/final-sync.js
+@@ -0,0 +1,159 @@
++/**
++ * final-sync.js — 终态同步三态 marker 与两段消费(2026-11-09-terminal-sync-background)。
++ *
++ * 背景:终态强校验(triggerSyncTerminalStrict)原为内联有界等待(预算 max(env,45s)),
++ * 多会话并行仓冻结面常含并行提交,change.patch 达 MB 级(2026-11-09 实证 5.66MB×1Mbps
++ * 链路),45s 必熔断 → exit 1 + 收口体感 hang。本模块把「结果可判」从前台挪到异步:
++ * 终态推送转后台通道,前台落 pending marker;bg 子进程按 sync treeOk 收敛 ok/failed;
++ * 下一条命令消费(ok 静默清理 / failed 🚨+自救命令 / pending 超 TTL 验证后清理或补报)。
++ *
++ * marker 落 runtime temp 分层(可随时整体删除,非契约存储):
++ *   <runtimeRoot>/temp/final-sync/<change>.json = { change, status, ts, detail? }
++ *
++ * 状态机单向 pending → ok|failed;并发写最坏互覆,任一方结果均可收敛(失败互覆窗口由
++ * TTL 验证路径兜住,验证性 sync 幂等)。消费动作全部容错——marker 故障绝不阻断主命令。
++ */
++import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
++import { join } from 'path';
++
++/** pending 无更新视为悬挂的时限(bg 总预算 150s + 收尾余量之后)。 */
++export const FINAL_SYNC_PENDING_TTL_MS = 10 * 60 * 1000;
++
++/** 🚨 补报横幅标签(与强校验内联路径的「平台文件树推送未确认」同族,带自救命令)。 */
++export const FINAL_SYNC_WARN_TAG = '[终态同步补报]';
++
++/** marker 目录:<runtimeRoot>/temp/final-sync(temp 分层=可随时整体删除)。 */
++function finalSyncDir(runtimeRoot) {
++  return join(runtimeRoot, 'temp', 'final-sync');
++}
++
++/**
++ * 解析 runtimeRoot(动态 import 防循环:shared 仅函数内动态引用本模块,本模块反向同款)。
++ * @param {string} cwd @param {object} platformOpts @returns {Promise<string>}
++ */
++async function resolveRoot(cwd, platformOpts) {
++  const { resolveRuntimeRoot } = await import('./run/shared.js');
++  return resolveRuntimeRoot(platformOpts, platformOpts?.specRoot || join(cwd, '.sillyspec'));
++}
++
++function markerFileName(change) {
++  // 变更名受控(日期-名),防御性 sanitize 防 path 拼接意外
++  return `${String(change).replace(/[^A-Za-z0-9._-]/g, '_')}.json`;
++}
++
++function readMarkersSync(runtimeRoot) {
++  const dir = finalSyncDir(runtimeRoot);
++  if (!existsSync(dir)) return [];
++  let names = [];
++  try { names = readdirSync(dir); } catch { return []; }
++  const out = [];
++  for (const n of names) {
++    if (!n.endsWith('.json')) continue;
++    try {
++      const raw = JSON.parse(readFileSync(join(dir, n), 'utf8'));
++      if (raw && typeof raw.change === 'string' && typeof raw.status === 'string') {
++        out.push({ ...raw, __file: n });
++      }
++    } catch { /* 脏件跳过(宁可漏报不阻断) */ }
++  }
++  return out;
++}
++
++/**
++ * 写终态 marker(整文件原子替换语义;失败抛给调用方——写失败不阻断主链,调用方 catch)。
++ * @param {string} cwd @param {object} platformOpts
++ * @param {string} change @param {'pending'|'ok'|'failed'} status @param {string|null} [detail]
++ */
++export async function writeFinalSyncMarker(cwd, platformOpts, change, status, detail = null) {
++  const runtimeRoot = await resolveRoot(cwd, platformOpts);
++  const dir = finalSyncDir(runtimeRoot);
++  mkdirSync(dir, { recursive: true });
++  const body = { change, status, ts: Date.now() };
++  if (detail) body.detail = String(detail).slice(0, 200);
++  writeFileSync(join(dir, markerFileName(change)), JSON.stringify(body));
++}
++
++/**
++ * 读全部终态 marker(附带 __file 供消费方定位删除);目录缺失返回 [],脏件跳过不抛。
++ * @param {string} cwd @param {object} platformOpts @returns {Promise<Array<object>>}
++ */
++export async function readFinalSyncMarkers(cwd, platformOpts) {
++  const runtimeRoot = await resolveRoot(cwd, platformOpts);
++  return readMarkersSync(runtimeRoot);
++}
++
++/**
++ * bg 子进程侧收敛:对 pending marker 逐个补推一次并按 sync treeOk 写 ok/failed。
++ * 主轮 triggerSync 通常已把树推完,此处补推多为增量 no-op、仅取结果收敛 marker。
++ * 单 marker 失败不影响其余;整体异常由调用方 catch(bg 轮循环 best-effort 契约)。
++ * @param {string} cwd @param {object} platformOpts
++ * @param {object} [opts] { syncImpl(注入缝,默认 sync.js sync) }
++ */
++export async function finalizePendingFinalSyncMarkers(cwd, platformOpts = {}, opts = {}) {
++  const runtimeRoot = await resolveRoot(cwd, platformOpts);
++  const pending = readMarkersSync(runtimeRoot).filter((m) => m.status === 'pending');
++  if (pending.length === 0) return;
++  const syncImpl = opts.syncImpl ?? (async (name) => (await import('./sync.js')).sync(name, cwd, {}));
++  const dir = finalSyncDir(runtimeRoot);
++  for (const m of pending) {
++    let ok = false;
++    let detail = null;
++    try {
++      const r = await syncImpl(m.change);
++      ok = !!(r && r.treeOk === true);
++      if (!ok) detail = (r && r.errors && r.errors[0]) || '文件树通道未确认收敛(treeOk!=true)';
++    } catch (e) {
++      detail = (e && e.message) || String(e);
++    }
++    try {
++      const body = { change: m.change, status: ok ? 'ok' : 'failed', ts: Date.now() };
++      if (!ok && detail) body.detail = String(detail).slice(0, 200);
++      writeFileSync(join(dir, markerFileName(m.change)), JSON.stringify(body));
++    } catch { /* 收敛写失败留 pending,由 TTL 验证路径兜底 */ }
++  }
++}
++
++/**
++ * 命令侧消费:ok 静默清理;failed 🚨 横幅+自救命令后清理;pending 未超 TTL 跳过
++ * (等 bg 收敛),超 TTL 做一次验证性 sync——成功静默清理,失败 🚨 补报后清理
++ * (宁可重复不静默;误报成本低且 platform sync 手动即真相)。全程容错不阻断主命令。
++ * @param {string} cwd @param {object} platformOpts
++ * @param {object} [opts] { syncImpl, now, ttl(默认 FINAL_SYNC_PENDING_TTL_MS) }
++ */
++export async function consumeFinalSyncMarkers(cwd, platformOpts = {}, opts = {}) {
++  const runtimeRoot = await resolveRoot(cwd, platformOpts);
++  const markers = readMarkersSync(runtimeRoot);
++  if (markers.length === 0) return;
++  const now = opts.now ?? Date.now();
++  const ttl = opts.ttl ?? FINAL_SYNC_PENDING_TTL_MS;
++  const syncImpl = opts.syncImpl ?? (async (name) => (await import('./sync.js')).sync(name, cwd, {}));
++  const dir = finalSyncDir(runtimeRoot);
++  for (const m of markers) {
++    try {
++      if (m.status === 'ok') {
++        rmSync(join(dir, m.__file), { force: true });
++        continue;
++      }
++      if (m.status === 'failed') {
++        console.error(`🚨 ${FINAL_SYNC_WARN_TAG} 变更「${m.change}」归档/删除终态未确认同步到平台：${m.detail || '文件树通道未确认收敛'}`);
++        console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${m.change}`);
++        rmSync(join(dir, m.__file), { force: true });
++        continue;
++      }
++      // pending:未超 TTL 等 bg 收敛;超 TTL 验证性同步定生死
++      if (now - (m.ts || 0) < ttl) continue;
++      let ok = false;
++      try {
++        const r = await syncImpl(m.change);
++        ok = !!(r && r.treeOk === true);
++      } catch { ok = false; }
++      if (ok) {
++        rmSync(join(dir, m.__file), { force: true });
++        continue;
++      }
++      console.error(`🚨 ${FINAL_SYNC_WARN_TAG} 变更「${m.change}」终态推送超时未收敛（验证性同步失败）。`);
++      console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${m.change}`);
++      rmSync(join(dir, m.__file), { force: true });
++    } catch { /* 单 marker 消费失败跳过,不影响其余与主命令 */ }
++  }
++}
+diff --git a/src/flow.js b/src/flow.js
+index 3639e0da..2b49c4a8 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2922,6 +2922,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：flow done 到此 =
+   // 变更已归档，文件树推送失败不再静默半态（🚨 告警 + 自救命令 + exit 1）
+   try { await triggerSyncTerminalStrict(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
++  // 2026-11-09-archive-landing-visibility FR-01：归档落库终态尾块——输出最后内容。
++  // 动机：runArchiveChain 内的「🚨 未落库」打在中段，尾部消费（agent tail/人扫尾行）只见
++  // 「✅ flow done 完成」假成功，归档件滞留共享暂存区（并行 index 手术可丢，同日三变更实证）。
++  // 此处独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效）；
++  // exit code 保持 0（未落库属设计内人工交接，不与收口失败的 exit≠0 语义混用）。
++  try {
++    const { computeArchiveLanding, renderArchiveLandingEpilogue } = await import('./run/complete-handlers.js')
++    console.log(renderArchiveLandingEpilogue(computeArchiveLanding({ cwd, changeName: change })))
++  } catch { /* 尾块 best-effort，不阻断协议面 */ }
+   return { change, substeps: doneList }
+ }
+ 
+diff --git a/src/run/bg-sync.js b/src/run/bg-sync.js
+index 4ca9a17c..ddd7be0b 100644
+--- a/src/run/bg-sync.js
++++ b/src/run/bg-sync.js
+@@ -302,6 +302,15 @@ export async function runBgSyncFromEnv(env = process.env) {
+   } catch (e) {
+     console.warn(`[spec-sync-bg] 终态补推扫描异常（best-effort）: ${(e && e.message) || e}`);
+   }
++  // 终态 marker 收敛（2026-11-09-terminal-sync-background）：主轮已把终态变更树推完，
++  // 此处对 pending marker 补推多为增量 no-op、仅取 sync treeOk 结果写 ok/failed——
++  // 「结果可判」从内联前台挪到本收敛点；失败/残留由下条命令的 consume 补报兜底。
++  try {
++    const { finalizePendingFinalSyncMarkers } = await import('../final-sync.js');
++    await finalizePendingFinalSyncMarkers(cwd, platformOpts, { syncImpl: (name) => import('../sync.js').then((m) => m.sync(name, cwd, {})) });
++  } catch (e) {
++    console.warn(`[spec-sync-bg] 终态 marker 收敛异常（best-effort，下条命令补报兜底）: ${(e && e.message) || e}`);
++  }
+   console.log(`[spec-sync-bg] 后台同步完成 ${new Date().toISOString()}: ${changeName}`);
+   removeBgSyncLock(runtimeRoot);
+ }
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 8780cb80..5e4e9b69 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -862,6 +862,43 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir,
+  * @param {{headTreeFiles:string, changeName:string}} p
+  * @returns {boolean}
+  */
++// ── 2026-11-09-archive-landing-visibility FR-01：终态归档落库重算 + 渲染 ──────────
++// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：runArchiveChain 内的「🚨 归档提交
++// 未落库」打在输出中段，最后一行是「✅ flow done 完成」——agent/人尾部消费（tail）得到假
++// 成功，归档件滞留共享暂存区（并行 index 手术可丢）。flow.js 终态打印时用 computeArchiveLanding
++// 独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效），渲染结果作为输出
++// 最后内容。归档提交执行主体不变（agent 手工执行，共享仓竞态 + hook 纪律见上方注释）。
++export function computeArchiveLanding({ cwd, changeName }) {
++  const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
++  const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
++  const landed = archiveLandedInHeadTree({ headTreeFiles, changeName })
++  let commitCommand = null
++  if (!landed) {
++    const { pathspecs } = resolveArchiveCommitPathspecs({
++      changeName,
++      stagedNameStatus: String(stagedRaw || ''),
++      headTreeFiles,
++      existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
++    })
++    if (pathspecs.length > 0) {
++      commitCommand = `git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`
++    }
++  }
++  return { landed, commitCommand }
++}
++
++/** FR-01 渲染纯函数：落库 → 单行确认；未落库 → 🚨 尾块（作为 flow done 输出最后内容）。 */
++export function renderArchiveLandingEpilogue({ landed, commitCommand }) {
++  if (landed) return '✅ 归档提交已落库（HEAD 树含本变更归档路径）。'
++  const lines = [
++    '🚨 归档提交尚未落库：归档件停在暂存区——pull/清理/工作区重置会丢归档（终态重算判定）。',
++    '   立即执行（幂等；pathspec 限本变更面）：',
++  ]
++  if (commitCommand) lines.push(`   ${commitCommand}`)
++  lines.push('   执行后核对：git log --oneline -1 应见「chore(archive): <变更名> 归档留档」。')
++  return lines.join('\n')
++}
++
+ export function archiveLandedInHeadTree({ headTreeFiles, changeName }) {
+   const prefix = '.sillyspec/changes/archive/'
+   const name = String(changeName || '')
+diff --git a/src/run/shared.js b/src/run/shared.js
+index ee23f645..ce46f1cb 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1001,6 +1001,13 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
+     && process.env.SILLYSPEC_SYNC_BG !== '0'
+     && !process.env.SILLYSPEC_BG_SYNC_CWD) {
+     try {
++      // 终态 marker 补报消费（2026-11-09-terminal-sync-background）：上一轮归档/删除的
++      // 终态推送结果在此对用户可见——ok 静默清理、failed 🚨+自救、超时 pending 验证后
++      // 处置。挂在后台化分支（每条带同步的命令必经），全程容错不阻断本轮同步。
++      try {
++        const { consumeFinalSyncMarkers } = await import('../final-sync.js')
++        await consumeFinalSyncMarkers(cwd, platformOpts)
++      } catch { /* marker 消费失败不阻断主同步 */ }
+       const bg = await import('./bg-sync.js')
+       const r = await bg.spawnBackgroundSync(cwd, changeName, platformOpts, opts)
+       if (r.status === 'spawned') {
+@@ -1051,7 +1058,7 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
+ }
+ 
+ /**
+- * 终态强校验同步（2026-10-17-archive-half-state-location-stuck-active）。
++ * 终态强校验同步（2026-10-17-archive-half-state-location-stuck-active；2026-11-09-terminal-sync-background 后台化改造）。
+  *
+  * 背景（坑档案 docs/sillyspec/archive-half-state-location-stuck-active.md，生产实证）：
+  * triggerSync 全链 best-effort + 后台化，重试是事件驱动（「下一条命令」）——而归档/删除
+@@ -1059,19 +1066,19 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
+  * （status=archived）成功而文件树通道（location）失败 → 半态：平台「进行中」列表
+  * 幽灵滞留已归档变更，无人再碰则无限期。
+  *
+- * 与 triggerSync 的三点差异：
++ * 与 triggerSync 的差异（2026-11-09 后台化后）：
+  *   1. **终态判定驱动**：仅当 DB 该变更 status ∈ (archived, deleted) 才走强校验；
+  *      非终态（普通阶段完成的 completion 同步等）原样委托 triggerSync（后台化不变，
+- *      零行为变化）。归档收尾允许阻塞换一致性——终态动作没有「下次再推」的假设。
+- *   2. **内联有界**：绕过后台化（结果不再藏进 bg 日志文件），sync() 直跑 + raceWithAbort
+- *      预算 = max(env SILLYSPEC_SYNC_TIMEOUT_MS 可调值, 45s 后台轮下限同款)；opts.timeoutMs
+- *      显式传入时直接生效（测试注入短窗）。
+- *   3. **失败显性化**：sync() 返回 treeOk!==true（syncSpecTree ok 契约，fail-closed——
+- *      无 ok 字段视同未确认）→ 🚨 告警 + 自救命令 + process.exitCode = 1（对齐
+- *      _submitApproval 的「终态网络失败必须可见」先例）。未决冲突（result.conflict）
+- *      不在此列——冲突面已有自己的 resolve 处置横幅，重复告警是噪音。
+- *
+- * @returns {{confirmed: boolean, delegated?: boolean, skipped?: string, result?: object}}
++ *      零行为变化）。
++ *   2. **主路径转后台 marker 化**：终态推送委托 detached 后台通道（不卡前台——多会话
++ *      并行仓冻结面常含并行提交，change.patch MB 级时内联 45s 必熔断），前台落 pending
++ *      marker；bg 子进程按 sync treeOk 收敛 ok/failed，下一条命令消费补报（final-sync.js）。
++ *      返回 delegated:'background'，exit code 不再反映终态推送结果。
++ *   3. **逃生阀/降级保留内联旧语义**：SILLYSPEC_SYNC_BG=0（用户自救）或后台 spawn 异常/
++ *      不可用时回退内联有界同步（预算 max(env,45s) + treeOk fail-closed 判定 + 🚨 +
++ *      exitCode=1，契约原样——失败显性化先例保留）。
++ *
++ * @returns {{confirmed: boolean, delegated?: boolean|string, skipped?: string, result?: object}}
+  */
+ export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts = {}, opts = {}) {
+   return timedAsync('sync', () => triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts, opts))
+@@ -1108,30 +1115,55 @@ async function triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts = {},
+     await triggerSync(cwd, changeName, platformOpts, opts)
+     return { confirmed: false, delegated: true }
+   }
+-  // 终态：内联有界同步（绕过后台化——结果必须当场可判）
+-  const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
+-  let result = null
+-  try {
+-    // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
+-    // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
+-    //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
+-    //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
+-    const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
+-    result = await raceWithAbort(runSync, timeoutMs)
+-  } catch (e) {
+-    result = { synced: 0, errors: [(e && e.message) || String(e)] }
+-  }
+-  if (result === null) result = { synced: 0, errors: [`同步总预算 ${timeoutMs}ms 熔断`] }
+-  // 未决冲突：已有 resolve 处置横幅（syncSpecTree 冲突分支自带），不重复告警
+-  if (result.conflict === true) return { confirmed: false, skipped: 'conflict', result }
+-  const confirmed = result.treeOk === true
+-  if (!confirmed) {
+-    const detail = ((result.errors && result.errors[0]) || '文件树通道未确认收敛（见上方 [spec-sync]/[sync] 行）').slice(0, 200)
+-    console.error(`🚨 [终态同步] 本地${dbStatus === 'deleted' ? '删除' : '归档'}已完成，但平台文件树推送未确认：${detail}`)
+-    console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${changeName}`)
+-    if (opts.exitOnUnconfirmed !== false) process.exitCode = 1
+-  }
+-  return { confirmed, result }
++  // 终态：内联有界同步（2026-11-09-terminal-sync-background 起降级为逃生阀/降级路径——
++  // 主路径转后台 marker 化，见下方分支；本闭包 = 旧强校验语义原样保留）
++  const terminalInline = async () => {
++    const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
++    let result = null
++    try {
++      // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
++      // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
++      //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
++      //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
++      const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
++      result = await raceWithAbort(runSync, timeoutMs)
++    } catch (e) {
++      result = { synced: 0, errors: [(e && e.message) || String(e)] }
++    }
++    if (result === null) result = { synced: 0, errors: [`同步总预算 ${timeoutMs}ms 熔断`] }
++    // 未决冲突：已有 resolve 处置横幅（syncSpecTree 冲突分支自带），不重复告警
++    if (result.conflict === true) return { confirmed: false, skipped: 'conflict', result }
++    const confirmed = result.treeOk === true
++    if (!confirmed) {
++      const detail = ((result.errors && result.errors[0]) || '文件树通道未确认收敛（见上方 [spec-sync]/[sync] 行）').slice(0, 200)
++      console.error(`🚨 [终态同步] 本地${dbStatus === 'deleted' ? '删除' : '归档'}已完成，但平台文件树推送未确认：${detail}`)
++      console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${changeName}`)
++      if (opts.exitOnUnconfirmed !== false) process.exitCode = 1
++    }
++    return { confirmed, result }
++  }
++  // 2026-11-09-terminal-sync-background：主路径转后台 marker 化——多会话并行仓冻结面常含
++  // 并行提交，change.patch 达 MB 级（生产实证 5.66MB×1Mbps），内联 45s 预算必熔断且卡收口。
++  // 逃生阀（SILLYSPEC_SYNC_BG=0，用户自救通道）与 spawn 失败降级保留内联旧语义。
++  if (process.env.SILLYSPEC_SYNC_BG !== '0') {
++    let bgResult = null
++    try {
++      // bgImpl 注入缝：函数形状（对齐 syncImpl 惯例）或模块形状（默认动态 import）
++      const spawnFn = typeof opts.bgImpl === 'function' ? opts.bgImpl : (await import('./bg-sync.js')).spawnBackgroundSync
++      bgResult = await spawnFn(cwd, changeName, platformOpts, opts)
++    } catch { bgResult = null } // spawn 任意异常 → 降级内联（绝不因后台化阻断终态推送）
++    if (bgResult && (bgResult.status === 'spawned' || bgResult.status === 'coalesced')) {
++      try {
++        const { writeFinalSyncMarker } = await import('../final-sync.js')
++        await writeFinalSyncMarker(cwd, platformOpts, changeName, 'pending')
++      } catch { /* marker 落盘失败不阻断后台化（残留无 marker 的推送由 bg 轮自愈） */ }
++      if (bgResult.status === 'spawned') {
++        console.log(`🔄 [终态同步] 已转后台推送（不阻塞命令返回；结果经下一条命令补报，输出见 ${bgResult.logPath || 'bg 日志'}）`)
++      }
++      return { confirmed: false, delegated: 'background' }
++    }
++  }
++  return await terminalInline()
+ }
+ 
+ /**
+diff --git a/test/archive-landing-epilogue.test.mjs b/test/archive-landing-epilogue.test.mjs
+new file mode 100644
+index 00000000..ee92a748
+--- /dev/null
++++ b/test/archive-landing-epilogue.test.mjs
+@@ -0,0 +1,118 @@
++/**
++ * 2026-11-09-archive-landing-visibility 回归：归档落库终态可见性与 doctor 残留检查。
++ *
++ * 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：flow done 的「🚨 归档提交
++ * 未落库」打在输出中段、末行是「✅ flow done 完成」——尾部消费假成功，归档件滞留
++ * 共享暂存区可被并行 index 手术冲掉。
++ *
++ * 覆盖：
++ *   ① renderArchiveLandingEpilogue：落库 → 单行确认；未落库 → 🚨 尾块含后果+命令+核对行
++ *   ② computeArchiveLanding（临时 git 仓）：staged 未提交 → landed=false + commitCommand
++ *      含 archive/ pathspec；提交后 → landed=true
++ *   ③ detectArchiveCommitResidue（临时 git 仓）：半归档残留 → WARNING 点名变更 + safe_actions
++ *      修复命令；提交后 → PASSED；非 git 仓 → skipped
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { execFileSync } from 'node:child_process'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { renderArchiveLandingEpilogue, computeArchiveLanding } = await import(
++  pathToFileURL(join(ROOT, '..', 'src', 'run', 'complete-handlers.js')).href
++)
++const { detectArchiveCommitResidue } = await import(
++  pathToFileURL(join(ROOT, '..', 'src', 'doctor-diagnostics.js')).href
++)
++
++const CHANGE = '2026-11-09-landing-x'
++
++function git(dir, args) {
++  return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
++    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
++  }).trim()
++}
++
++function cleanup(dir) {
++  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch { /* 留待系统清理 */ }
++}
++
++function buildRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'alep-'))
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'user.name', 't'])
++  const c = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(c, { recursive: true })
++  writeFileSync(join(c, 'design.md'), 'design v1\n')
++  git(cwd, ['add', '-A', '--', '.sillyspec'])
++  git(cwd, ['commit', '-qm', 'base'])
++  return cwd
++}
++
++test('① renderArchiveLandingEpilogue：落库单行确认 / 未落库 🚨 尾块', () => {
++  const ok = renderArchiveLandingEpilogue({ landed: true })
++  assert.ok(ok.includes('归档提交已落库'), '落库态含确认')
++  assert.ok(!ok.includes('🚨'), '落库态无 🚨')
++
++  const warn = renderArchiveLandingEpilogue({ landed: false, commitCommand: `git commit -m "chore(archive): ${CHANGE} 归档留档" -- x y` })
++  assert.ok(warn.startsWith('🚨'), '未落库态以 🚨 开头')
++  assert.ok(warn.includes('会丢归档'), '含后果提示')
++  assert.ok(warn.includes(`git commit -m "chore(archive): ${CHANGE} 归档留档" -- x y`), '含可执行命令')
++  assert.ok(warn.includes('执行后核对'), '含核对行')
++
++  const noCmd = renderArchiveLandingEpilogue({ landed: false, commitCommand: null })
++  assert.ok(noCmd.includes('🚨') && !noCmd.includes('git commit -m'), '无命令态不伪造命令')
++})
++
++test('② computeArchiveLanding：staged 未提交 false+命令 / 提交后 true', () => {
++  const cwd = buildRepo()
++  try {
++    // 半归档：git mv 到 archive/ 后停在暂存区（未 commit）。
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', CHANGE)
++    mkdirSync(arch, { recursive: true })
++    git(cwd, ['mv', `.sillyspec/changes/${CHANGE}/design.md`, `.sillyspec/changes/archive/${CHANGE}/design.md`])
++    let r = computeArchiveLanding({ cwd, changeName: CHANGE })
++    assert.equal(r.landed, false, '未提交 → landed=false')
++    assert.ok(r.commitCommand && r.commitCommand.includes(`archive/${CHANGE}`), '命令含归档侧 pathspec')
++
++    git(cwd, ['commit', '-qm', `chore(archive): ${CHANGE} 归档留档`])
++    r = computeArchiveLanding({ cwd, changeName: CHANGE })
++    assert.equal(r.landed, true, '提交后 → landed=true')
++    assert.equal(r.commitCommand, null, '落库态不产命令')
++  } finally {
++    cleanup(cwd)
++  }
++})
++
++test('③ detectArchiveCommitResidue：残留 WARNING / 提交后 PASSED / 非仓 skipped', () => {
++  const cwd = buildRepo()
++  try {
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', CHANGE)
++    mkdirSync(arch, { recursive: true })
++    git(cwd, ['mv', `.sillyspec/changes/${CHANGE}/design.md`, `.sillyspec/changes/archive/${CHANGE}/design.md`])
++    let r = detectArchiveCommitResidue(cwd)
++    assert.equal(r.pass, false, '半归档 → 不通过')
++    assert.equal(r.severity, 'warning', '严重度 WARNING（常量小写形态）')
++    assert.ok(r.findings.some((f) => f.includes(CHANGE)), 'findings 点名变更')
++    assert.ok(r.safe_actions.some((a) => a.action.includes(`chore(archive): ${CHANGE}`) && a.action.includes(`archive/${CHANGE}`)), 'safe_actions 含修复命令')
++
++    git(cwd, ['commit', '-qm', `chore(archive): ${CHANGE} 归档留档`])
++    r = detectArchiveCommitResidue(cwd)
++    assert.equal(r.pass, true, '落库后 → PASSED')
++
++    const notRepo = mkdtempSync(join(tmpdir(), 'alep-norepo-'))
++    try {
++      const skipped = detectArchiveCommitResidue(notRepo)
++      assert.equal(skipped.skipped, true, '非 git 仓 → skipped')
++      assert.notEqual(skipped.severity, 'ERROR', '非仓不判红')
++    } finally {
++      cleanup(notRepo)
++    }
++  } finally {
++    cleanup(cwd)
++  }
++})
+diff --git a/test/final-sync-marker.test.mjs b/test/final-sync-marker.test.mjs
+new file mode 100644
+index 00000000..a9f21889
+--- /dev/null
++++ b/test/final-sync-marker.test.mjs
+@@ -0,0 +1,143 @@
++/**
++ * 终态 marker 生命周期单测（2026-11-09-terminal-sync-background / final-sync.js）。
++ *
++ * 覆盖：write/read 往返、脏件容错、bg 收敛（finalizePending 按 treeOk 写 ok/failed、
++ * 终态已收敛的 marker 不触碰）、命令侧消费（consume：ok 静默清理 / failed 🚨+自救+清理 /
++ * pending 未超 TTL 跳过 / 超时 pending 验证 ok 删除 / 验证失败报横幅+清理）。
++ */
++import { test, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import {
++  FINAL_SYNC_PENDING_TTL_MS,
++  writeFinalSyncMarker,
++  readFinalSyncMarkers,
++  finalizePendingFinalSyncMarkers,
++  consumeFinalSyncMarkers,
++} from '../src/final-sync.js'
++
++let cwd
++let savedEnv
++const errCapture = []
++
++beforeEach(() => {
++  cwd = mkdtempSync(join(tmpdir(), 'sillyspec-final-sync-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  savedEnv = { ...process.env }
++  errCapture.length = 0
++  console.error = ((...args) => { errCapture.push(args.join(' ')) })
++})
++
++afterEach(() => {
++  console.error = (() => {})
++  process.env = savedEnv
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* 临时目录清理失败不影响断言 */ }
++})
++
++// ── write/read 往返与容错 ───────────────────────────────────────────────────
++
++test('write → read 往返：change/status/ts 齐全，detail 按需携带', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'pending')
++  await writeFinalSyncMarker(cwd, {}, 'c2', 'failed', '同步请求失败 HTTP 504')
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers.length, 2)
++  const byChange = Object.fromEntries(markers.map((m) => [m.change, m]))
++  assert.equal(byChange.c1.status, 'pending')
++  assert.equal(byChange.c2.status, 'failed')
++  assert.equal(byChange.c2.detail, '同步请求失败 HTTP 504')
++  assert.ok(typeof byChange.c1.ts === 'number' && byChange.c1.ts > 0)
++})
++
++test('read 容错：目录不存在返回空、脏 json 跳过不抛', async () => {
++  assert.deepEqual(await readFinalSyncMarkers(cwd, {}), [])
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'pending')
++  // 手工写一个脏件（非 json）——与合法 marker 同目录
++  const dir = join(cwd, '.sillyspec', '.runtime', 'temp', 'final-sync')
++  writeFileSync(join(dir, 'broken.json'), '{not json')
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers.length, 1)
++  assert.equal(markers[0].change, 'c1')
++})
++
++// ── finalizePending（bg 子进程侧收敛）─────────────────────────────────────
++
++test('finalizePending：pending 按 treeOk 收敛 ok/failed（failed 携 detail），已终态 marker 不触碰', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'p1', 'pending')
++  await writeFinalSyncMarker(cwd, {}, 'p2', 'pending')
++  await writeFinalSyncMarker(cwd, {}, 'done', 'ok')
++  const syncCalls = []
++  await finalizePendingFinalSyncMarkers(cwd, {}, {
++    syncImpl: async (name) => {
++      syncCalls.push(name)
++      return name === 'p1' ? { synced: 1, treeOk: true } : { synced: 0, treeOk: false, errors: ['HTTP 504'] }
++    },
++  })
++  assert.deepEqual(syncCalls.sort(), ['p1', 'p2']) // ok marker 不触发补推
++  const byChange = Object.fromEntries((await readFinalSyncMarkers(cwd, {})).map((m) => [m.change, m]))
++  assert.equal(byChange.p1.status, 'ok')
++  assert.equal(byChange.p2.status, 'failed')
++  assert.equal(byChange.p2.detail, 'HTTP 504')
++  assert.equal(byChange.done.status, 'ok') // 已终态不动
++})
++
++test('finalizePending：syncImpl 抛异常 → failed（detail 携错误消息）', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'p1', 'pending')
++  await finalizePendingFinalSyncMarkers(cwd, {}, {
++    syncImpl: async () => { throw new Error('网络炸了') },
++  })
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers[0].status, 'failed')
++  assert.equal(markers[0].detail, '网络炸了')
++})
++
++// ── consume（命令侧补报消费）────────────────────────────────────────────
++
++test('consume：ok marker 静默清理（零输出零残留）', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'ok')
++  await consumeFinalSyncMarkers(cwd, {}, { syncImpl: async () => { throw new Error('不应被调') } })
++  assert.deepEqual(await readFinalSyncMarkers(cwd, {}), [])
++  assert.equal(errCapture.length, 0)
++})
++
++test('consume：failed marker → 🚨 横幅 + 自救命令 + 清理（不重复骚扰）', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'failed', '同步请求失败 HTTP 504')
++  await consumeFinalSyncMarkers(cwd, {}, { syncImpl: async () => { throw new Error('不应被调') } })
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('终态同步补报'), out)
++  assert.ok(out.includes('c1'), out)
++  assert.ok(out.includes('sillyspec platform sync --change c1'), out)
++  assert.deepEqual(await readFinalSyncMarkers(cwd, {}), []) // 消费即清理
++})
++
++test('consume：pending 未超 TTL → 跳过不动（等 bg 子进程收敛）', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'pending')
++  await consumeFinalSyncMarkers(cwd, {}, { now: Date.now(), syncImpl: async () => { throw new Error('不应被调') } })
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers.length, 1)
++  assert.equal(markers[0].status, 'pending')
++})
++
++test('consume：pending 超 TTL + 验证性同步 ok → 静默清理', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'pending')
++  await consumeFinalSyncMarkers(cwd, {}, {
++    now: Date.now() + FINAL_SYNC_PENDING_TTL_MS + 1,
++    syncImpl: async () => ({ synced: 0, treeOk: true }),
++  })
++  assert.deepEqual(await readFinalSyncMarkers(cwd, {}), [])
++  assert.equal(errCapture.length, 0)
++})
++
++test('consume：pending 超 TTL + 验证性同步失败 → 🚨 补报 + 清理（宁可重复不静默）', async () => {
++  await writeFinalSyncMarker(cwd, {}, 'c1', 'pending')
++  await consumeFinalSyncMarkers(cwd, {}, {
++    now: Date.now() + FINAL_SYNC_PENDING_TTL_MS + 1,
++    syncImpl: async () => ({ synced: 0, treeOk: false, errors: ['HTTP 504'] }),
++  })
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('终态同步补报'), out)
++  assert.ok(out.includes('sillyspec platform sync --change c1'), out)
++  assert.deepEqual(await readFinalSyncMarkers(cwd, {}), [])
++})
+diff --git a/test/terminal-sync-strict.test.mjs b/test/terminal-sync-strict.test.mjs
+index 70d4f3f4..4a3b0e48 100644
+--- a/test/terminal-sync-strict.test.mjs
++++ b/test/terminal-sync-strict.test.mjs
+@@ -16,6 +16,7 @@ import { tmpdir } from 'os'
+ 
+ import { syncSpecTree } from '../src/spec-sync.js'
+ import { triggerSyncTerminalStrict } from '../src/run/shared.js'
++import { readFinalSyncMarkers } from '../src/final-sync.js'
+ 
+ let cwd
+ let savedEnv
+@@ -28,7 +29,9 @@ beforeEach(() => {
+   savedEnv = { ...process.env }
+   delete process.env.SILLYHUB_PLATFORM_URL
+   delete process.env.SILLYHUB_PLATFORM_TOKEN
+-  delete process.env.SILLYSPEC_SYNC_BG
++  // 2026-11-09-terminal-sync-background：终态默认改走后台通道——本文件大多数用例钉的是
++  // 「逃生阀内联旧语义」（SILLYSPEC_SYNC_BG=0），beforeEach 统一预设；后台化新用例显式 delete。
++  process.env.SILLYSPEC_SYNC_BG = '0'
+   savedExitCode = process.exitCode
+   process.exitCode = undefined
+   errCapture.length = 0
+@@ -161,3 +164,72 @@ test('quick 会话 SID → 委托既有 triggerSync（无归档/删除终态）'
+   assert.equal(r.delegated, true)
+   assert.equal(process.exitCode, undefined)
+ })
++
++// ── 终态后台化（2026-11-09-terminal-sync-background）────────────────────────
++
++test('终态 + 后台可用（bgImpl spawned）→ pending marker + delegated background，不内联不置 exitCode', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  delete process.env.SILLYSPEC_SYNC_BG // 后台化主路径
++  let syncCalled = 0
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => { syncCalled++; return { synced: 1, treeOk: true } },
++    bgImpl: async () => ({ status: 'spawned', logPath: 'x.log' }),
++  })
++  assert.equal(r.delegated, 'background')
++  assert.equal(r.confirmed, false)
++  assert.equal(syncCalled, 0) // 不内联等待
++  assert.equal(process.exitCode, undefined)
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers.length, 1)
++  assert.equal(markers[0].change, 'c1')
++  assert.equal(markers[0].status, 'pending')
++})
++
++test('终态 + coalesced（活后台轮在跑）→ delegated background + pending marker（由活轮收敛）', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  delete process.env.SILLYSPEC_SYNC_BG
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => { throw new Error('不应内联') },
++    bgImpl: async () => ({ status: 'coalesced' }),
++  })
++  assert.equal(r.delegated, 'background')
++  const markers = await readFinalSyncMarkers(cwd, {})
++  assert.equal(markers.length, 1)
++  assert.equal(markers[0].status, 'pending')
++})
++
++test('终态 + bgImpl 抛异常 → 降级内联旧语义（syncImpl 被调、treeOk 判定恢复）', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  delete process.env.SILLYSPEC_SYNC_BG
++  let syncCalled = 0
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => { syncCalled++; return { synced: 1, treeOk: true } },
++    bgImpl: async () => { throw new Error('spawn 爆炸') },
++  })
++  assert.equal(syncCalled, 1) // 降级内联
++  assert.equal(r.delegated, undefined)
++  assert.equal(r.confirmed, true)
++  assert.equal(process.exitCode, undefined)
++})
++
++test('终态 + bgImpl 返回未知状态 → 降级内联旧语义（失败显性化保留：🚨 + exit 1）', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  delete process.env.SILLYSPEC_SYNC_BG
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => ({ synced: 0, errors: ['同步请求失败 HTTP 504'] }),
++    bgImpl: async () => ({ status: 'bogus' }),
++  })
++  assert.equal(r.confirmed, false)
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('平台文件树推送未确认'), out)
++  assert.ok(out.includes('sillyspec platform sync --change c1'), out)
++  assert.equal(process.exitCode, 1)
++})

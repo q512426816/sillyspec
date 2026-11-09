@@ -53,4 +53,5 @@ created_at: 2026-11-09T06:41:23.072Z
 | 修改 | src/run/bg-sync.js | runBgSyncFromEnv 主轮后挂 finalizePendingFinalSyncMarkers 收敛 |
 | 修改 | test/terminal-sync-strict.test.mjs | 既有内联用例钉到 env=0 前提；新增后台化/降级用例 |
 | 新增 | test/final-sync-marker.test.mjs | marker 生命周期/收敛/补报消费用例 |
-| 修改 | docs/sillyspec/modules/sync.md（或对应模块卡） | 终态同步语义变化留档 |
+| 修改 | .sillyspec/docs/sillyspec/modules/sync.md + sync.changelog.md | 终态同步语义变化留档（评审更正：原清单路径漏 .sillyspec/ 前缀） |
+| 修改 | .sillyspec/docs/sillyspec/modules/_module-map.yaml | sync 模块 paths 登记 src/final-sync.js（收口 patch 门登记要求） |

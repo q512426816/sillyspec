@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-09-terminal-sync-background",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-09-terminal-sync-background:flow:测试绑定FR-01",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs「终态+后台可用→pending marker+delegated background+不置 exitCode」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-terminal-sync-background"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-09-terminal-sync-background:flow:测试绑定FR-02",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs「SYNC_BG=0 内联旧语义回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-terminal-sync-background"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-09-terminal-sync-background:flow:测试绑定FR-03",
+      "tests": [
+        "test/final-sync-marker.test.mjs「bg 收敛按 treeOk 写 ok/failed」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-terminal-sync-background"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-09-terminal-sync-background:flow:测试绑定FR-04",
+      "tests": [
+        "test/final-sync-marker.test.mjs「ok 静默清理/failed 横幅+自救命令+清理」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-terminal-sync-background"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-09-terminal-sync-background:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs「sillyspec 全量 node --test 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-terminal-sync-background"
+    }
+  ]
+}
