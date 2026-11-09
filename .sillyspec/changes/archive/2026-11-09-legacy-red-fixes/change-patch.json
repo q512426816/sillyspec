@@ -1,0 +1,129 @@
+{
+  "change": "2026-11-09-legacy-red-fixes",
+  "baseline": "3eed8ae00a506a402d75b7a5057dc11e09ee93ca",
+  "head": "2fb976f8fef83434e51e49b6bb206579f8672b5c",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "test/backlog-batch-e.test.mjs",
+    "test/prompt-golden.json",
+    "test/runtime-relayout.test.mjs",
+    "test/spec-dir-home-guard.test.mjs",
+    "test/thin-user-decision-record.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 44,
+    "deletions": 18
+  },
+  "savedAt": "2026-11-09T08:17:26.959Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3eed8ae00a506a402d75b7a5057dc11e09ee93ca",
+    "totals": {
+      "files": 8,
+      "additions": 44,
+      "deletions": 18
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 11,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/backlog-batch-e.test.mjs",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/prompt-golden.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/runtime-relayout.test.mjs",
+        "additions": 14,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/spec-dir-home-guard.test.mjs",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-user-decision-record.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-knowledge/SKILL.md",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "b8f6d9c12f1ccfa2029c85e0ab64c9bff70035248c31969f35ce6f450137c365",
+  "patchStatus": "ok"
+}

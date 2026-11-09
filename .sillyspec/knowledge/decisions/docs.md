@@ -50,3 +50,12 @@
 文件：docs/prompt/_extracted.json, docs/prompt/explore.md, src/stages/explore.js
 最近确认：7098403292e3eb3b9f6fd925a3209d8f7ac451c3
 理由：对照 mattpocock /prototype skill 三方分析（主分析+独立分析+证伪）终局结论：SillySpec 原型体系 UI-only，逻辑/状态模型类歧义缺「可交互证据」模态；但 brainstorm 侧不动（孤儿产物论证——下游 execute/gates/verify 三件套全是 UI 语义，逻辑原型在 brainstorm 生成无任何下游消费），explore 粗选件框架天然适配（手绘合法/不进变更目录/仅用户明确要求），零下游配套。 本变更只改 `src/stages/explore.js`「HTML 原型生成」节 prompt 三处：① 首句扩触发面（+状态机/流程/时序类歧义）；② 新增逻辑形 bullet（三要素+非 JS 复刻失真声明+不进变更目录）；③ 新增对比判据 bullet（结构性分歧+真实数据密度）。随后机械同步 docs/prompt 镜像与 skills 文档。
+
+## D-docs-002@v1 2026-11-09-legacy-red-fixes——三类归因三类修法，全部锚定「修被误伤面，不改测试迁就错误」（AGENTS 规则 5 例外说明：FR-05 的测试断言更新属「测试锚定对象本身有意演进」——锚的不
+状态：implemented
+变更：2026-11-09-legacy-red-fixes
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-09-legacy-red-fixes/design.md
+文件：docs/sillyspec/platform-interface-map.md, test/backlog-batch-e.test.mjs, test/prompt-golden.json, test/runtime-relayout.test.mjs, test/spec-dir-home-guard.test.mjs, test/thin-user-decision-record.test.mjs
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+理由：三类归因三类修法，全部锚定「修被误伤面，不改测试迁就错误」（AGENTS 规则 5 例外说明：FR-05 的测试断言更新属「测试锚定对象本身有意演进」——锚的不是逻辑是文案，文案演进提交 a556e117 是应然，故改测试是正确方向）： 1. **知识 SKILL 误回退恢复（FR-01）**：`git checkout 2b1fd2fb^ -- .claude/skills/sillyspec-knowledge/SKILL.md` 原样恢复 2026-11-07 三知识变更累积版（accept 命令行/refresh 退役/propose --body-file/K 形态四段模板）。选恢复而非改测试：SKILL 文档是功能面（accept 命令是 6a68770c 根因修复的对外入口），回退是 2b1fd2fb 的误伤（项目地图变更与知识 SKILL 无关），测试断言正确地拦住了它。 2. **残渣治理（FR-02）**：backlog-batch-e ③ MCP gate 段首尾加 `process.chdir` 到隔离 tmp 目录并复原——gate 的 `_pathWithDir` mkdir-p 语义决定了「cwd 落哪 runtime 目录建哪」，源头修掉；spec-dir-home-guard Test 5 前对 `test/.sillyspec` 做前置 rmSync 防护（auto-pull-throttle 残渣的源头未必只有一处，防护保证该测试不再依赖仓内整洁态）。顺手删除现存残渣（不进 git 的运行产物）。 3. **文案/行号锚对齐（FR-03/04/05）**：doc-ref 行号按当前源码实测更新（890→895/839、1217/1068/1144→1254/1282/1353、942→947、spec-sync.js:56→120、936 核对）；prompt-golden 走官方 `SILLYSPEC_REGEN_PROMPT_GOLDEN=1` 再生成（diff 随提交可审）；thin-record 断言更新到 a556e117 演进后的现行句。

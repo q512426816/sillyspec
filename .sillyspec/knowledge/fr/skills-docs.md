@@ -1366,3 +1366,129 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-08-flow-askuser-confirm
   status: active
+
+## FR-skills-docs-073 knowledge SKILL 恢复 2b1fd2fb^ 版本,3 测试 5 断言绿
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：误回退恢复
+场景正文：
+- 场景：误回退恢复 — Given SKILL.md 处于 2b1fd2fb^ 版本，When 跑三个 knowledge 测试，Then SKILL 文案断言全过。
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-01
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-01
+  tests: test/knowledge-accept-channel.test.mjs「T6 SKILL 文案」 | test/knowledge-generated-retire.test.mjs | test/knowledge-k-shape-minimal.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active
+
+## FR-skills-docs-074 test/.sillyspec 残渣清除+产生源头修复,home-guard 与 relayout 绿
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：残渣不再复发
+场景正文：
+- 场景：残渣不再复发 — Given 全量套件顺序跑，When 跑完后检查 test/ 目录，Then 无 `.sillyspec` 残渣产生，且 spec-dir-home-guard 与 run
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-02
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-02
+  tests: test/runtime-relayout.test.mjs | test/spec-dir-home-guard.test.mjs「Test 5 非 home 祖先链正常向上命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active
+
+## FR-skills-docs-075 platform-interface-map.md 行号锚对齐当前源码,doc-ref-check 绿
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：行号锚全对齐
+场景正文：
+- 场景：行号锚全对齐 — Given 文档行号更新后，When 跑 doc-ref-check，Then 零断言失败。
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-03
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-03
+  tests: test/doc-ref-check.test.mjs「文档引用行号校验」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active
+
+## FR-skills-docs-076 prompt-golden 金档按现行提示词再生
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：金档对齐现行提示词
+场景正文：
+- 场景：金档对齐现行提示词 — Given 再生成执行后，When 跑 prompt-golden，Then 哈希比对通过。
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-04
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-04
+  tests: test/prompt-golden.test.mjs「stage 提示词金档哈希比对」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active
+
+## FR-skills-docs-077 thin-user-decision-record 断言对齐现行断点②文案
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：文案锚对齐
+场景正文：
+- 场景：文案锚对齐 — Given 断言更新后，When 跑 thin-user-decision-record，Then 三断言全过。
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-05
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-05
+  tests: test/thin-user-decision-record.test.mjs「② 断点②对账半句」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active
+
+## FR-skills-docs-078 sillyspec 全量测试绿
+变更：2026-11-09-legacy-red-fixes
+状态：active
+摘要：全量回归门
+场景正文：
+- 场景：全量回归门 — Given 全部修复合入后，When 跑全量套件，Then 退出码 0。
+全文：.sillyspec/changes/archive/2026-11-09-legacy-red-fixes/requirements.md#FR-06
+最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-09-legacy-red-fixes:flow:测试绑定FR-06
+  tests: test/run-tests.mjs「全量 0 失败」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-09-legacy-red-fixes
+  status: active

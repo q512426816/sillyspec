@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-09-legacy-red-fixes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-accept-channel.test.mjs「T6 SKILL 文案」",
+        "test/knowledge-generated-retire.test.mjs",
+        "test/knowledge-k-shape-minimal.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-02",
+      "tests": [
+        "test/runtime-relayout.test.mjs",
+        "test/spec-dir-home-guard.test.mjs「Test 5 非 home 祖先链正常向上命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-03",
+      "tests": [
+        "test/doc-ref-check.test.mjs「文档引用行号校验」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-04",
+      "tests": [
+        "test/prompt-golden.test.mjs「stage 提示词金档哈希比对」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-05",
+      "tests": [
+        "test/thin-user-decision-record.test.mjs「② 断点②对账半句」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-09-legacy-red-fixes:flow:测试绑定FR-06",
+      "tests": [
+        "test/run-tests.mjs「全量 0 失败」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-09-legacy-red-fixes"
+    }
+  ]
+}
