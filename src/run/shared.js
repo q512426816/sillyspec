@@ -1001,6 +1001,13 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
     && process.env.SILLYSPEC_SYNC_BG !== '0'
     && !process.env.SILLYSPEC_BG_SYNC_CWD) {
     try {
+      // 终态 marker 补报消费（2026-11-09-terminal-sync-background）：上一轮归档/删除的
+      // 终态推送结果在此对用户可见——ok 静默清理、failed 🚨+自救、超时 pending 验证后
+      // 处置。挂在后台化分支（每条带同步的命令必经），全程容错不阻断本轮同步。
+      try {
+        const { consumeFinalSyncMarkers } = await import('../final-sync.js')
+        await consumeFinalSyncMarkers(cwd, platformOpts)
+      } catch { /* marker 消费失败不阻断主同步 */ }
       const bg = await import('./bg-sync.js')
       const r = await bg.spawnBackgroundSync(cwd, changeName, platformOpts, opts)
       if (r.status === 'spawned') {
@@ -1051,7 +1058,7 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
 }
 
 /**
- * 终态强校验同步（2026-10-17-archive-half-state-location-stuck-active）。
+ * 终态强校验同步（2026-10-17-archive-half-state-location-stuck-active；2026-11-09-terminal-sync-background 后台化改造）。
  *
  * 背景（坑档案 docs/sillyspec/archive-half-state-location-stuck-active.md，生产实证）：
  * triggerSync 全链 best-effort + 后台化，重试是事件驱动（「下一条命令」）——而归档/删除
@@ -1059,19 +1066,19 @@ async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
  * （status=archived）成功而文件树通道（location）失败 → 半态：平台「进行中」列表
  * 幽灵滞留已归档变更，无人再碰则无限期。
  *
- * 与 triggerSync 的三点差异：
+ * 与 triggerSync 的差异（2026-11-09 后台化后）：
  *   1. **终态判定驱动**：仅当 DB 该变更 status ∈ (archived, deleted) 才走强校验；
  *      非终态（普通阶段完成的 completion 同步等）原样委托 triggerSync（后台化不变，
- *      零行为变化）。归档收尾允许阻塞换一致性——终态动作没有「下次再推」的假设。
- *   2. **内联有界**：绕过后台化（结果不再藏进 bg 日志文件），sync() 直跑 + raceWithAbort
- *      预算 = max(env SILLYSPEC_SYNC_TIMEOUT_MS 可调值, 45s 后台轮下限同款)；opts.timeoutMs
- *      显式传入时直接生效（测试注入短窗）。
- *   3. **失败显性化**：sync() 返回 treeOk!==true（syncSpecTree ok 契约，fail-closed——
- *      无 ok 字段视同未确认）→ 🚨 告警 + 自救命令 + process.exitCode = 1（对齐
- *      _submitApproval 的「终态网络失败必须可见」先例）。未决冲突（result.conflict）
- *      不在此列——冲突面已有自己的 resolve 处置横幅，重复告警是噪音。
+ *      零行为变化）。
+ *   2. **主路径转后台 marker 化**：终态推送委托 detached 后台通道（不卡前台——多会话
+ *      并行仓冻结面常含并行提交，change.patch MB 级时内联 45s 必熔断），前台落 pending
+ *      marker；bg 子进程按 sync treeOk 收敛 ok/failed，下一条命令消费补报（final-sync.js）。
+ *      返回 delegated:'background'，exit code 不再反映终态推送结果。
+ *   3. **逃生阀/降级保留内联旧语义**：SILLYSPEC_SYNC_BG=0（用户自救）或后台 spawn 异常/
+ *      不可用时回退内联有界同步（预算 max(env,45s) + treeOk fail-closed 判定 + 🚨 +
+ *      exitCode=1，契约原样——失败显性化先例保留）。
  *
- * @returns {{confirmed: boolean, delegated?: boolean, skipped?: string, result?: object}}
+ * @returns {{confirmed: boolean, delegated?: boolean|string, skipped?: string, result?: object}}
  */
 export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts = {}, opts = {}) {
   return timedAsync('sync', () => triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts, opts))
@@ -1108,30 +1115,55 @@ async function triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts = {},
     await triggerSync(cwd, changeName, platformOpts, opts)
     return { confirmed: false, delegated: true }
   }
-  // 终态：内联有界同步（绕过后台化——结果必须当场可判）
-  const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
-  let result = null
-  try {
-    // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
-    // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
-    //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
-    //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
-    const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
-    result = await raceWithAbort(runSync, timeoutMs)
-  } catch (e) {
-    result = { synced: 0, errors: [(e && e.message) || String(e)] }
+  // 终态：内联有界同步（2026-11-09-terminal-sync-background 起降级为逃生阀/降级路径——
+  // 主路径转后台 marker 化，见下方分支；本闭包 = 旧强校验语义原样保留）
+  const terminalInline = async () => {
+    const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
+    let result = null
+    try {
+      // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
+      // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
+      //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
+      //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
+      const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
+      result = await raceWithAbort(runSync, timeoutMs)
+    } catch (e) {
+      result = { synced: 0, errors: [(e && e.message) || String(e)] }
+    }
+    if (result === null) result = { synced: 0, errors: [`同步总预算 ${timeoutMs}ms 熔断`] }
+    // 未决冲突：已有 resolve 处置横幅（syncSpecTree 冲突分支自带），不重复告警
+    if (result.conflict === true) return { confirmed: false, skipped: 'conflict', result }
+    const confirmed = result.treeOk === true
+    if (!confirmed) {
+      const detail = ((result.errors && result.errors[0]) || '文件树通道未确认收敛（见上方 [spec-sync]/[sync] 行）').slice(0, 200)
+      console.error(`🚨 [终态同步] 本地${dbStatus === 'deleted' ? '删除' : '归档'}已完成，但平台文件树推送未确认：${detail}`)
+      console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${changeName}`)
+      if (opts.exitOnUnconfirmed !== false) process.exitCode = 1
+    }
+    return { confirmed, result }
   }
-  if (result === null) result = { synced: 0, errors: [`同步总预算 ${timeoutMs}ms 熔断`] }
-  // 未决冲突：已有 resolve 处置横幅（syncSpecTree 冲突分支自带），不重复告警
-  if (result.conflict === true) return { confirmed: false, skipped: 'conflict', result }
-  const confirmed = result.treeOk === true
-  if (!confirmed) {
-    const detail = ((result.errors && result.errors[0]) || '文件树通道未确认收敛（见上方 [spec-sync]/[sync] 行）').slice(0, 200)
-    console.error(`🚨 [终态同步] 本地${dbStatus === 'deleted' ? '删除' : '归档'}已完成，但平台文件树推送未确认：${detail}`)
-    console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${changeName}`)
-    if (opts.exitOnUnconfirmed !== false) process.exitCode = 1
+  // 2026-11-09-terminal-sync-background：主路径转后台 marker 化——多会话并行仓冻结面常含
+  // 并行提交，change.patch 达 MB 级（生产实证 5.66MB×1Mbps），内联 45s 预算必熔断且卡收口。
+  // 逃生阀（SILLYSPEC_SYNC_BG=0，用户自救通道）与 spawn 失败降级保留内联旧语义。
+  if (process.env.SILLYSPEC_SYNC_BG !== '0') {
+    let bgResult = null
+    try {
+      // bgImpl 注入缝：函数形状（对齐 syncImpl 惯例）或模块形状（默认动态 import）
+      const spawnFn = typeof opts.bgImpl === 'function' ? opts.bgImpl : (await import('./bg-sync.js')).spawnBackgroundSync
+      bgResult = await spawnFn(cwd, changeName, platformOpts, opts)
+    } catch { bgResult = null } // spawn 任意异常 → 降级内联（绝不因后台化阻断终态推送）
+    if (bgResult && (bgResult.status === 'spawned' || bgResult.status === 'coalesced')) {
+      try {
+        const { writeFinalSyncMarker } = await import('../final-sync.js')
+        await writeFinalSyncMarker(cwd, platformOpts, changeName, 'pending')
+      } catch { /* marker 落盘失败不阻断后台化（残留无 marker 的推送由 bg 轮自愈） */ }
+      if (bgResult.status === 'spawned') {
+        console.log(`🔄 [终态同步] 已转后台推送（不阻塞命令返回；结果经下一条命令补报，输出见 ${bgResult.logPath || 'bg 日志'}）`)
+      }
+      return { confirmed: false, delegated: 'background' }
+    }
   }
-  return { confirmed, result }
+  return await terminalInline()
 }
 
 /**

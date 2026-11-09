@@ -16,6 +16,7 @@ import { tmpdir } from 'os'
 
 import { syncSpecTree } from '../src/spec-sync.js'
 import { triggerSyncTerminalStrict } from '../src/run/shared.js'
+import { readFinalSyncMarkers } from '../src/final-sync.js'
 
 let cwd
 let savedEnv
@@ -28,7 +29,9 @@ beforeEach(() => {
   savedEnv = { ...process.env }
   delete process.env.SILLYHUB_PLATFORM_URL
   delete process.env.SILLYHUB_PLATFORM_TOKEN
-  delete process.env.SILLYSPEC_SYNC_BG
+  // 2026-11-09-terminal-sync-background：终态默认改走后台通道——本文件大多数用例钉的是
+  // 「逃生阀内联旧语义」（SILLYSPEC_SYNC_BG=0），beforeEach 统一预设；后台化新用例显式 delete。
+  process.env.SILLYSPEC_SYNC_BG = '0'
   savedExitCode = process.exitCode
   process.exitCode = undefined
   errCapture.length = 0
@@ -160,4 +163,73 @@ test('quick 会话 SID → 委托既有 triggerSync（无归档/删除终态）'
   })
   assert.equal(r.delegated, true)
   assert.equal(process.exitCode, undefined)
+})
+
+// ── 终态后台化（2026-11-09-terminal-sync-background）────────────────────────
+
+test('终态 + 后台可用（bgImpl spawned）→ pending marker + delegated background，不内联不置 exitCode', async () => {
+  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
+  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  delete process.env.SILLYSPEC_SYNC_BG // 后台化主路径
+  let syncCalled = 0
+  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
+    changeStatus: 'archived',
+    syncImpl: async () => { syncCalled++; return { synced: 1, treeOk: true } },
+    bgImpl: async () => ({ status: 'spawned', logPath: 'x.log' }),
+  })
+  assert.equal(r.delegated, 'background')
+  assert.equal(r.confirmed, false)
+  assert.equal(syncCalled, 0) // 不内联等待
+  assert.equal(process.exitCode, undefined)
+  const markers = await readFinalSyncMarkers(cwd, {})
+  assert.equal(markers.length, 1)
+  assert.equal(markers[0].change, 'c1')
+  assert.equal(markers[0].status, 'pending')
+})
+
+test('终态 + coalesced（活后台轮在跑）→ delegated background + pending marker（由活轮收敛）', async () => {
+  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
+  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  delete process.env.SILLYSPEC_SYNC_BG
+  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
+    changeStatus: 'archived',
+    syncImpl: async () => { throw new Error('不应内联') },
+    bgImpl: async () => ({ status: 'coalesced' }),
+  })
+  assert.equal(r.delegated, 'background')
+  const markers = await readFinalSyncMarkers(cwd, {})
+  assert.equal(markers.length, 1)
+  assert.equal(markers[0].status, 'pending')
+})
+
+test('终态 + bgImpl 抛异常 → 降级内联旧语义（syncImpl 被调、treeOk 判定恢复）', async () => {
+  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
+  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  delete process.env.SILLYSPEC_SYNC_BG
+  let syncCalled = 0
+  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
+    changeStatus: 'archived',
+    syncImpl: async () => { syncCalled++; return { synced: 1, treeOk: true } },
+    bgImpl: async () => { throw new Error('spawn 爆炸') },
+  })
+  assert.equal(syncCalled, 1) // 降级内联
+  assert.equal(r.delegated, undefined)
+  assert.equal(r.confirmed, true)
+  assert.equal(process.exitCode, undefined)
+})
+
+test('终态 + bgImpl 返回未知状态 → 降级内联旧语义（失败显性化保留：🚨 + exit 1）', async () => {
+  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
+  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  delete process.env.SILLYSPEC_SYNC_BG
+  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
+    changeStatus: 'archived',
+    syncImpl: async () => ({ synced: 0, errors: ['同步请求失败 HTTP 504'] }),
+    bgImpl: async () => ({ status: 'bogus' }),
+  })
+  assert.equal(r.confirmed, false)
+  const out = errCapture.join('\n')
+  assert.ok(out.includes('平台文件树推送未确认'), out)
+  assert.ok(out.includes('sillyspec platform sync --change c1'), out)
+  assert.equal(process.exitCode, 1)
 })

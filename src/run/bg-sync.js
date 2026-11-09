@@ -302,6 +302,15 @@ export async function runBgSyncFromEnv(env = process.env) {
   } catch (e) {
     console.warn(`[spec-sync-bg] 终态补推扫描异常（best-effort）: ${(e && e.message) || e}`);
   }
+  // 终态 marker 收敛（2026-11-09-terminal-sync-background）：主轮已把终态变更树推完，
+  // 此处对 pending marker 补推多为增量 no-op、仅取 sync treeOk 结果写 ok/failed——
+  // 「结果可判」从内联前台挪到本收敛点；失败/残留由下条命令的 consume 补报兜底。
+  try {
+    const { finalizePendingFinalSyncMarkers } = await import('../final-sync.js');
+    await finalizePendingFinalSyncMarkers(cwd, platformOpts, { syncImpl: (name) => import('../sync.js').then((m) => m.sync(name, cwd, {})) });
+  } catch (e) {
+    console.warn(`[spec-sync-bg] 终态 marker 收敛异常（best-effort，下条命令补报兜底）: ${(e && e.message) || e}`);
+  }
   console.log(`[spec-sync-bg] 后台同步完成 ${new Date().toISOString()}: ${changeName}`);
   removeBgSyncLock(runtimeRoot);
 }
