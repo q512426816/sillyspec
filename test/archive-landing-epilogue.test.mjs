@@ -104,6 +104,13 @@ test('③ detectArchiveCommitResidue：残留 WARNING / 提交后 PASSED / 非�
     r = detectArchiveCommitResidue(cwd)
     assert.equal(r.pass, true, '落库后 → PASSED')
 
+    // 评审 F1 回归：仅活跃侧 changes/<名>/ 的暂存是进行中工作常态——不算半归档，
+    // 不得报 WARNING / 不得产含不存在 archive 侧 pathspec 的修复命令。
+    writeFileSync(join(cwd, '.sillyspec', 'changes', CHANGE, 'extra.md'), 'wip\n')
+    git(cwd, ['add', '--', `.sillyspec/changes/${CHANGE}/extra.md`])
+    const activeOnly = detectArchiveCommitResidue(cwd)
+    assert.equal(activeOnly.pass, true, '仅活跃侧暂存 → PASSED（不误报半归档）')
+
     const notRepo = mkdtempSync(join(tmpdir(), 'alep-norepo-'))
     try {
       const skipped = detectArchiveCommitResidue(notRepo)

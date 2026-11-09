@@ -896,12 +896,15 @@ export function detectArchiveCommitResidue(cwd) {
     const owners = new Set()
     // 解析口径对齐 resolveArchiveCommitPathspecs（--name-status：R 行 src<TAB>dst
     // 两格、A/M/D 单格——TAB 分隔逐格取，勿用 porcelain 的 ' -> ' 形态）。
+    // 只认**归档侧**条目（archive/<名>/）：仅活跃侧 changes/<名>/ 的暂存是进行中
+    // 工作的常态，不算半归档（评审 F1：混收会把「从未归档的活跃变更」误报成
+    // 归档残留且修复命令含不存在的 archive 侧 pathspec）。
     for (const line of stagedRaw.split('\n')) {
       if (!line.trim()) continue
       for (const cell of line.split('\t').slice(1)) {
         const raw = cell.trim().replace(/^"|"$/g, '')
         if (!raw) continue
-        const m = /^\.sillyspec\/changes\/(?:archive\/)?([^/]+)\//.exec(raw)
+        const m = /^\.sillyspec\/changes\/archive\/([^/]+)\//.exec(raw)
         if (m && m[1] !== 'archive') owners.add(m[1])
       }
     }
