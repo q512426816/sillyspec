@@ -1,0 +1,33 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  修复 CI 两个测试平台差异失败
+
+
+  动机与背景：main 分支 GitHub Actions test job 连续多轮红（run 42585092831：908 过/2 失败），两例均为 Windows 本地绿、Linux CI 红的平台差异：(1)
+  fr-regress-cap ③ 无条件读仓根 .sillyspec/local.yaml，该文件属 gitignored 机器本地配置、CI checkout 不存在 → ENOENT；(2)
+  eval-knowledge-runner Test9 重复标签用例夹具用单字标签 x 拼 join(root,path)，POSIX 下拼出 x:/home/... 撞上 parseRepoSpec 的 Windows
+  盘符分支，标签被解析成 basename（a/b）不再冲突故不抛错。
+
+
+  成功标准：
+
+  - 两用例改为平台无关后本地 Windows 复跑全绿（fr-regress-cap 3/3、eval-knowledge-runner 39/39）
+
+  - POSIX 逻辑推演：local.yaml 缺失走条件跳过分支、重复标签走非盘符分支照常抛错——GitHub Actions test job 转绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 4102d4d1ac010609c741499e8487586ff13de0c1
+updatedAt: '2026-11-09T16:35:03.776Z'
+baseline_sha256: c39ddaf576ff6d10db4fefde13f7fb21320ac460402aa5bae79a986615effe6c
+spec_approved: true
+spec_approved_at: '2026-11-09T16:34:23.474Z'
+spec_approved_by: main@ci-fix
+spec_approved_channel: unattested
+spec_attested_by: null
+

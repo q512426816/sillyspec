@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,9 +65,12 @@ test('② readFrRegressCap v2 五态（缺省翻转：默认就不跑，配置�
 })
 
 test('③ 本仓缺省断言与消费点单一源锚', () => {
-  const yaml = readFileSync(join(ROOT, '.sillyspec', 'local.yaml'), 'utf8')
-  assert.ok(!/^fr_regress_cap:/m.test(yaml), '本仓 local.yaml 无键（缺省即 off——2026-10-23-fr-regress-default-off 收敛，键已移除）')
-  assert.equal(readFrRegressCap(join(ROOT, '.sillyspec')), 0, '本仓读取=0（缺省 off）')
+  const localYaml = join(ROOT, '.sillyspec', 'local.yaml')
+  if (existsSync(localYaml)) {
+    const yaml = readFileSync(localYaml, 'utf8')
+    assert.ok(!/^fr_regress_cap:/m.test(yaml), '本仓 local.yaml 无键（缺省即 off——2026-10-23-fr-regress-default-off 收敛，键已移除；文件 gitignored，CI checkout 缺席时跳过）')
+  }
+  assert.equal(readFrRegressCap(join(ROOT, '.sillyspec')), 0, '本仓读取=0（缺省 off；文件缺席同值，本地/CI 一致）')
   const src = readFileSync(join(ROOT, 'src', 'verify-postcheck.js'), 'utf8')
   assert.ok(src.includes('applyFrRegressCap(fr, capVal)'), '组面接线在位（本地收集路径单一消费点）')
   assert.ok(src.includes('applyFrRegressCap(frPre, capVal)'), '决策层产生点施帽在位（单一时点单一口径）')

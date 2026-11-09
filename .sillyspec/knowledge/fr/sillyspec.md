@@ -133,10 +133,10 @@ created_at: 2026-10-08T02:26:08.643Z
 - row: 2026-10-09-release-3-32-2:flow:测试绑定FR-02
   tests: test/quick-retired.test.mjs「✅ 通过: 25 ❌ 失败: 0」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: 4102d4d1ac010609c741499e8487586ff13de0c1
   source_change: 2026-10-09-release-3-32-2
   status: active
 

@@ -141,7 +141,8 @@ console.log('\n=== Test 9: parseRepoArgs ===')
   const win = parseRepoSpec('C:/repos/proj')
   assert(win.label === 'proj', 'Windows 盘符不当作 label 分隔符')
   let threw = false
-  try { parseRepoArgs(`x:${join(root, 'a')},x:${join(root, 'b')}`, root) } catch { threw = true }
+  // 多字标签：单字标签+POSIX 绝对路径（x:/home/...）与 parseRepoSpec 盘符分支 /^[A-Za-z]:[\\/]/ 撞形，被当盘路径致标签退化为 basename——该形态歧义本质无解，夹具必须用多字标签绕开
+  try { parseRepoArgs(`dup:${join(root, 'a')},dup:${join(root, 'b')}`, root) } catch { threw = true }
   assert(threw === true, '重复标签抛错（不静默覆盖）')
 }
 
