@@ -228,6 +228,7 @@ modules:
       - src/sync.js
       - src/deleted-ledger.js
       - src/spec-sync.js
+      - src/final-sync.js
       - src/sync-noise.js
       - src/write-audit.js
       - src/commit-guard.js
