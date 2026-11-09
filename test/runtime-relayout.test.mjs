@@ -2,8 +2,9 @@
 // 锁 runtime-paths.js 三方共源清单：写入路径助手、迁移前缀匹配、回收精确名生成。
 // 隔离：cwd 用 os.tmpdir() 临时目录，绝不碰真实 .runtime。
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { tmpdir } from 'os'
+import { fileURLToPath } from 'node:url'
 import {
   RUNTIME_STATE_DIRNAME,
   RUNTIME_TEMP_DIRNAME,
@@ -29,6 +30,10 @@ const assert = (cond, msg) => {
 }
 
 const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-runtime-relayout-${process.pid}-`))
+// CLI 脚本路径锚仓根（2026-11-09-legacy-red-fixes）：runner 全量跑测试文件时 cwd=test/，
+// process.cwd() 拼路径解析到 test/bin/（不存在）→ MODULE_NOT_FOUND exit 1（单跑 cwd=仓根
+// 故绿——「单跑绿全量红」真因，非并发污染）；按 import.meta.url 定位对两种形态都稳。
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const list = (d) => { try { return readdirSync(d).sort() } catch { return [] } }
 
 console.log('\n[runtime-relayout] .runtime state/temp 分层与旧布局迁移')
@@ -212,13 +217,18 @@ console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spa
   writeFileSync(join(rt, 'ceremony-tier-2026-01-01-upgrade.json'), 'C')
   writeFileSync(join(rt, 'watcher.log'), 'L')
   writeFileSync(join(rt, 'repro-junk.mjs'), 'J') // 未知归属：入口迁移也不动
-  const childEnv = { ...process.env, SILLYSPEC_SYNC_BG: '0', SILLYSPEC_WATCHER: '0' } // 禁后台旁路：满载套件下子进程拖时间/残留句柄
-  const r = spawnSync(process.execPath, [join(process.cwd(), 'bin', 'sillyspec.js'), 'status', '--dir', repo], {
+  // HOME/USERPROFILE 钉到本文件私有隔离目录（2026-11-09-legacy-red-fixes）：runner 的
+  // childEnv 把 HOME 指向套件共享 suiteTmp，满载并发下先跑的 home 类测试在 suiteTmp
+  // 留下的 .sillyspec 会被本段 status 子进程读到（脏 home → exit 1）——私有 home 断开共享。
+  const isolatedHome = mkdtempSync(join(tmpdir(), `sillyspec-relayout-home-${process.pid}-`))
+  const childEnv = { ...process.env, SILLYSPEC_SYNC_BG: '0', SILLYSPEC_WATCHER: '0', HOME: isolatedHome, USERPROFILE: isolatedHome } // 禁后台旁路：满载套件下子进程拖时间/残留句柄
+  const r = spawnSync(process.execPath, [join(repoRoot, 'bin', 'sillyspec.js'), 'status', '--dir', repo], {
     cwd: repo, // 子进程 cwd 锚临时仓：防 cwd 解析在真实仓/测试目录落 .sillyspec 污染
     encoding: 'utf8', timeout: 60000, env: childEnv,
   })
+  rmSync(isolatedHome, { recursive: true, force: true })
   const okStatus = r.status === 0 || r.status === null
-  assert(okStatus, `CLI status 正常完成（exit=${r.status}）`)
+  assert(okStatus, `CLI status 正常完成（exit=${r.status}；stderr 尾 400 字：${(r.stderr || '').slice(-400)}；stdout 尾 200 字：${(r.stdout || '').slice(-200)}）`)
   assert(existsSync(join(rt, 'state', 'draft-ledger-2026-01-01-upgrade.json')) && existsSync(join(rt, 'state', 'ceremony-tier-2026-01-01-upgrade.json')), '旧布局散文件入口自动迁 state/')
   assert(existsSync(join(rt, 'temp', 'watcher.log')), '日志入口自动迁 temp/')
   assert(existsSync(join(rt, 'repro-junk.mjs')), '未知归属文件入口迁移不动（不猜归属）')

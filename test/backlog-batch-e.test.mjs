@@ -84,6 +84,14 @@ console.log('\n=== ② friction-tally：锁内原子 RMW ===')
 
 console.log('\n=== ③ mcp-server exit 2 不标 isError ===')
 {
+  // gate 的 runtime 目录按 cwd 解析 + mkdir-p（2026-11-09-legacy-red-fixes 残渣治理）：
+  // 本段进程 cwd=仓根/test 时 gate 调用会在 test/ 下造出 .sillyspec/.runtime，
+  // 污染 spec-dir-home-guard Test 5 的向上查找——chdir 到隔离 tmp 并在段尾复原。
+  const { mkdtempSync: _mkdtemp } = await import('node:fs')
+  const { tmpdir: _tmpdir } = await import('node:os')
+  const isolated = _mkdtemp(join(_tmpdir(), 'be-mcp-cwd-'))
+  const prevCwd = process.cwd()
+  process.chdir(isolated)
   const { startMcpServer } = await import('../src/mcp-server.js')
   const { PassThrough } = await import('node:stream')
   const input = new PassThrough()
@@ -101,6 +109,8 @@ console.log('\n=== ③ mcp-server exit 2 不标 isError ===')
   assert(r !== null, '收到回包')
   assert(r?.result?.isError !== true && typeof r?.result?.content?.[0]?.text === 'string' && r.result.content[0].text.length > 0,
     `exit 2 不标 isError 且诊断 text 保留（isError=${r?.result?.isError}，text 前 40 字：${(r?.result?.content?.[0]?.text || '').slice(0, 40)}）`)
+  process.chdir(prevCwd)
+  rmSync(isolated, { recursive: true, force: true })
 }
 
 console.log(`\n${'='.repeat(50)}\n✅ 通过: ${count.passed}  ❌ 失败: ${count.failed}\n${'='.repeat(50)}`)

@@ -93,6 +93,10 @@ console.log('\n=== Test 4: home 里的真项目（自带 .sillyspec）不受影�
 console.log('\n=== Test 5: 非 home 祖先链正常向上命中 ===')
 {
   const { resolveSpecDir } = await imp(join(root, 'src', 'run', 'shared.js'))
+  // 前置防护（2026-11-09-legacy-red-fixes）：个别测试在 test/ cwd 下触发 gate/auto-pull 的
+  // mkdir-p 会在 test/ 下造出 .sillyspec 残渣，污染本用例的向上查找——跑前清掉（源头
+  // backlog-batch-e ③ 已 chdir 隔离根治，此处防护未知残留源复发）。
+  rmSync(join(root, 'test', '.sillyspec'), { recursive: true, force: true })
   // 本仓库自身：从 test/ 向上必须命中仓库根 .sillyspec（真实环境 home 不在本链上）
   const got = resolveSpecDir(__dirname)
   assert(got === join(root, '.sillyspec'), `本仓库子目录正常向上命中 (got: ${got})`)

@@ -1,4 +1,5 @@
 # core-engine 变更索引
+- 2026-11-09-legacy-red-fixes | 全量 8 预存失败归因清偿三件:①2026-11-08-project-map(2b1fd2fb)误回退 knowledge SKILL.md(撤 accept/refresh 退役/--body-file/K 形态四段模板)——git 恢复 2b1fd2fb^ 版本,knowledge 三测试 5 断言复绿;②test/.sillyspec 运行残渣(backlog-batch-e ③ MCP gate 调用 cwd=test/ 触发 mkdir-p)污染向上查找(home-guard Test5+relayout 单跑绿全量红)——③段 chdir 隔离 tmp 根治+home-guard 前置清理防护;③文案/行号锚演进同步:platform-interface-map 12 处行号锚按当前源码更新、prompt-golden 官方通道再生(quick 阶段 +821B,与 a556e117 AskUserQuestion 文案演进吻合)、thin-record 断点②断言对齐现行句。src/ 零改动
 
 > 由 sillyspec modules split-changelog 自模块卡迁出（手工批次：节标题带后缀/MANUAL_NOTES 区，工具正则不认）；新条目继续追加到本文件，勿写回模块卡。
 

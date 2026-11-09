@@ -53,7 +53,8 @@ test('② 断点②对账半句：保留「执行断点」关键词，追加汇�
   const s = cli(['flow', 'start', '--change', CHANGE, '--input', INPUT])
   assert.equal(s.status, 0)
   assert.match(s.stdout, /执行断点/, '断点②关键词保留（flow-checkpoints 断言兼容）')
-  assert.match(s.stdout, /等用户确认再跑收口/, '既有句逐字保留')
+  // 等待语义句随 a556e117（AskUserQuestion 问询改造）演进为「等用户选择」（2026-11-09-legacy-red-fixes 锚同步）
+  assert.match(s.stdout, /等用户选择再跑收口/, '现行等待语义句保留')
   assert.match(s.stdout, /汇报顺带对账/, '追加对账半句')
   rmSync(cwd, { recursive: true, force: true })
 })
