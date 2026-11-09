@@ -20,7 +20,7 @@ import { join } from 'path';
 export const FINAL_SYNC_PENDING_TTL_MS = 10 * 60 * 1000;
 
 /** 🚨 补报横幅标签(与强校验内联路径的「平台文件树推送未确认」同族,带自救命令)。 */
-export const FINAL_SYNC_WARN_TAG = '[终态同步补报]';
+const FINAL_SYNC_WARN_TAG = '[终态同步补报]';
 
 /** marker 目录:<runtimeRoot>/temp/final-sync(temp 分层=可随时整体删除)。 */
 function finalSyncDir(runtimeRoot) {
