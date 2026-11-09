@@ -862,6 +862,43 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
  * @param {{headTreeFiles:string, changeName:string}} p
  * @returns {boolean}
  */
+// ── 2026-11-09-archive-landing-visibility FR-01：终态归档落库重算 + 渲染 ──────────
+// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：runArchiveChain 内的「🚨 归档提交
+// 未落库」打在输出中段，最后一行是「✅ flow done 完成」——agent/人尾部消费（tail）得到假
+// 成功，归档件滞留共享暂存区（并行 index 手术可丢）。flow.js 终态打印时用 computeArchiveLanding
+// 独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效），渲染结果作为输出
+// 最后内容。归档提交执行主体不变（agent 手工执行，共享仓竞态 + hook 纪律见上方注释）。
+export function computeArchiveLanding({ cwd, changeName }) {
+  const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
+  const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
+  const landed = archiveLandedInHeadTree({ headTreeFiles, changeName })
+  let commitCommand = null
+  if (!landed) {
+    const { pathspecs } = resolveArchiveCommitPathspecs({
+      changeName,
+      stagedNameStatus: String(stagedRaw || ''),
+      headTreeFiles,
+      existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
+    })
+    if (pathspecs.length > 0) {
+      commitCommand = `git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`
+    }
+  }
+  return { landed, commitCommand }
+}
+
+/** FR-01 渲染纯函数：落库 → 单行确认；未落库 → 🚨 尾块（作为 flow done 输出最后内容）。 */
+export function renderArchiveLandingEpilogue({ landed, commitCommand }) {
+  if (landed) return '✅ 归档提交已落库（HEAD 树含本变更归档路径）。'
+  const lines = [
+    '🚨 归档提交尚未落库：归档件停在暂存区——pull/清理/工作区重置会丢归档（终态重算判定）。',
+    '   立即执行（幂等；pathspec 限本变更面）：',
+  ]
+  if (commitCommand) lines.push(`   ${commitCommand}`)
+  lines.push('   执行后核对：git log --oneline -1 应见「chore(archive): <变更名> 归档留档」。')
+  return lines.join('\n')
+}
+
 export function archiveLandedInHeadTree({ headTreeFiles, changeName }) {
   const prefix = '.sillyspec/changes/archive/'
   const name = String(changeName || '')

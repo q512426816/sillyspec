@@ -2922,6 +2922,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：flow done 到此 =
   // 变更已归档，文件树推送失败不再静默半态（🚨 告警 + 自救命令 + exit 1）
   try { await triggerSyncTerminalStrict(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+  // 2026-11-09-archive-landing-visibility FR-01：归档落库终态尾块——输出最后内容。
+  // 动机：runArchiveChain 内的「🚨 未落库」打在中段，尾部消费（agent tail/人扫尾行）只见
+  // 「✅ flow done 完成」假成功，归档件滞留共享暂存区（并行 index 手术可丢，同日三变更实证）。
+  // 此处独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效）；
+  // exit code 保持 0（未落库属设计内人工交接，不与收口失败的 exit≠0 语义混用）。
+  try {
+    const { computeArchiveLanding, renderArchiveLandingEpilogue } = await import('./run/complete-handlers.js')
+    console.log(renderArchiveLandingEpilogue(computeArchiveLanding({ cwd, changeName: change })))
+  } catch { /* 尾块 best-effort，不阻断协议面 */ }
   return { change, substeps: doneList }
 }
 

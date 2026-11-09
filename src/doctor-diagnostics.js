@@ -36,7 +36,8 @@ import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
 import { readGateSnapshotLedger, selectStaleSnapshots } from './run/gate-snapshot-ledger.js'
 import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
-import { readFrictionLedger } from './friction-ledger.js';
+import { readFrictionLedger } from './friction-ledger.js'
+import { archiveLandedInHeadTree } from './run/complete-handlers.js';
 // FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
 // fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
 import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
@@ -872,6 +873,60 @@ export function detectInjectionBudget(cwd) {
  * .sillyspec/.runtime/worktrees（worktree.js:24——勿用 runtimeRoot，平台模式分离只影响
  * execute-runs 族）。
  */
+// ── 2026-11-09-archive-landing-visibility FR-02：归档提交残留（半归档半态）──────────
+// 动机（multi-agent-platform 仓 2026-11-09 三变更实证）：flow done 归档子步把归档件
+// 补暂存后由 agent 手工提交（设计内交接，共享仓竞态 + hook 纪律）——交接被漏时归档件
+// 滞留共享暂存区（pull/清理/index 手术可丢），且 flow done 输出已翻篇无从发现。本检查
+// 只读兜底：暂存区条目（src/dst 任一侧）落在 changes/<名>/ 或 changes/archive/<名>/
+// 且该变更未落 HEAD 树 → WARNING + 修复命令。复用 archiveLandedInHeadTree 判定；
+// 含他人半归档残留（complete-handlers othersResidual 只在归档时刻可见，此处常驻可见）。
+export function detectArchiveCommitResidue(cwd) {
+  const base = { name: 'archive_commit_residue', label: '归档提交残留（staged 未落库）', safe_actions: [] }
+  try {
+    // 非 git 仓显式判定（gitQuiet 失败不抛错而是空返回，靠 catch 抓不到非仓态）。
+    const insideRepo = String(gitQuiet(cwd, ['rev-parse', '--is-inside-work-tree']) || '').trim()
+    if (insideRepo !== 'true') {
+      return { ...base, findings: ['非 git 仓（或 git 不可用）——skipped'], pass: true, severity: null, skipped: true }
+    }
+    const stagedRaw = String(gitQuiet(cwd, ['diff', '--cached', '--name-status']) || '')
+    if (!stagedRaw.trim()) {
+      return { ...base, findings: ['暂存区无归档相关条目'], pass: true, severity: CHECK_SEVERITY.PASSED }
+    }
+    const headTreeFiles = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
+    const owners = new Set()
+    // 解析口径对齐 resolveArchiveCommitPathspecs（--name-status：R 行 src<TAB>dst
+    // 两格、A/M/D 单格——TAB 分隔逐格取，勿用 porcelain 的 ' -> ' 形态）。
+    for (const line of stagedRaw.split('\n')) {
+      if (!line.trim()) continue
+      for (const cell of line.split('\t').slice(1)) {
+        const raw = cell.trim().replace(/^"|"$/g, '')
+        if (!raw) continue
+        const m = /^\.sillyspec\/changes\/(?:archive\/)?([^/]+)\//.exec(raw)
+        if (m && m[1] !== 'archive') owners.add(m[1])
+      }
+    }
+    const residue = []
+    for (const owner of owners) {
+      if (!archiveLandedInHeadTree({ headTreeFiles, changeName: owner })) residue.push(owner)
+    }
+    if (residue.length === 0) {
+      return { ...base, findings: ['暂存区归档相关条目均已落 HEAD（无半归档残留）'], pass: true, severity: CHECK_SEVERITY.PASSED }
+    }
+    const findings = residue.map((owner) =>
+      `半归档残留：变更 ${owner} 的归档条目已进暂存区但 HEAD 树无 archive/${owner}/——pull/清理/index 手术会丢归档件`,
+    )
+    base.safe_actions.push({
+      action: residue.map((owner) =>
+        `git commit -m "chore(archive): ${owner} 归档留档" -- .sillyspec/changes/${owner} .sillyspec/changes/archive/${owner}`,
+      ).join(' ; '),
+      risk: 'low',
+    })
+    return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（git 不可用或非仓库：${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
 export function detectWorktreeHealth(cwd) {
   const base = { name: 'worktree_health', label: 'worktree 隔离健康', safe_actions: [] }
   try {
@@ -1744,7 +1799,9 @@ export async function runDoctorDiagnostics({ cwd }) {
   // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
   // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
+  // 2026-11-09-archive-landing-visibility FR-02：归档提交残留（只读 WARNING）
+  const archiveCommitResidue = detectArchiveCommitResidue(cwd)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
 
   return {
     dimensions,
