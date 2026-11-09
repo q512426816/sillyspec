@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-10-ci-platform-test-fixes",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "df1e4108c26ce320b9764736b43125d1cda37c27",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——同步单进程测试断言，无事件时序面，与 design 作答一致；diff 仅两测试文件，无事件/回调/异步时序引入（change.patch 全文核）",
+    "并发": "ok——design 声称的防护实证在位：eval 测试 7/8 tmp fixture + finally rmSync 清理（test/eval-knowledge-runner.test.mjs:95-110,126-130）；Test9 parseRepoArgs 为纯字符串解析零 fs 接触（eval/knowledge/lib/repos.mjs 无 fs import）；③ 只读仓根 local.yaml 不写——无并发写面",
+    "切换": "n/a；边界已裁决：可接受——(a) ③「无键」断言条件式化（existsSync 在场才断言）为 design 显式声明取舍：文件缺席=天然无键（不变量 vacuous 成立），「读取=0」断言无条件保留兜底（test/fr-regress-cap.test.mjs:73），缺席 fail-soft=0 由同文件 ② rmSync→0 显式覆盖且实测绿——守卫未弱化，非吞崩溃 guard（ENOENT 根因=对 gitignored 可缺席文件无条件断言，修复对齐真实契约）；(b) FR-02 绑定「不适用」为披露边界：Linux CI 进程本地无法实例化，逻辑分支由 FR-01 两用例平台无关实现覆盖、终验收=推送后 GitHub Actions test job（CI 实跑结果属 cannot_verify，承诺本身即写明推送后留痕口径）",
+    "scope": "ok；边界已裁决：可接受——单字标签 x+POSIX 绝对路径与盘符形态的字符串歧义本质无解（design 死路声明成立）：生产侧按 process.platform 门控会破坏已锁定的跨平台 baseline 键稳定语义（既有断言「Windows 盘符不当作 label 分隔符」原样保留于 test/eval-knowledge-runner.test.mjs:141-142）；机理实证：parseRepoSpec 盘符分支 /^[A-Za-z]:[\\\\/]/（eval/knowledge/lib/repos.mjs:14）只匹配单字盘符，「dup:」多字标签两平台均落 :18 label:path 分支 → :35-36 Map 冲突检测抛「仓标签冲突」——守护行为（重复标签抛错不静默覆盖）两平台同判；ROOT 锚定 import.meta.url（fr-regress-cap.test.mjs:17）单仓不串台"
+  },
+  "reviewedAt": "2026-11-09T16:39:53Z"
+}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-10-ci-platform-test-fixes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-10-ci-platform-test-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「③ 本仓缺省断言与消费点单一源锚」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-10-ci-platform-test-fixes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-10-ci-platform-test-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-knowledge-runner.test.mjs「重复标签抛错（不静默覆盖）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-10-ci-platform-test-fixes"
+    }
+  ]
+}

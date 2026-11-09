@@ -1,0 +1,12 @@
+{"ts":1794241937578,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1794241947775,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794242010350,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1794242010843,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794242010843,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1794242057726,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794242082368,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1794242084452,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794242084452,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1794242098100,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1794242151215,"kind":"commit","stage":null,"detail":"df1e4108","provisional":true}
+{"ts":1794242161437,"kind":"gate-run","stage":"verify","detail":"门实测 passed（0.4s） · 20261109163559","provisional":true}

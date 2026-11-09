@@ -278,3 +278,29 @@ created_at: 2026-10-20T01:19:37.412Z
   confirmed_at: null
   source_change: 2026-11-04-shipped-hygiene-prompt-golden
   status: active
+
+## FR-auto-sillyspec-048 两个失败用例改为平台无关后，Windows 本地复跑全绿（fr-regress-cap 3/3、eval-knowledge-runner 39/39）
+变更：2026-11-10-ci-platform-test-fixes
+状态：active
+摘要：主路径；边界——CI checkout 态
+全文：.sillyspec/changes/archive/2026-11-10-ci-platform-test-fixes/requirements.md#FR-01
+最近确认：df1e4108c26ce320b9764736b43125d1cda37c27
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-10-ci-platform-test-fixes:flow:测试绑定FR-01
+  tests: test/eval-knowledge-runner.test.mjs「重复标签抛错（不静默覆盖）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-10-ci-platform-test-fixes
+  status: active
+
+## FR-auto-sillyspec-049 POSIX 形态输入行为正确——GitHub Actions test job 转绿
+变更：2026-11-10-ci-platform-test-fixes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-10-ci-platform-test-fixes/requirements.md#FR-02
+最近确认：df1e4108c26ce320b9764736b43125d1cda37c27
