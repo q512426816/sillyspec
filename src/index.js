@@ -78,6 +78,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]
                                       一键收编本会话 QUICKLOG 条目（切片提交：HEAD 基线+本会话条目块，
                                       patches sidecar 一并带上；并行会话条目恢复为工作区未提交态，不夹带）
+  sillyspec map <build|diff>        项目地图静态底图：build 产路由表+import 素材 JSON（stdout，
+                                     零写入）；diff 按契约 §4 判定 stale 四态写 MAP-INDEX 派生块
   sillyspec worktree <cmd>     git worktree 隔离管理（execute 阶段相关）
     create <change> [--base <branch>]   创建隔离 worktree
     apply <change> [--check-only]       校验并应用变更到主工作区
@@ -527,6 +529,26 @@ async function main() {
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
       await (await import('./setup.js')).cmdSetup(dir, { json, list: setupList });
       break;
+    case 'map': {
+      // 2026-11-10-map-cli-basemap task-03：项目地图静态底图（MASTER 子变更 2）。
+      // build=素材生成器（stdout JSON，零写入 D-001@v1）；diff=stale 四态判定写派生块。
+      const mapSub = filteredArgs[1];
+      const mapDirIdx = filteredArgs.indexOf('--dir');
+      const mapDir = mapDirIdx >= 0 && filteredArgs[mapDirIdx + 1] && !String(filteredArgs[mapDirIdx + 1]).startsWith('--') ? filteredArgs[mapDirIdx + 1] : dir;
+      if (mapSub === 'build') {
+        const { runMapBuild } = await import('./map-build.js');
+        process.exit(await runMapBuild(mapDir, { json: filteredArgs.includes('--json') }));
+      } else if (mapSub === 'diff') {
+        const { runMapDiff } = await import('./map-diff.js');
+        const baseIdx = filteredArgs.indexOf('--base');
+        const base = baseIdx >= 0 && filteredArgs[baseIdx + 1] && !String(filteredArgs[baseIdx + 1]).startsWith('--') ? filteredArgs[baseIdx + 1] : undefined;
+        process.exit(await runMapDiff(mapDir, { base, dryRun: filteredArgs.includes('--dry-run') }));
+      } else {
+        console.error("用法: sillyspec map build [--dir <项目根>] [--json] | sillyspec map diff [--dir <项目根>] [--base <commit>] [--dry-run]");
+        process.exit(2);
+      }
+      break;
+    }
     case 'progress': {
       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
       const progDir = specDir ? dir : resolveEffectiveDir(dir);
