@@ -129,6 +129,43 @@ test('writeVerifyFacts 分段合并：re-init 保留固化段、刷新机器段'
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段', () => {
+  const dir = tmpDir()
+  try {
+    // 缺场：不产 handover 段（现状零回归——未 --init 过的目录）
+    writeVerifyFacts(dir, R, 'c1')
+    let facts = JSON.parse(readFileSync(join(dir, 'verify-facts.json'), 'utf8'))
+    assert.equal(facts.handover, undefined, '无 verify-result.md → 不产 handover 段')
+
+    // 在场：md 含移交项表格 → 重跑命令后 facts.handover 反映 md 内容
+    // （2026-11-12-verify-probes-md-facts-refresh：此前仅 gates verify 收尾 backfill 产出，
+    //  gate 提示「重跑 verify-probes 刷新 facts」与实际不符）
+    writeFileSync(join(dir, 'verify-result.md'), [
+      '# 验证报告',
+      '',
+      '## 移交项（结构化）',
+      '| 类型 | 条目 | 复跑/验收条件 |',
+      '|---|---|---|',
+      '| manual-acceptance | 浏览器实拍对照 | 起 next dev 逐屏对照 |',
+      '| env-blocked | 集成实测未跑 | 重跑 verify 质量扫描步 |',
+      '',
+    ].join('\n'), 'utf8')
+    writeVerifyFacts(dir, R, 'c1')
+    facts = JSON.parse(readFileSync(join(dir, 'verify-facts.json'), 'utf8'))
+    assert.equal(facts.handover.count, 2, '移交项两行被解析')
+    assert.equal(facts.handover.items[0].type, 'manual-acceptance')
+    assert.equal(facts.handover.items[0].severity, 'advisory')
+    assert.equal(facts.handover.items[1].type, 'env-blocked')
+    assert.equal(facts.handover.items[1].severity, 'blocking')
+
+    // md 改写后重跑：handover 跟随 md 刷新（真相源，不是只保留旧值）
+    writeFileSync(join(dir, 'verify-result.md'), '# 验证报告（已清空移交项）\n', 'utf8')
+    writeVerifyFacts(dir, R, 'c1')
+    facts = JSON.parse(readFileSync(join(dir, 'verify-facts.json'), 'utf8'))
+    assert.equal(facts.handover.count, 0, '清空后 handover 归零（md 为真相源）')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('backfillMissingEvidenceSlots：缺失补齐 + 幂等二跑零改动', () => {
   const dir = tmpDir()
   try {

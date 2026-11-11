@@ -5496,3 +5496,75 @@
   confirmed_at: null
   source_change: 2026-11-11-deps-hub-symbol-narrow
   status: active
+
+## FR-core-engine-291 writeVerifyFacts 落盘前，若变更目录 verify-result.md 存在，则从 md 重解析并刷新 handover / dbScriptDeclarations / matrixPartialRows 三段（md 为真相源）
+变更：2026-11-12-verify-probes-md-facts-refresh
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 变更目录有 verify-result.md（含两行移交项表格）；When 跑 `sillyspec verify-probes --change X`；Then facts.handover.count = 2 且各行 type/severity 正确；md 清空后重跑 → count 归零
+全文：.sillyspec/changes/archive/2026-11-12-verify-probes-md-facts-refresh/requirements.md#FR-01
+最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-01
+  tests: test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-verify-probes-md-facts-refresh
+  status: active
+
+## FR-core-engine-292 verify-result.md 不存在时行为与现状完全一致（不产新段）
+变更：2026-11-12-verify-probes-md-facts-refresh
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 变更目录无 verify-result.md（未 --init 过）；When 跑 verify-probes 命令；Then facts 中无 handover 字段（与改动前一致）
+全文：.sillyspec/changes/archive/2026-11-12-verify-probes-md-facts-refresh/requirements.md#FR-02
+最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-02
+  tests: test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-verify-probes-md-facts-refresh
+  status: active
+
+## FR-core-engine-293 conclusion 段维持现状（解析器在 stage-contract，分层单向不引入反向 import）
+变更：2026-11-12-verify-probes-md-facts-refresh
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 任意调用路径；When writeVerifyFacts 落盘；Then facts.conclusion 仅来自 prev 保留或 backfill，本命令不解析结论枚举
+全文：.sillyspec/changes/archive/2026-11-12-verify-probes-md-facts-refresh/requirements.md#FR-03
+最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
+
+## FR-core-engine-294 新增测试覆盖：md 含移交项表格时重跑命令后 facts.handover 反映 md 内容
+变更：2026-11-12-verify-probes-md-facts-refresh
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given test/verify-facts-v2.test.mjs 新用例「writeVerifyFacts md 派生段刷新」；When `node --test test/verify-facts-v2.test.mjs` 执行；Then 三分支断言（在场解析 / 缺场不产段 / 清空归零）全部通过
+全文：.sillyspec/changes/archive/2026-11-12-verify-probes-md-facts-refresh/requirements.md#FR-04
+最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-04
+  tests: test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-verify-probes-md-facts-refresh
+  status: active

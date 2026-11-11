@@ -2981,6 +2981,19 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
       }
     }
   } catch { /* 首次落盘/v1/损坏 → 全新快照（v1 无固化段，直接升 v2） */ }
+  // md 派生段刷新（2026-11-12-verify-probes-md-facts-refresh）：verify-result.md 是真相源，
+  // 本命令落盘时同步重解析三段——此前这些字段只在 gates verify 收尾的
+  // backfillFactsFromMdAndTests 里产出，gate 拦截提示「重跑 verify-probes 幂等刷新 facts
+  // 即可消解」与实际行为不符（重跑只保留旧段，2026-11-11-workspace-ia-redesign 实证）。
+  // conclusion 仍归 backfill：其解析器 extractVerifyConclusionSlot 在 stage-contract，
+  // 分层单向（verify-probes 不反向 import）。
+  try {
+    const verifyMd = readFileSync(join(changeDir, 'verify-result.md'), 'utf8')
+    const handoverItems = parseHandoverRows(verifyMd)
+    facts.handover = { count: handoverItems.length, items: handoverItems }
+    facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMd)
+    facts.matrixPartialRows = countMatrixPartialRows(verifyMd)
+  } catch { /* verify-result.md 不存在（未 --init 过）→ 不产新段，维持现状 */ }
   writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
   console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（v2 分段合并，固化段保留；CLI 全权写，勿手改）${opts.platformNote || ''}`)
   // 左移警告（2026-09-23 执行会话实证：散文式接口定义到 verify 期才被零面拦下，表格形态要求

@@ -717,3 +717,12 @@ supersedes：D-001@v1
 文件：src/deps-symbol-narrow.js, src/index.js, src/verify-postcheck.js, test/deps-symbol-narrow.test.mjs
 最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
 理由：现行 import 依赖回归面（`discoverModuleDependentTests`，src/verify-postcheck.js:1180）按**模块路径子串**匹配：变更枢纽模块任一导出，全部引用该路径的测试入面（「只可能多跑不漏」——2026-09-26-dynamic-test-inference 契约），枢纽模块（依赖方众多的 mcp_tools 类）单符号改动拖全量面。本变更加一层**符号收敛**：从变更 diff 提取「触达导出符号集」，模块路径命中且命名导入不含任何触达符号的依赖测试出面。收敛只在枢纽面激活（模块路径命中数 > 8，常量 `DEPS_SYMBOL_NARROW_HUB_MIN`，无配置键——默认零配置可用纪律）；所有不确定形态 fail-open 保留（多跑侧不变量只在「命名导入且全不触达」这一可判定形态上放开，该放开正是本变更的目的、用户显式决策）。语言面：JS/TS 适配器先行；Python 等其他语言无符号信息 → 整体回落模块路径匹配（不锁死语言，新增语言加提取适配即可）。
+
+## D-core-engine-052@v1 2026-11-12-verify-probes-md-facts-refresh——改 `src/verify-probes.js` 的 `writeVerifyFacts`（verify-probes 命令的 facts 落盘点）：合并 pr
+状态：implemented
+变更：2026-11-12-verify-probes-md-facts-refresh
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-12-verify-probes-md-facts-refresh/design.md
+文件：src/verify-probes.js, test/verify-facts-v2.test.mjs
+最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
+理由：改 `src/verify-probes.js` 的 `writeVerifyFacts`（verify-probes 命令的 facts 落盘点）：合并 prev 固化段之后、写盘之前，若变更目录存在 `verify-result.md` 则用本文件既有的三个解析器（parseHandoverRows / parseDbScriptDeclarations / countMatrixPartialRows）重解析并覆盖 `handover` / `dbScriptDeclarations` / `matrixPartialRows` 三段。理由：这三个字段是 verify-result.md 的纯派生（md 是真相源），此前唯一产出入口是 gates verify 收尾的 `backfillFactsFromMdAndTests`，导致 gate 拦截提示「重跑 verify-probes 幂等刷新 facts 即可消解」与实际行为不符（重跑只保留旧段不产新段，2026-11-11-workspace-ia-redesign 实证只能靠 `--done` 回填）。
