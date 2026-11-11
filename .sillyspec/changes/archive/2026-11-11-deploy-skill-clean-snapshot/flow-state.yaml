@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -22,11 +30,16 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: 6be426284c8f2a5fb3e1d6dcb88507cc7ab0cc91
-updatedAt: '2026-11-11T08:00:43.472Z'
+updatedAt: '2026-11-11T08:10:01.427Z'
 baseline_sha256: 14bb2b9ac2de355c9582bd5f3b67f5f4d9f9e68033e312d7af2200c8e6c2811a
 spec_approved: true
 spec_approved_at: '2026-11-11T08:00:43.471Z'
 spec_approved_by: main@deploy-skill
 spec_approved_channel: user-confirmed
 spec_attested_by: main@deploy-skill
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（17.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261111080428\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 7 个
 

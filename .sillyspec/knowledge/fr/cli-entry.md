@@ -12312,3 +12312,17 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-05-knowledge-search-observability
   status: active
+
+## FR-cli-entry-650 deploy SKILL.md ⑥ 步改为 HEAD 临时 worktree 干净快照发布为唯一路径，写明 why 与完整命令序列
+变更：2026-11-11-deploy-skill-clean-snapshot
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-11-deploy-skill-clean-snapshot/requirements.md#FR-01
+最近确认：33c389e45c86f492028d1486ecc9f0c79aeb9b36
+
+## FR-cli-entry-651 前置检查、版本面、验证门、坑清单四处同步本次实战学习
+变更：2026-11-11-deploy-skill-clean-snapshot
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-11-deploy-skill-clean-snapshot/requirements.md#FR-02
+最近确认：33c389e45c86f492028d1486ecc9f0c79aeb9b36

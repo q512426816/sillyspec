@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-11-deploy-skill-clean-snapshot",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "33c389e45c86f492028d1486ecc9f0c79aeb9b36",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——设计答「不适用」属实：diff 无事件面，纯指引文本；流程时序（⑤ 推送先于 ⑥ 快照）在正文显式钉死（SKILL.md:87「发布提交已在 ⑤ 推送，HEAD 即发布态」），HEAD 恒发布态的前提由顺序链保证",
+    "并发": "ok——边界已裁决：可接受。设计声明的版本号命名防撞 + 同版本并发被 registry 拒经核实成立：跨版本目录名不同不撞；同版本时 git worktree add 对已注册路径干净报错（非数据损坏），registry 端完整性由 npm「cannot publish over」保证；发布物内容恒为同一 HEAD 快照，无正确性风险",
+    "切换": "ok——边界已裁决：可接受。中断残留临时 worktree 无数据风险（发布物已上 registry，残留目录 git worktree list 可见、remove 可清），设计披露如实且正文「用毕即删」降低概率；坑清单不新增属合理取舍",
+    "作用域": "ok——边界已裁决：可接受。WT 建在系统 TEMP（SKILL.md:90），不碰仓内 worktree 清单；skill description 显式限本仓，无跨仓串台面"
+  },
+  "notes": "冻结 patch 与 HEAD（33c389e4）实态一致（该文件工作区无未提交改动）。检查单逐条：1) FR↔实现↔测试一致——FR-01 六步序列+why 全兑现（SKILL.md:85-97，无条件唯一路径+工作区实态打包机理+~105 残渣实证）；FR-02 五处齐备（①:19,22 dist-tags 防呆两停规则；③:39 跳位实证；④:66 pack 移 ⑥+主仓 ~485 不可作基线；⑥:94 快照面 pack+~380 基线；坑清单:122-123 两新行）。测试绑定两条「不适用：纯文档」成立——diff 仅 .agents/skills/deploy/SKILL.md 一个文件，ledger 回执面 module[]+deps passed 与纯文档一致。2) 盲维四问见 dimensionNotes，均属实。3) 披露边界五条全部显式裁决为可接受（见 notes 详列）。4) 防护声明核实：dist-tags 防呆、快照绝缘、渐进轮询均在正文在位；「.npmignore 拦不住未跟踪文件」机理属实（.npmignore 存在，npm pack 按盘面文件非 git 状态收集）；「快照面无 node_modules 可 pack --dry-run」核实成立——package.json scripts 无 prepack/prepare 钩子。5) 生成物同步 n/a（无类型/契约文件；skill frontmatter name/description 未动，与设计承诺一致）。6) 测试有效性两问不适用（文档口径）：无绑定测试可造假，验收以内容核对替代且逐条给出行级正锚点；diff 无代码无吞异常 guard。探针：cli-copy-selfsufficient pass——文中全部命令/flag/路径核实真实（sillyspec push 为真实 CLI 命令、test/quick-retired.test.mjs 与 test/flow-order-canon.test.mjs 存在且复跑 8/8 绿 exit=0 与「版本锚点 8 例」文案一致、registry.npmjs.org dist-tags 与版本端点格式正确、npm-cache/_logs 路径正确、npm run lint=check-syntax 存在）；坑清单引用门禁文案「index 有 N 个已暂存文件」与 src/push.js:796 实际输出逐字一致；①「脏面不阻断」与实际门判定（仅暂存区门，push.js:796 文案自证未暂存/未跟踪不阻止）一致无文案漂移。config-absent-zero-regression n/a（未触 local.yaml 键）。crossrepo-path-compat pass——Git Bash 正斜杠 TEMP 路径写法正确，git worktree 接受绝对路径；不假设构建工具链在 PATH（全部命令为 git/npm/node/curl 基元）；无 repos 注册语义卷入。声明边界裁决详列：a) 无条件快照唯一路径（不做脏面条件分支）——可接受，消灭归属误判面；b) 版本号命名目录+registry 拒同版本——可接受，见并发维度；c) 无 node_modules 快照面 pack——可接受，无 prepack 钩子实证；d) 残留 worktree 不入坑清单——可接受，list/remove 处置路径已有；e) TEMP 隔离不碰仓内 .worktrees——可接受。"
+}
