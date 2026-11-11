@@ -1075,7 +1075,13 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             const { discoverModuleDependentTests } = await import('./verify-postcheck.js');
             const tAllowed = parseAllowedPaths(readFileSync(tCardPath, 'utf8'));
             if (tAllowed.length > 0) {
-              const tDeps = discoverModuleDependentTests({ cwd: dir, changedFiles: tAllowed, coveredCommands: [] });
+              // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：best-effort，收集失败 → null → 回落模块级
+              let tSymbols = null
+              try {
+                const { collectTouchedExportSymbols } = await import('./deps-symbol-narrow.js')
+                tSymbols = collectTouchedExportSymbols({ cwd: dir, changeName: tChange, specBase: tSpecBase, changedFiles: tAllowed })
+              } catch { tSymbols = null }
+              const tDeps = discoverModuleDependentTests({ cwd: dir, changedFiles: tAllowed, coveredCommands: [], touchedExportSymbols: tSymbols });
               if (tDeps.length > 0) {
                 console.log(`🎯 受影响测试族（deps(auto) 同源 ${tDeps.length} 个）——写完先跑定向再全量（30s 定位 < 100s 全量+归因）：`);
                 console.log(`   node --test ${tDeps.slice(0, 10).join(' ')}${tDeps.length > 10 ? `  …等共 ${tDeps.length} 个` : ''}`);

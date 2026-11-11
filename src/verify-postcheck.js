@@ -29,6 +29,7 @@ import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 import { unquoteYamlScalar } from './yaml-scalar-unquote.js'
+import { collectTouchedExportSymbols, namedImportEvidence, DEPS_SYMBOL_NARROW_HUB_MIN } from './deps-symbol-narrow.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync } from 'fs'
 import { join, resolve, isAbsolute } from 'path'
 import { readChangeTrace, testAnchorFile } from './test-bindings.js'
@@ -1177,7 +1178,7 @@ function stripCommentsForDepMatch(content, isPy = false) {
   return out
 }
 
-export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
+export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [], touchedExportSymbols = null, hubMinDependents = DEPS_SYMBOL_NARROW_HUB_MIN }) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
   const norm = (p) => String(p).replace(/\\/g, '/')
   const changedAll = [...new Set(changedFiles.map(norm))]
@@ -1193,6 +1194,47 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
     for (const d of pythonImportCandidates(src)) pyCandidates.add(d)
   }
   const jsSrc = changedSrc.filter(p => /\.(js|mjs|cjs|ts|tsx)$/.test(p))
+
+  // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：带非空符号映射时走两阶段判定——
+  // 阶段一模块路径命中（与下方无参路径同口径）；阶段二对「命中数 > hubMinDependents（枢纽）
+  // 且有符号」的文件做 namedImportEvidence 二次裁决，纯命名导入全不触达（miss）出面，
+  // hit/unknown 保留（fail-open 多跑侧）。无参路径与 2026-09-26 现状逐字一致（FR-04 零回归）。
+  const symMap = touchedExportSymbols && typeof touchedExportSymbols === 'object'
+    ? new Map(Object.entries(touchedExportSymbols).filter(([, v]) => Array.isArray(v) && v.length > 0))
+    : null
+  if (symMap) {
+    const hitsByTest = new Map()
+    const countBySrc = new Map()
+    for (const tf of collectTestFiles(cwd)) {
+      const fname = tf.split('/').pop()
+      if (covered.includes(fname) || covered.includes(tf)) continue
+      let content = ''
+      try { content = readFileSync(join(cwd, tf), 'utf8') } catch { continue }
+      const contentCode = stripCommentsForDepMatch(content, tf.endsWith('.py'))
+      const hitSrcs = jsSrc.filter(src => contentCode.includes(src))
+      const pyHit = [...pyCandidates].some(d => contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`))
+      if (hitSrcs.length === 0 && !pyHit) continue
+      hitsByTest.set(tf, { hitSrcs, pyHit, contentCode })
+      for (const src of hitSrcs) countBySrc.set(src, (countBySrc.get(src) || 0) + 1)
+    }
+    for (const [tf, { hitSrcs, pyHit, contentCode }] of hitsByTest) {
+      let include = pyHit
+      if (!include) {
+        include = hitSrcs.some((src) => {
+          const syms = symMap.get(src)
+          if (!syms || (countBySrc.get(src) || 0) <= hubMinDependents) return true // 非枢纽/无符号 → 模块级保留
+          return namedImportEvidence(contentCode, src, syms) !== 'miss'
+        })
+      }
+      if (include) found.add(tf)
+    }
+    for (const t of changedTests) {
+      const fname = t.split('/').pop()
+      if (covered.includes(fname)) continue
+      if (existsSync(join(cwd, t))) found.add(t)
+    }
+    return [...found].sort()
+  }
 
   for (const tf of collectTestFiles(cwd)) {
     const fname = tf.split('/').pop()
@@ -2487,7 +2529,10 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   let frCapApplied = null
   if (strategy === 'dynamic' && !gitUnavailable) {
     try {
-      depsAutoFiles = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [] })
+      // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：收集失败 → null → 回落现状模块级
+      let depsSymbols = null
+      try { depsSymbols = collectTouchedExportSymbols({ cwd, changeName, specBase, changedFiles: lastChangedFiles }) } catch { depsSymbols = null }
+      depsAutoFiles = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [], touchedExportSymbols: depsSymbols })
     } catch { depsAutoFiles = [] }
     try {
       frPre = collectFrLinkedTests({ specBase, changeName, changedFiles: lastChangedFiles, projectRoot: cwd })
@@ -3808,7 +3853,10 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
   // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
   // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
-  let deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：收集失败 → null → 回落现状模块级
+  let subsetSymbols = null
+  try { subsetSymbols = collectTouchedExportSymbols({ cwd, changeName, specBase, changedFiles }) } catch { subsetSymbols = null }
+  let deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test), touchedExportSymbols: subsetSymbols })
   // deps_regress_cap（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
   // own（变更触碰文件集∩依赖面）优先整跑，其余按 N 截断/off 全弃（归 pre-push/CI 门）。
   // 缺省 null=全跑（现状零回归）。own 判定与语言/框架无关（纯路径集合运算）。
