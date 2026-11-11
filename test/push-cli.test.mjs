@@ -318,3 +318,31 @@ test('⑪ pre-push hook 失败：ok=false，json 错误含 hook stderr', async (
     assert.ok(oldHead, '本地状态仍在（不自动回滚）')
   } finally { cleanup(join(work, '..')) }
 })
+
+test('⑫ human 模式 pre-push 失败错误含 hook stderr', async () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    mkdirSync(join(work, '.git', 'hooks'), { recursive: true })
+    writeFileSync(join(work, '.git', 'hooks', 'pre-push'), '#!/bin/sh\necho HOOK-FAIL-SIGNAL >&2\nexit 1\n', { mode: 0o755 })
+    const r = await runPush({ cwd: work })
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join('\n'), /HOOK-FAIL-SIGNAL/, 'human 模式错误也要含底层 stderr 详情（不再只有首行）')
+  } finally { cleanup(join(work, '..')) }
+})
+
+test('⑬ human 模式转发 git 输出、--json stdout 纯净', () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    const human = spawnSync(process.execPath, [BIN, 'push'], { cwd: work, encoding: 'utf8' })
+    assert.equal(human.status, 0, human.stderr)
+    assert.match(human.stderr, /To /, 'human 模式应转发 git push 输出到 stderr')
+    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
+    const js = spawnSync(process.execPath, [BIN, 'push', '--json'], { cwd: work, encoding: 'utf8' })
+    assert.equal(js.status, 0, js.stderr)
+    const parsed = JSON.parse(js.stdout)
+    assert.equal(parsed.command, 'push')
+    assert.doesNotMatch(js.stdout, /^To /m, '--json 的 stdout 必须保持纯 JSON（不含 git 原始输出）')
+  } finally { cleanup(join(work, '..')) }
+})

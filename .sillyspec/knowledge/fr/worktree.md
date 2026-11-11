@@ -350,3 +350,117 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-10-10-worktree-salvage-archive-aware
   status: active
+
+## FR-worktree-019 parsePushArgs 忽略代执行环境残留的 shell 重定向 token（2>&1、>/dev/null、>/dev/null 等）并产生告警
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：末尾带 2>&1；重定向夹在合法参数之间
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-01
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-01
+  tests: test/push-plan.test.mjs「parsePushArgs：容忍代执行残留的 shell 重定向 token」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active
+
+## FR-worktree-020 parsePushArgs 遇到管道/链式控制符（|、||、&&、;、&）截断其后参数并产生告警
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：管道后接 tail；参数后再接链式命令
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-02
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-02
+  tests: test/push-plan.test.mjs「parsePushArgs：管道/链式控制符截断其后参数」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active
+
+## FR-worktree-021 合法参数组合与现有 fail-closed 行为保持不变
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：真正的位置参数仍被拒绝；互斥组合仍被拒绝
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-03
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-03
+  tests: test/push-plan.test.mjs「parsePushArgs：默认 by-change；one 必须带 --change；未知/互斥 fail-closed」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active
+
+## FR-worktree-022 human 模式 git push 失败时错误信息包含底层 stderr 详情
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：pre-push hook 失败；远端拒绝推送
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-04
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-04
+  tests: test/push-cli.test.mjs「human 模式 pre-push 失败错误含 hook stderr」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active
+
+## FR-worktree-023 成功与失败均由 CLI 转发捕获的 git 输出到终端
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：json 模式 stdout 纯净
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-05
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-05
+  tests: test/push-cli.test.mjs「human 模式转发 git 输出、--json stdout 纯净」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active
+
+## FR-worktree-024 相关单测与集成测试通过
+变更：2026-11-11-push-shell-token-tolerance
+状态：active
+摘要：测试套件
+全文：.sillyspec/changes/archive/2026-11-11-push-shell-token-tolerance/requirements.md#FR-06
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-06
+  tests: test/push-plan.test.mjs「parsePushArgs：容忍代执行残留的 shell 重定向 token」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-push-shell-token-tolerance
+  status: active

@@ -5873,6 +5873,9 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       // 放在 switch 末尾：避免插行造成 docs 里 index.js:N 的行号引用整体漂移。
       const { parsePushArgs, runPush, PUSH_USAGE } = await import('./push.js');
       const parsed = parsePushArgs(filteredArgs.slice(1));
+      // 代执行环境残留的 shell token 容忍告警（2026-11-11-push-shell-token-tolerance）：
+      // 解析成功时也能看到「忽略了什么」，便于定位平台层不解析 shell 的根因。
+      for (const w of parsed.warnings || []) console.error(`⚠️ ${w}`);
       if (!parsed.ok) {
         for (const e of parsed.errors) console.error(`❌ ${e}`);
         console.error(PUSH_USAGE);

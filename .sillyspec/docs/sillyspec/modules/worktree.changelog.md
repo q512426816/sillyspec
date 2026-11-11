@@ -29,3 +29,4 @@ ql-20260911-030-bad4 | hasUnappliedChanges 无 meta 改保守 true（对齐 dir 
 | 2026-10-21 | 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测 |
 | 2026-10-23 | 2026-10-23-push-squash | 推送前按变更压扁本地未推送提交 |
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
+| 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |

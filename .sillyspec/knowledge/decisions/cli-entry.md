@@ -255,3 +255,12 @@ supersedes：D-010@v1
 文件：src/index.js, src/stages/knowledge.js, test/knowledge-propose-body-file.test.mjs
 最近确认：f1acc9d4f35f45560109db808cbebb5ae5a603e8
 理由：在 `cmdPropose`（src/stages/knowledge.js:534-590）的参数解析段新增 `--body-file <路径>`：与既有 `--title/--category/--body/--from` 同款 indexOf 取值，读文件（readFileSync utf8）作 body，后续 slug 生成/frontmatter 拼接/writeAtomicSync 落盘全部复用既有 --body 路径零改写。校验序前置：`--body` 与 `--body-file` 同给 → `body_source_conflict`；文件不存在 → `body_file_missing`；读抛错 → `body_file_read_failed`——三类错误全部在 `mkdirSync(proposedDir)` 之前返回，错误路径零目录创建零落盘。选该方案是因为它是平台会话工具反馈原话建议的形态（「支持 --body-file 从文件读正文，彻底绕开命令行传参」），且是唯一同时规避「命令行长度上限」与「策略层对命令行文本的误判」两个问题的通道——正文不经过 argv。
+
+## D-cli-entry-014@v1 2026-11-11-push-shell-token-tolerance——两处代码修复，均在 `src/push.js`，加少量 `src/index.js` 渲染： 1. **参数容忍**：在 `parsePushArgs` 的现有
+状态：implemented
+变更：2026-11-11-push-shell-token-tolerance
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-11-push-shell-token-tolerance/design.md
+文件：src/git-helper.js, src/index.js, src/push.js, test/push-cli.test.mjs, test/push-plan.test.mjs
+最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
+理由：两处代码修复，均在 `src/push.js`，加少量 `src/index.js` 渲染： 1. **参数容忍**：在 `parsePushArgs` 的现有循环内、flag 解析之后增加两级判定——遇到 `|`/`||`/`&&`/`;`/`&` 立即 `break`（shell 语义下当前命令参数到此结束，丢弃其后 token）；遇到 shell 重定向 token（`2>&1`、`1>&2`、`2>/dev/null`、`>nul`、裸 `>`/`>>`/`1>`/`2>` 及其目标文件等）则 `continue`（裸重定向符额外跳过后一个目标文件 token）。每次忽略/截断向 `warnings` 推一条可读告警。判定放在 flag 解析之后，保证 `--change <值>` 这类合法值不会被误剥离。返回结构增加 `warnings` 字段，由 `index.js` 在 human 模式打印。 2. **错误详情**：`pushBranch` 不再用 `stdio: inherit`（该模式让 `execFileSync` 拿不到 stderr，错误只剩 `Command failed` 首行）。改为默认 pipe 捕获，结束后把捕获的 stdout/stderr 转发到进程 stderr（human 模式）；失败时把 detail 合入错误信息，`--json` 模式保持 stdout 纯 JSON、不转发。 选择「循环内判定」而非「解析前整串预剥离」：预剥离会误吞 `--change 2>&1` 这类合法值（值位置还未被 flag 消费），内联判定天然尊重 flag 值消费顺序。

@@ -12,7 +12,7 @@
  * 数组形式天然规避 shell 拆词，路径含空格 / 元字符安全。
  * safeGit 额外支持 opts.retryOnTimeout：ETIMEDOUT（机器忙瞬时抖动）时用 2× timeout 重试一次。
  */
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -161,6 +161,35 @@ export function git(cwd, args, opts = {}) {
   })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
+}
+
+/**
+ * 捕获型 git 调用（spawnSync，不经 shell）：同时返回 stdout/stderr 与退出码。
+ *
+ * 与 git() 的区别：execFileSync 在失败时抛错、成功时**丢弃 stderr**，需要「成功也要
+ * 转发输出、失败要完整 stderr」的调用方（如 push）拿不到 stderr。本函数用 spawnSync
+ * 一次拿全，调用方自行决定转发/合并（2026-11-11-push-shell-token-tolerance）。
+ *
+ * @param {string} cwd
+ * @param {string[]} args
+ * @param {{ timeout?: number, env?: NodeJS.ProcessEnv, input?: string|Buffer }} [opts]
+ * @returns {{ ok: boolean, status: number|null, signal: string|null, stdout: string, stderr: string, error: Error|null }}
+ */
+export function gitCapture(cwd, args, opts = {}) {
+  const { timeout = 5000, env, input } = opts
+  const res = spawnSync('git', buildFullArgs(cwd, args), {
+    encoding: 'utf8', timeout, maxBuffer: GIT_MAX_BUFFER,
+    ...(input === undefined ? {} : { input }),
+    env: gitChildEnv(env), windowsHide: true,
+  })
+  return {
+    ok: res.status === 0,
+    status: res.status,
+    signal: res.signal || null,
+    stdout: String(res.stdout == null ? '' : res.stdout),
+    stderr: String(res.stderr == null ? '' : res.stderr),
+    error: res.error || null,
+  }
 }
 
 /**

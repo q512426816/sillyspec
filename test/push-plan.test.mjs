@@ -36,6 +36,41 @@ test('parsePushArgs：默认 by-change；one 必须带 --change；未知/互斥 
   assert.equal(parsePushArgs(['--dry-run', '--json']).options.dryRun, true, '--json 由全局层剥离，这里不应报未知')
 })
 
+test('parsePushArgs：容忍代执行残留的 shell 重定向 token', () => {
+  const r = parsePushArgs(['2>&1'])
+  assert.equal(r.ok, true)
+  assert.equal(r.options.mode, 'by-change')
+  assert.ok(r.warnings.some((w) => w.includes('2>&1')), '告警需点名被忽略的 token')
+  const r2 = parsePushArgs(['--dry-run', '2>/dev/null'])
+  assert.equal(r2.ok, true)
+  assert.equal(r2.options.dryRun, true)
+  const r3 = parsePushArgs(['--mode', 'one', '--change', APP, '>nul'])
+  assert.equal(r3.ok, true)
+  assert.equal(r3.options.change, APP)
+  const r4 = parsePushArgs(['--dry-run', '>', 'out.log'])
+  assert.equal(r4.ok, true)
+  assert.equal(r4.options.dryRun, true)
+  // 合法值不被误吞：flag 值优先于 shell token 判定
+  const r5 = parsePushArgs(['--mode', 'one', '--change', '2>&1'])
+  assert.equal(r5.ok, true)
+  assert.equal(r5.options.change, '2>&1')
+})
+
+test('parsePushArgs：管道/链式控制符截断其后参数', () => {
+  const r = parsePushArgs(['|', 'tail', '-12'])
+  assert.equal(r.ok, true)
+  assert.ok(r.warnings.some((w) => w.includes('|')), '告警需说明控制符截断')
+  const r2 = parsePushArgs(['--dry-run', '&&', 'git', 'status'])
+  assert.equal(r2.ok, true)
+  assert.equal(r2.options.dryRun, true)
+  const r3 = parsePushArgs(['--mode', 'one', '--change', APP, ';', 'echo', 'done'])
+  assert.equal(r3.ok, true)
+  assert.equal(r3.options.change, APP)
+  const r4 = parsePushArgs(['--dry-run', '||', 'echo', 'fallback'])
+  assert.equal(r4.ok, true)
+  assert.equal(r4.options.dryRun, true)
+})
+
 test('detectChangeOwner：括号/归档/plumbing 形态与歧义', () => {
   assert.equal(detectChangeOwner(`feat: a (${APP})`, [APP, OTHER]), APP)
   assert.equal(detectChangeOwner(`chore(archive): ${APP} 归档留档`, [APP, OTHER]), APP)

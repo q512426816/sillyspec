@@ -18,11 +18,20 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { git, safeGit, gitQuiet } from './git-helper.js'
+import { git, safeGit, gitQuiet, gitCapture } from './git-helper.js'
 
 const PUSH_MODES = ['by-change', 'one', 'none']
 const GIT_TIMEOUT = 30000
 const PUSH_TIMEOUT = 600000
+// 平台「git 代执行」通道不解析 shell：命令行里的重定向/管道会被原样拆成 argv 传给 CLI
+// （2026-11-11 实证：`sillyspec push 2>&1 | tail -12` 报「不接受位置参数: 2>&1」）。
+// 这里按 shell 语义容错——控制符处截断，重定向 token 忽略——让命令在代执行环境也能执行，
+// 同时保留告警暴露根因。正常 shell 下这些 token 根本到不了 CLI，改动零影响。
+const SHELL_CONTROL_TOKENS = new Set(['|', '||', '&&', ';', '&'])
+// 裸重定向符（> >> 1> 2> &>）：后一个 token 是目标文件，需一并跳过。
+const BARE_REDIRECT_RE = /^(?:\d|&)?>>?$/
+// 一体式重定向：2>&1 / 1>&2 / >&2 / 2>/dev/null / >nul / 2>file / &>file ...
+const INLINE_REDIRECT_RE = /^(?:\d|&)?>>?(?:&\d+|\/dev\/(?:null|stdout|stderr)|nul|\S+)$/i
 const MAX_MESSAGE_BYTES = 200000
 const PLUMBING_RE = /^sillyspec:/
 
@@ -68,6 +77,7 @@ export function parsePushArgs(argv = []) {
     base: null, remote: null, branch: null, help: false, json: false,
   }
   const errors = []
+  const warnings = []
   const valueFlags = new Set(['--mode', '--change', '--base', '--remote', '--branch'])
   const boolFlags = new Set(['--dry-run', '--no-push', '--undo', '--help', '-h', '--json'])
   for (let i = 0; i < argv.length; i++) {
@@ -102,6 +112,21 @@ export function parsePushArgs(argv = []) {
       else if (key === '--branch') options.branch = String(v)
       continue
     }
+    // 代执行环境残留的 shell 语法：放在 flag 解析之后，--flag <值> 的值优先被消费，
+    // 不会被误剥离（如 `--change 2>&1` 的值仍原样生效）。
+    if (SHELL_CONTROL_TOKENS.has(a)) {
+      warnings.push(`检测到 shell 控制符 ${a}，已忽略其后的参数（代执行环境不解析 shell；请裸调用 sillyspec push）`)
+      break
+    }
+    if (BARE_REDIRECT_RE.test(a)) {
+      warnings.push(`检测到 shell 重定向 ${a}，已忽略（代执行环境不解析 shell；请裸调用 sillyspec push）`)
+      if (i + 1 < argv.length && !String(argv[i + 1]).startsWith('-')) i++
+      continue
+    }
+    if (INLINE_REDIRECT_RE.test(a)) {
+      warnings.push(`检测到 shell 重定向 ${a}，已忽略（代执行环境不解析 shell；请裸调用 sillyspec push）`)
+      continue
+    }
     if (a.startsWith('-')) { errors.push(`未知参数: ${a}`); continue }
     errors.push(`不接受位置参数: ${a}`)
   }
@@ -117,8 +142,8 @@ export function parsePushArgs(argv = []) {
     if (options.noPush) errors.push('--undo 不能与 --no-push 同用')
   }
   if (options.mode === 'none' && options.noPush) errors.push('--mode none 已不压扁，不能与 --no-push 同用')
-  if (errors.length) return { ok: false, errors }
-  return { ok: true, options }
+  if (errors.length) return { ok: false, errors, warnings }
+  return { ok: true, options, warnings }
 }
 
 /**
@@ -754,21 +779,23 @@ function rewriteChain({ repoRoot, base, groups, oldHead }) {
 }
 
 function pushBranch({ repoRoot, remote, branch, remoteBranch, json = false }) {
-  try {
-    // human 模式 inherit：pre-push hook 输出实时直达终端——报错一次给全，不依赖二跑定位
-    // （cli-copy-selfsufficient 探针口径）；--json 模式保持 pipe 捕获，stderr 并入错误信息供机器消费。
-    const out = git(repoRoot, ['push', remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`], {
-      timeout: PUSH_TIMEOUT, trim: false,
-      stdio: json ? undefined : ['ignore', 'inherit', 'inherit'],
-    })
-    return { ok: true, output: String(out || '') }
-  } catch (e) {
-    // json（pipe）模式把 hook 的 stderr/stdout 并入错误信息——报错一次给全；
-    // human（inherit）模式下输出已实时直达终端，e.stderr 为空属预期。
-    const detail = [e && e.stderr, e && e.stdout].map((x) => String(x == null ? '' : x).trim()).filter(Boolean).join('\n')
-    const first = String(e && e.message ? e.message : e).split('\n')[0]
-    return { ok: false, error: detail ? `${first}\n${detail}` : first }
-  }
+  // 用 gitCapture（spawnSync）同时拿 stdout/stderr/退出码（2026-11-11 实证）：原 human
+  // 模式用 stdio: inherit，execFileSync 拿不到 stderr，失败只剩 "Command failed" 首行，
+  // 平台 UI 只显示 failed to push some refs，non-fast-forward/网络/hook 等真实原因被吞；
+  // 而成功时 git 的 "To <remote>" 输出也在 stderr，execFileSync 成功路径同样拿不到。
+  // 取舍：hook 输出改为子进程结束后一次性转发（不再实时逐行），换取输出完整。
+  // --json 模式不转发，stdout 保持纯 JSON。
+  const refspec = `refs/heads/${branch}:refs/heads/${remoteBranch}`
+  const r = gitCapture(repoRoot, ['push', remote, refspec], { timeout: PUSH_TIMEOUT })
+  const captured = [r.stdout, r.stderr].map((x) => String(x == null ? '' : x)).join('')
+  if (!json && captured.trim()) process.stderr.write(captured.endsWith('\n') ? captured : `${captured}\n`)
+  if (r.ok) return { ok: true, output: r.stdout }
+  const detail = [r.stderr, r.stdout].map((x) => String(x == null ? '' : x).trim()).filter(Boolean).join('\n')
+  const reason = r.error
+    ? `${r.error.message}${r.signal ? ` (signal ${r.signal})` : ''}`
+    : `exit ${r.status == null ? 'unknown' : r.status}`
+  const first = `Command failed: git push ${remote} ${refspec} — ${reason}`
+  return { ok: false, error: detail ? `${first}\n${detail}` : first }
 }
 
 /**
