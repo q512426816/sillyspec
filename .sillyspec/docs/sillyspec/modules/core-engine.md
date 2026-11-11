@@ -197,3 +197,8 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 ## 探针族注记（2026-09-27-gate-docs-cleanup）
 
 - verify 探针族增员至 12：「探针 12 UI 视觉证据（分级门）」——UI 触达变更验 visual-evidence.md 在场性与降级裁决留痕；缺证据默认警告（ui_visual_gate=error 升阻断）、视觉降级无「用户裁决」留痕恒 error。实现 src/ui-visual.js（runUiVisualProbe/renderUiVisualProbeLines），runVerifyProbes fail-soft 计算、renderVerifyProbesReport 段渲染（旧 result 无键兜底零回归）。
+
+## 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）
+
+- import 依赖回归面收敛：`src/deps-symbol-narrow.js` 三导出（`extractTouchedExports` diff 精确改动行×export span、`namedImportEvidence` 命名导入三态 hit/miss/unknown、`collectTouchedExportSymbols` flow-state baseline 直锚收集器）；`discoverModuleDependentTests` 增可选 `touchedExportSymbols`/`hubMinDependents`（缺省 8=常量 DEPS_SYMBOL_NARROW_HUB_MIN）——枢纽文件（模块路径命中>阈值）的依赖测试经命名导入裁决：全命名导入均不含触达符号（miss）出面，hit/unknown 保留（fail-open 多跑侧）。
+- 无符号参数路径与 2026-09-26 现状逐字一致（零回归）；三个调用点（收口动态子集/runModuleSubset/task-start 前移）fail-soft 接线，收集失败回落模块级。Python 无符号收敛（回落模块级，语言中立）。

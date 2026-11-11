@@ -5401,3 +5401,98 @@
   confirmed_at: null
   source_change: 2026-11-09-archive-landing-visibility
   status: active
+
+## FR-core-engine-286 变更枢纽模块某导出符号时，仅引用模块其他未触达导出的依赖测试不再入 import 依赖回归面
+变更：2026-11-11-deps-hub-symbol-narrow
+状态：active
+摘要：枢纽收敛主路径
+全文：.sillyspec/changes/archive/2026-11-11-deps-hub-symbol-narrow/requirements.md#FR-01
+最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-01
+  tests: test/deps-symbol-narrow.test.mjs「枢纽收敛主路径：未触达符号依赖出面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-deps-hub-symbol-narrow
+  status: active
+
+## FR-core-engine-287 引用触达符号的依赖测试（命名 import/解构）照常入面
+变更：2026-11-11-deps-hub-symbol-narrow
+状态：active
+摘要：触达符号引用保持
+全文：.sillyspec/changes/archive/2026-11-11-deps-hub-symbol-narrow/requirements.md#FR-02
+最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-02
+  tests: test/deps-symbol-narrow.test.mjs「触达符号命名导入/require 解构保持入面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-deps-hub-symbol-narrow
+  status: active
+
+## FR-core-engine-288 无法判定引用形态（star import/动态 import/别名/解析失败）时 fail-open 回落模块路径匹配（多跑侧不漏）
+变更：2026-11-11-deps-hub-symbol-narrow
+状态：active
+摘要：fail-open 三态
+全文：.sillyspec/changes/archive/2026-11-11-deps-hub-symbol-narrow/requirements.md#FR-03
+最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-03
+  tests: test/deps-symbol-narrow.test.mjs「fail-open：default/动态/无 import 语句三态保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-deps-hub-symbol-narrow
+  status: active
+
+## FR-core-engine-289 无符号信息（不可提取/未传 diff）时行为与现状逐字一致，既有测试面推断零回归
+变更：2026-11-11-deps-hub-symbol-narrow
+状态：active
+摘要：参数缺省零回归
+全文：.sillyspec/changes/archive/2026-11-11-deps-hub-symbol-narrow/requirements.md#FR-04
+最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-04
+  tests: test/deps-cwd-prefix.test.mjs | test/deps-symbol-narrow.test.mjs「无符号参数与现状逐字一致」 | test/dynamic-deps-comment-edge.test.mjs | test/dynamic-test-inference.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-deps-hub-symbol-narrow
+  status: active
+
+## FR-core-engine-290 新增符号提取与收敛判定的纯函数测试跑绿
+变更：2026-11-11-deps-hub-symbol-narrow
+状态：active
+摘要：纯函数边界覆盖
+全文：.sillyspec/changes/archive/2026-11-11-deps-hub-symbol-narrow/requirements.md#FR-05
+最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-05
+  tests: test/deps-symbol-narrow.test.mjs「extractTouchedExports span×hunk」 | test/deps-symbol-narrow.test.mjs「namedImportEvidence 三态与别名」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-11-deps-hub-symbol-narrow
+  status: active
