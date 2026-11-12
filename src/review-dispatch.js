@@ -110,40 +110,90 @@ export function detectStall(record, nowMs, stallMs) {
 }
 
 /**
- * 首个平衡 JSON 对象扫描（通道②/③共用）：从文本首个 { 起括号配对扫描（字符串字面量内的
- * } 不计数），命中即 JSON.parse 返回对象；无 {} / 首个平衡段解析失败 → null。
+ * 围栏代码块候选（坑 2026-11-09-review-dispatch-summary-json-extractor）：read_only worker
+ * 不能写文件，LLM 最自然的 JSON 产出形态是 ```json 代码块包裹——原三通道只做裸平衡扫描，
+ * 代码块前若有任何不可解析的 {...}（占位符/示例/尾逗号），首段解析失败即整体放弃，三通道
+ * 全空 → worker 成果被判「提取失败」误降级自审（实证 verdict 反转漏 3 个 P1）。
+ * 本函数收集 ```json / 裸 ``` 围栏内以 { 开头的整段文本（trim 后），按出现序返回。
  */
-function scanFirstBalancedJson(text) {
+function collectFencedJsonCandidates(text) {
   const t = String(text)
-  const start = t.indexOf('{')
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  for (let i = start; i < t.length; i++) {
-    const ch = t[i]
-    if (esc) { esc = false; continue }
-    if (ch === '\\') { esc = true; continue }
-    if (ch === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) {
-        try {
-          const obj = JSON.parse(t.slice(start, i + 1))
-          if (obj && typeof obj === 'object') return obj
-        } catch { return null }
-      }
-    }
+  const out = []
+  for (const m of t.matchAll(/```[ \t]*(?:json)?[ \t]*\r?\n([\s\S]*?)```/g)) {
+    const inner = m[1].trim()
+    if (inner.startsWith('{')) out.push(inner)
   }
-  return null
+  return out
 }
 
 /**
- * 从 artifacts / answer 提取 review JSON（三通道容错，design 风险登记「平台 artifacts 形态演进」）：
+ * 平衡扫描多候选化（同坑修复②）：收集文本中**全部**平衡 {...} 子串并逐段 JSON.parse——
+ * 原实现首个平衡段 parse 失败即 return null（前导噪声段一票否决后续真 JSON）。
+ * 仅返回可解析为对象的候选，按出现序。
+ */
+function collectBalancedJsonObjects(text) {
+  const t = String(text)
+  const out = []
+  let i = 0
+  while (i < t.length) {
+    const start = t.indexOf('{', i)
+    if (start === -1) break
+    let depth = 0, inStr = false, esc = false
+    let closedAt = -1
+    for (let j = start; j < t.length; j++) {
+      const ch = t[j]
+      if (esc) { esc = false; continue }
+      if (ch === '\\') { esc = true; continue }
+      if (ch === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) { closedAt = j; break }
+      }
+    }
+    if (closedAt === -1) break // 未闭合：后续不会再有完整对象
+    const slice = t.slice(start, closedAt + 1)
+    try {
+      const obj = JSON.parse(slice)
+      if (obj && typeof obj === 'object') out.push(obj)
+    } catch { /* 该段不可解析——继续下一候选（不再一票否决） */ }
+    i = closedAt + 1
+  }
+  return out
+}
+
+/** review 形态标记（候选排序用，非门禁——validateStageReview 才是 schema 权威）。 */
+function looksLikeReviewObject(obj) {
+  return obj && typeof obj === 'object' &&
+    (obj.schemaVersion !== undefined || obj.reviewType !== undefined || obj.specVerdict !== undefined)
+}
+
+/** 单文本提取：围栏候选优先（LLM 自然形态）→ 平衡多候选；review 形态标记优先于首个对象。 */
+function parseFirstReviewJson(text) {
+  const t = String(text)
+  if (!t) return null
+  const fencedObjs = []
+  for (const c of collectFencedJsonCandidates(t)) {
+    try {
+      const obj = JSON.parse(c)
+      if (obj && typeof obj === 'object') fencedObjs.push(obj)
+    } catch { /* 围栏内容非纯 JSON——落平衡扫描候选 */ }
+  }
+  const balancedObjs = collectBalancedJsonObjects(t)
+  const all = [...fencedObjs, ...balancedObjs]
+  return all.find(looksLikeReviewObject) || all[0] || null
+}
+
+/**
+ * 从 artifacts / answer 提取 review JSON（通道容错，design 风险登记「平台 artifacts 形态演进」）：
  * ① kind 含 review/review_json 的 artifact，content/content_ref/text 字段 JSON.parse 优先；
- * ② 兜底任一 artifact 文本字段提取首个平衡 {} 对象；
+ * ② 兜底任一 artifact 文本字段（含 summary 的 content_ref——2026-11-09 实证该字段承载正文）
+ *   提取 JSON：围栏 ```json 块候选优先 + 平衡 {...} 多候选续扫（首段噪声不再一票否决）；
  * ③ answer 正文扫描（2026-10-21-review-dispatch-answer-salvage / dsh 会话实证：worker 把完整
  *   review JSON 放回答正文而非 artifacts——任务书已明示该兜底形态）。
+ * 候选排序：review 形态标记（schemaVersion/reviewType/specVerdict）优先于首个对象——
+ * 摘要正文里先出现的示例 JSON 不抢真评审结果的位置。
  * 第二参可缺省——只传 artifacts 时行为与改前逐字一致（向后兼容）。全失败 → null（调用方给 --salvage 兜底指引）。
  */
 export function extractReviewFromArtifacts(artifacts, answer) {
@@ -167,7 +217,7 @@ export function extractReviewFromArtifacts(artifacts, answer) {
   }
   if (typeof answer === 'string' && answer) texts.push(answer)
   for (const t of texts) {
-    const obj = scanFirstBalancedJson(t)
+    const obj = parseFirstReviewJson(t)
     if (obj) return obj
   }
   return null

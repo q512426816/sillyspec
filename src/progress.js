@@ -10,7 +10,7 @@
  * worktree-guard hook 直读 sillyspec.db，不再有 gate-status.json 缓存双源（task-10 废除）。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync, lstatSync, readlinkSync } from 'fs';
 import { RUNTIME_TEMP_DIRNAME, runtimeTempPath } from './runtime-paths.js'
 import { timedSync } from './timing.js';
 import { join, basename, dirname, resolve, sep } from 'path';
@@ -233,12 +233,36 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
     });
   }
   if (!existsSync(ptr.specRoot)) {
+    // 悬空 junction 专项诊断（坑 2026-11-10-worktree-remove-dangling-spec-junction）：
+    // daemon spec junction 在 worktree 拆除后悬空（existsSync 对悬空链判 miss）——原提示
+    // 「daemon 未起？」误导排查方向，且悬空前的静默空读窗曾致「未找到进度数据=全部收口」误判。
+    try {
+      const lst = lstatSync(ptr.specRoot)
+      if (lst.isSymbolicLink()) {
+        const danglingTarget = readlinkSync(ptr.specRoot)
+        const repoSpec = join(dirname(pointerPath), '.sillyspec')
+        throw new PointerUnreachableError({
+          pointerPath,
+          specRoot: ptr.specRoot,
+          reason: `pointer.specRoot 是悬空链接（目标不存在：${danglingTarget}${danglingTarget.includes('.worktrees') ? '——worktree 拆除后 daemon spec junction 未还原' : ''}）`,
+          hint: [
+            `修复（约 1 分钟）：`,
+            `  ①删除悬空链接：rm "${ptr.specRoot}"（对 junction 安全，只删链接不删目标）`,
+            `  ②重指主仓：${process.platform === 'win32' ? `cmd /c mklink /J "${ptr.specRoot}" "${repoSpec}"` : `ln -s "${repoSpec}" "${ptr.specRoot}"`}${existsSync(repoSpec) ? '' : `（注意：${repoSpec} 不在场，先核对仓库根）`}`,
+            `  ③重跑本命令，并用 sillyspec status 核对活跃变更列表非空（意外为空=仍悬空）`,
+          ].join('\n'),
+        })
+      }
+    } catch (e) {
+      if (e instanceof PointerUnreachableError) throw e
+      /* 非 symlink 形态 / lstat 失败 → 走通用提示 */
+    }
     throw new PointerUnreachableError({
       pointerPath,
       specRoot: ptr.specRoot,
       reason: 'pointer.specRoot 路径不存在（daemon 未起？已迁移？）',
       hint: `启动 SillyHub daemon；或 sillyspec doctor --json 诊断；或显式 --spec-dir <本地路径> 临时走本地`,
-    });
+    })
   }
   // 驾驭：pointer 指向 OS temp 目录几乎肯定是陈旧测试/CI 残留（合法项目不会把 specRoot 放 temp）。
   // 历史：npm test 等会写 pointer 到 Temp/spec-dir-test-*，不清理则污染真实环境，所有命令静默落错库。

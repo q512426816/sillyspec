@@ -48,7 +48,7 @@ export function parseRouteFrontmatter(text) {
  * git 变更集 + rename 映射（--name-status --find-renames，scan-diff :116-131 同款）。
  * @returns {{ changed:Set<string>, renameMap:Object<string,string>, headShort:string }}
  */
-export function collectChangeSet(cwd, baseCommit) {
+function collectChangeSet(cwd, baseCommit) {
   const diffRes = safeGit(cwd, ['diff', '--name-status', '--find-renames', `${baseCommit}..HEAD`], { timeout: GIT_TIMEOUT_MS })
   if (diffRes.error || diffRes.value === null) {
     throw new Error(`git diff 失败（${baseCommit}..HEAD）：${diffRes.error || 'unknown'}`)
@@ -110,7 +110,7 @@ export function judgeRoute(meta, changeSet, prevState) {
 }
 
 /** 读既有派生块条目（route_id → state）——只降级判定需要。 */
-export function readExistingStaleStates(indexText) {
+function readExistingStaleStates(indexText) {
   const states = {}
   try {
     const data = yaml.load(indexText)

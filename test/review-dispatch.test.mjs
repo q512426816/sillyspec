@@ -92,6 +92,30 @@ test('artifacts 双通道提取：kind 命中 / 文本兜底 / 全失败 null', 
   assert.deepEqual(extractReviewFromArtifacts([{ kind: 'review', content: JSON.stringify(tricky) }]), tricky, '字符串字面量内 } 不误判')
 })
 
+// ── 坑 2026-11-09-review-dispatch-summary-json-extractor：summary.content_ref 代码块 JSON ──
+// read_only worker 不能写文件——LLM 自然产出形态是 ```json 围栏包裹；原实现裸平衡扫描
+// 且首段解析失败即放弃，实证三通道全空 → 误降级自审（verdict 反转漏 3 个 P1）。
+test('通道④：summary.content_ref 围栏代码块 JSON / 噪声后续扫 / 形态标记优先', () => {
+  const review = { schemaVersion: 1, reviewType: 'design', specVerdict: 'fail' }
+  // 坑实证形态：summary 的 content_ref 承载 ```json 围栏包裹的完整评审 JSON
+  const summaryRef = `评审完成，要点如下：\n\n\`\`\`json\n${JSON.stringify(review, null, 2)}\n\`\`\`\n\n请按结论处置。`
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'summary', content_ref: summaryRef }]), review, 'summary.content_ref 围栏 JSON 命中（坑实证形态）')
+  // 前导噪声段（不可解析的 {...} 占位）不再一票否决——后续真 JSON 续扫命中
+  const noisy = `先看示例占位 {placeholder} 不是 JSON，以下是真结论：\n\`\`\`json\n${JSON.stringify(review)}\n\`\`\``
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'summary', text: noisy }]), review, '前导噪声平衡段失败后继续扫描（旧实现此处返回 null）')
+  // 形态标记优先：围栏里的 review 形态对象胜过更早出现的无标记示例对象
+  const decoy = { example: true, a: 1 }
+  const both = `示例 \`\`\`json\n${JSON.stringify(decoy)}\n\`\`\` 之后才是评审 \`\`\`json\n${JSON.stringify(review)}\n\`\`\``
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'summary', text: both }]), review, 'review 形态标记优先于首个无标记对象')
+  // 裸 ``` 围栏（无 json 语言标注）同样识别
+  const bareFence = `结论：\n\`\`\`\n${JSON.stringify(review)}\n\`\`\``
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'other', text: bareFence }]), review, '裸 ``` 围栏同样命中')
+  // answer 正文围栏形态（通道③同享通道④逻辑）
+  assert.deepEqual(extractReviewFromArtifacts([], summaryRef), review, 'answer 正文围栏 JSON 命中')
+  // 全噪声（占位段不可解析且无其他候选）→ 仍 null（不虚造）
+  assert.equal(extractReviewFromArtifacts([{ kind: 'summary', text: '占位 {not-json} 完' }]), null, '无可解析候选 → null')
+})
+
 test('persistStageReview：schema 校验 + reviewer 落款 + docHash 机械重算 + 产物过 validateStageReview', () => {
   const sb = makeSpecBase()
   try {
