@@ -154,3 +154,12 @@ created_at: 2026-08-23T22:40:00+08:00
 理由：applyCrossRepoWorktrees 对每个有 meta 的跨仓：主副本 baseHash..HEAD 有推进且推进文件集与该仓声明文件面（resolveApplyAllowSet 切片）交集非空 → warning 列证（commit 数/交集文件/核对决策留痕指引），不阻断；跨仓 .git marker + worktree-guard hook 实时拦截记非目标（SillyHub 实证环境无 sillyspec hook，拦截无效且侵入异仓）。
 故障面：声明面不全的变更交集恒空漏报（与 apply 既有清单校验治理面重合，接受）；worktree 目录被外部删除（meta 随目录消失无 baseHash 可锚）与 changedFiles 收集抛错分支不适用检测（评审吸收③）
 退役判据：跨仓 hook 安装面成为现实约束（平台普遍装载 sillyspec hook）时升级为实时拦截
+
+## D-worktree-007@v1 2026-11-12-baseline-own-declared-skip——两处改动，同一根因（baseline overlay 把「本变更前置产物」与「并行会话脏文件」混进同一个 checkpoint）： ① `src/worktre
+状态：implemented
+变更：2026-11-12-baseline-own-declared-skip
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-12-baseline-own-declared-skip/design.md
+文件：src/worktree.js, test/baseline-own-declared-skip.test.mjs
+最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
+理由：两处改动，同一根因（baseline overlay 把「本变更前置产物」与「并行会话脏文件」混进同一个 checkpoint）： ① `src/worktree.js`：`_overlayBaseline` 用既有 `loadOwnDeclaredSet` 计算 `ownDeclaredFiles`（本变更 task 卡声明集 ∩ overlay 文件），文件仍复制进 worktree（保持在场），但 `_createBaselineCheckpoint` 用 pathspec `:(exclude)` 把它们排除出 commit——以未提交态等本变更 Wave 提交收编，`diff baselineCommit..HEAD` 对账即可见。 ② 归档交付面口径：**撤销**。原诊断假设「baseline 带入的并行会话未提交脏文件会被算成本变更交付面」，实测不成立——原 `git diff baselineCommit`（工作区）口径本已排除 checkpoint 内容；改成「只算提交面」反而漏检未提交交付（change-ownership-guards ⑦a/⑦a2 实测变红）。保留原口径，归档残留文件的根因另行诊断（apply 的 docs 通道），本轮不修。

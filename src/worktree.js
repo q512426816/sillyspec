@@ -20,7 +20,7 @@ import { openDatabase } from './db-engine.js';
 import { git, gitQuiet, unquoteGitPath } from './git-helper.js';
 // foreign-declared 零环独立模块（仅依赖 change-list/git-helper/stages/plan-postcheck，
 // 链上无回边）——contract-matrix/verify-probes/task-review 等处已有同款 import 先例
-import { splitOwnVsForeignDiffFiles } from './foreign-declared.js';
+import { splitOwnVsForeignDiffFiles, loadOwnDeclaredSet } from './foreign-declared.js';
 import { readWorktreePolicy } from './worktree-policy.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
@@ -924,14 +924,16 @@ export class WorktreeManager {
     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
     // （传变更名启用并行会话声明隔离——他者在途文件不进本变更 baseline，D-001@v1）
     const baselineResult = this._overlayBaseline(this.cwd, worktreePath, name);
-    const baselineFiles = baselineResult.files;
+    const ownDeclaredFiles = baselineResult.ownDeclaredFiles || [];
+    // meta/提交信息里的 baselineFiles = 主仓并行在途清单（本变更声明文件不混入，见 _overlayBaseline 尾注）
+    const baselineFiles = baselineResult.files.filter((f) => !ownDeclaredFiles.includes(f));
     const baselineHash = baselineResult.baselineHash;
 
     // 5.7 创建 baseline checkpoint（有 dirty baseline 时才创建）
     let baselineCommit = null;
     if (adoptedBranch) baselineCommit = baseHash; // adopt：分支 HEAD 恒作交付 diff 锚（无 dirty overlay 也要锚定）
-    if (baselineFiles.length > 0) {
-      baselineCommit = this._createBaselineCheckpoint(worktreePath, name, baselineFiles);
+    if (baselineResult.files.length > 0) {
+      baselineCommit = this._createBaselineCheckpoint(worktreePath, name, baselineFiles, ownDeclaredFiles);
     }
 
     // 5.8 依赖供给（change 2026-06-28-worktree-deps-provision）
@@ -2491,10 +2493,32 @@ export class WorktreeManager {
 
     const uniqueFiles = [...new Set(files)];
 
+    // 本变更声明集命中子集（2026-11-12-baseline-own-declared-skip）：这些文件是本变更
+    // 交付物（brainstorm/执行前置阶段已在主仓生成、尚未提交），复制进 worktree 保持在场，
+    // 但不进 baseline checkpoint——以未提交态等待本变更 Wave 提交收编，NEW: 声明的
+    // target_files 对账（diff baselineCommit..HEAD）才能看见它们（此前被 checkpoint 收编
+    // 导致 verify 对账误判「声明未做」＋归档交付面混入，2026-11-11-workspace-ia-redesign
+    // 实证原型三件套）。也不入 meta.baselineFiles（那是「主仓并行在途」归因清单）。
+    const ownDeclaredFiles = [];
+    if (changeName) {
+      try {
+        const ownSet = loadOwnDeclaredSet(
+          join(mainCwd, '.sillyspec'),
+          join(mainCwd, '.sillyspec', '.runtime'),
+          changeName,
+        );
+        if (ownSet.size > 0) {
+          for (const f of uniqueFiles) {
+            if (ownSet.has(String(f).replace(/\\/g, '/'))) ownDeclaredFiles.push(f);
+          }
+        }
+      } catch { /* 声明集加载失败 → 退回旧行为（全进 checkpoint，不阻断 create） */ }
+    }
+
     // 计算 baseline hash（用于 merge 前校验主工作区是否变化）
     const baselineHash = uniqueFiles.length > 0 ? computeBaselineHash(mainCwd) : null;
 
-    return { files: uniqueFiles, baselineHash };
+    return { files: uniqueFiles, ownDeclaredFiles, baselineHash };
   }
 
   /**
@@ -2503,12 +2527,16 @@ export class WorktreeManager {
    * @param {string} worktreePath
    * @param {string} changeName
    * @param {string[]} [baselineFiles] 主仓并行在途文件清单（_overlayBaseline 返回的 files，
-   *   已排除 .sillyspec）——写入提交信息正文（坑 baseline-checkpoint-opaque-carriage，
-   *   2026-08-24 用户反馈三期③：checkpoint 把主仓并行脏文件带进分支 diff，逐任务归因要靠
-   *   人肉区分；清单入 message 后 `git log` 一眼可辨、可机械排除）
+   *   已排除 .sillyspec 与本变更声明文件）——写入提交信息正文（坑
+   *   baseline-checkpoint-opaque-carriage，2026-08-24 用户反馈三期③：checkpoint 把主仓并行
+   *   脏文件带进分支 diff，逐任务归因要靠人肉区分；清单入 message 后 `git log` 一眼可辨、
+   *   可机械排除）
+   * @param {string[]} [ownDeclaredFiles] 本变更声明文件（2026-11-12-baseline-own-declared-skip）：
+   *   pathspec 排除出 checkpoint，以未提交态留在 worktree 等工作区提交收编——否则会被
+   *   checkpoint 收编、target_files 对账（diff baselineCommit..HEAD）看不见（实证原型三件套）
    * @returns {string} commit hash
    */
-  _createBaselineCheckpoint(worktreePath, changeName, baselineFiles = []) {
+  _createBaselineCheckpoint(worktreePath, changeName, baselineFiles = [], ownDeclaredFiles = []) {
     // 临时 git identity（用户未配置 user.name/email 时兜底）。终批-③：{ ...process.env } 展开
     // 而非裸替换——裸 env 丢 SystemRoot/USERPROFILE/TEMP（Windows 上 git 直接起不来）；
     // 提交走统一 git() 入口（safe.directory/timeout/maxBuffer 与全仓其他调用同口径——
@@ -2521,7 +2549,11 @@ export class WorktreeManager {
       GIT_COMMITTER_EMAIL: 'sillyspec@baseline',
     };
     try {
-      git(worktreePath, ['add', '-A'], { timeout: 30000 });
+      // 本变更声明文件不进 checkpoint（pathspec 排除，数组传参字面安全）：留在 worktree
+      // 未提交态，由本变更 Wave 提交收编 → target_files 对账可见、归档交付面干净。
+      const own = Array.isArray(ownDeclaredFiles) ? ownDeclaredFiles.filter(Boolean) : []
+      const excludeSpecs = own.map((f) => ':(exclude)' + String(f).replace(/\\/g, '/'))
+      git(worktreePath, ['add', '-A', '--', '.', ...excludeSpecs], { timeout: 30000 });
       // 检查是否有实际变更（可能 overlay 后和 HEAD 完全一致）
       const status = gitQuiet(worktreePath, ['status', '--porcelain'], { timeout: 30000 });
       if (!status) {
@@ -2530,6 +2562,11 @@ export class WorktreeManager {
       // 提交信息正文列夹带文件（封顶 30 行，超出记总数）——清单与 meta.baselineFiles 同源
       const CAP = 30
       const files = Array.isArray(baselineFiles) ? baselineFiles.filter(Boolean) : []
+      const ownBody = own.length > 0
+        ? [`\n本变更声明文件（留在工作区待本变更提交，未入 checkpoint）：`,
+           ...own.slice(0, CAP).map(f => `- ${f}`),
+           ...(own.length > CAP ? [`…等共 ${own.length} 个`] : [])].join('\n')
+        : ''
       const body = files.length > 0
         ? ['\n主仓并行在途文件（非本变更改动，逐任务归因时排除）：',
            ...files.slice(0, CAP).map(f => `- ${f}`),
@@ -2541,7 +2578,7 @@ export class WorktreeManager {
       // 致 commit 失败 → worktree 创建失败 → execute 无法启动。
       git(
         worktreePath,
-        ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}${body}`],
+        ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}${body}${ownBody}`],
         { timeout: 30000, env }
       );
       const hash = git(worktreePath, ['rev-parse', 'HEAD']);

@@ -464,3 +464,87 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-11-11-push-shell-token-tolerance
   status: active
+
+## FR-worktree-025 overlay 返回本变更声明命中集，声明文件不进 baseline checkpoint
+变更：2026-11-12-baseline-own-declared-skip
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 主仓有未提交的 demo.js（被本变更 task 卡 allowed_paths 声明）与 other.js（未声明）；When 创建 worktree（overlay + checkpoint）；Then ownDeclaredFiles = [demo.js]；checkpoint 提交含 other.js 不含 demo.js；demo.js 在 worktr
+全文：.sillyspec/changes/archive/2026-11-12-baseline-own-declared-skip/requirements.md#FR-01
+最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-01
+  tests: test/baseline-own-declared-skip.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-baseline-own-declared-skip
+  status: active
+
+## FR-worktree-026 无声明命中时行为与现状一致
+变更：2026-11-12-baseline-own-declared-skip
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 主仓未提交文件均不被当前变更声明；When 创建 worktree；Then ownDeclaredFiles 为空数组；checkpoint 含全部 overlay 文件（旧行为）
+全文：.sillyspec/changes/archive/2026-11-12-baseline-own-declared-skip/requirements.md#FR-02
+最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-02
+  tests: test/baseline-overlay-isolation.test.mjs | test/baseline-own-declared-skip.test.mjs「无声明命中 → ownDeclaredFiles 为空（旧行为）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-baseline-own-declared-skip
+  status: active
+
+## FR-worktree-027 归档交付面口径维持原样（撤销该修复）
+变更：2026-11-12-baseline-own-declared-skip
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given worktree 有未提交交付改动（modified 或 untracked）；When 归档前置检查；Then 交付面非空 → 阻断归档（与原行为一致）
+全文：.sillyspec/changes/archive/2026-11-12-baseline-own-declared-skip/requirements.md#FR-03
+最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-03
+  tests: test/change-ownership-guards.test.mjs「⑦a worktree 有未 apply 交付面 → 归档阻断」 | test/change-ownership-guards.test.mjs「⑦a2 --skip-apply 留痕」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-baseline-own-declared-skip
+  status: active
+
+## FR-worktree-028 新增回归测试覆盖三条语义
+变更：2026-11-12-baseline-own-declared-skip
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given test/baseline-own-declared-skip.test.mjs；When node --test 执行；Then 8 项断言全部通过；既有 baseline-overlay-isolation / cross-repo-baseline-anchor / archive-b
+全文：.sillyspec/changes/archive/2026-11-12-baseline-own-declared-skip/requirements.md#FR-04
+最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-04
+  tests: test/archive-baseline-entry.test.mjs | test/baseline-own-declared-skip.test.mjs | test/cross-repo-baseline-anchor.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-baseline-own-declared-skip
+  status: active
