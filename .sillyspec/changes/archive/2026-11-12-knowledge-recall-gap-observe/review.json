@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-knowledge-recall-gap-observe",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5da372df2670ba19a5e7b05fc3274fe198251a1c",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "入选规则引用过期头注，未指向有效正典值集",
+      "evidence": "【首轮】docs/troubleshooting.md:118 引用 decision-distill.js:20-22 头注（5 类型、仅 confirmed/accepted），实际入选集在 decision-values.js:31/34 与 dispositionOf:100-106。【复审】已改引 decision-values.js 并明示 :20-22 头注过期，核心问题解决。",
+      "location": "docs/troubleshooting.md:118"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "第二层机制描述遗漏正常域词片兜底与否决召回状态门",
+      "evidence": "【首轮】docs/troubleshooting.md:132-137 只按停车场通道解释召回失效。【复审】已补 fallbackByQueryShingles（:390、2 <= n <= ceil :411）与第三层防复潮注入状态门（flow.js:357 的 rejected/deathPath 过滤），implemented 决策即使入库/召回也不在注入面显示；词片上下界与 ceil 公式已写全。",
+      "location": "docs/troubleshooting.md:132"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "“与决策标题存在字面交集”低估匹配面：实现为标题∪理由",
+      "evidence": "【首轮】knowledge-match.js:426/721 均匹配 `${h.title} ${h.reason || ''}`，非仅标题。【复审】docs/troubleshooting.md:139 已改为「标题 + 理由」。",
+      "location": "docs/troubleshooting.md:139"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design 的“type=scope 一律不入选”与代码不符（scope+rejected 仍入库）",
+      "evidence": "【首轮】design.md:15 概括过宽；decision-distill.js:104 对任意 type 的 rejected 先返回 rejected。【复审】design.md:15 已改为「type=scope 且 status 非 rejected → 不入库」，docs/troubleshooting.md:129 亦注明 scope+rejected 会入库。",
+      "location": ".sillyspec/changes/2026-11-12-knowledge-recall-gap-observe/design.md:15"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "“三周前”日期不精确：裁决归档距记录日 28 天（四周）",
+      "evidence": "【首轮】2026-10-15→2026-11-12 为 28 天。【复审】docs/troubleshooting.md:111 与 design.md:13 均已改为「四周前（28 天）」。",
+      "location": "docs/troubleshooting.md:111"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "新增引用 decision-values.js:42 越界（KNOWLEDGE_STATUSES 实际在 :34）",
+      "evidence": "【复审】docs/troubleshooting.md:125 已改为 `decision-values.js:34`（`sed -n '34p'` 命中 KNOWLEDGE_STATUSES）；诊断段改为 `sed -n '20,34p'`，与文件 34 行一致，实测打印 20-34。",
+      "location": "docs/troubleshooting.md:125"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design.md:13 仍写「三周前」，与正文修正后的「四周前（28 天）」不一致",
+      "evidence": "【复审】design.md:13 已改为「四周前（28 天）」，与 docs/troubleshooting.md:111 口径一致；本变更相关面已无「三周前」残留。",
+      "location": ".sillyspec/changes/2026-11-12-knowledge-recall-gap-observe/design.md:13"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-12T16:15:03+08:00"
+}

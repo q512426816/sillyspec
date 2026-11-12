@@ -1,0 +1,42 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  知识召回缺口记录：历史裁决不被意图查询命中
+
+
+  本次对话中先给出「补生成式快照」建议，事后 grep 才发现该能力已于 2026-10-15 裁决冻结（D-001@v1），暴露知识召回缺口：knowledge search 按关键词命中，无法覆盖「我要不要做
+  X」这类意图查询，历史「已裁决不做」的决策不会在提建议时被自动召回。按规则 18 记入 troubleshooting.md 作为独立观察项。
+
+
+  成功标准：
+
+  - docs/troubleshooting.md 新增条目「意图查询无法召回历史裁决」，含症状、根因、诊断、处置四段
+
+  - 条目以本次 L3 裁决未被召回为实证，指明召回机制（knowledge-scope / 注入面）的缺口位置
+
+  - 文档头部 updated_at 更新为 2026-11-12
+autopilot: false
+prestage_ack: false
+baseline_commit: 14f11496d452617a13231abf94a8c57706b066a7
+updatedAt: '2026-11-12T08:15:52.984Z'
+baseline_sha256: a5a6174efacf92ca89ae0e2a5251b345d090c3add9543ccfe6a63b27948f188f
+spec_approved: true
+spec_approved_at: '2026-11-12T07:55:34.976Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: 'test: —｜lint: —｜门文件 16 个'
+
