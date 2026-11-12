@@ -175,6 +175,18 @@ export function renderSillyHubInstruction(contract) {
     ? `- \`agent_profile_id\`：\`${agentProfileHint}\`（来自 contract.agentProfileHint）`
     : '- `agent_profile_id`：未提供（contract.agentProfileHint 缺），沿用 daemon 默认 profile'
 
+  // 展示锚点参数行（2026-11-13-review-dispatch-origin-session / 主仓跨仓契约）：
+  // env SILLYHUB_SESSION_ID 非空（daemon 托管会话内注入）→ create_mission 附
+  // origin_session_id + origin_kind='execute' 两键（成对，平台参数对约束）；
+  // 缺失（手工终端）→ 整段不加，零回归。**converge 维持 D-004 禁调**（execute
+  // worker 回收由 SillySpec 自己 diff/apply，不走平台合并/收口）。
+  const originEnv = typeof process.env.SILLYHUB_SESSION_ID === 'string'
+    ? process.env.SILLYHUB_SESSION_ID.trim()
+    : '';
+  const originLine = originEnv
+    ? `\n   - \`origin_session_id\`：\`${originEnv}\` + \`origin_kind\`：\`execute\`（发起会话展示锚点——平台会话页按它展示本 Wave 任务卡；成对传入，勿单传）`
+    : '';
+
   const modeLine = readOnly
     ? '**只读模式（read_only=true）**：worker 只读 / 审查 / 写 review.json，不改源码（注：第一波 execute task 用写模式，acceptance 强制 tier=self，R-03）'
     : '**写模式（read_only=false）**：worker 按蓝图实现源码（TDD），但**绝不 git commit**（见下方 worker_prompt 覆写）'
@@ -191,7 +203,7 @@ export function renderSillyHubInstruction(contract) {
 
 1. **Wave 开始先建 mission**：调 \`create_mission\` tool 为本 Wave 创建独立 mission
    - 参数：\`objective\`（本 Wave 目标）/ \`change_id\`（SillySpec change id）/ \`budget_usd\`（per Wave 预算）
-   - 返回 \`mission_id\`，记下供本 Wave 内所有 task→worker 复用：${missionDisplay}
+   - 返回 \`mission_id\`，记下供本 Wave 内所有 task→worker 复用：${missionDisplay}${originLine}
 2. **Wave 内 task → worker 并行 dispatch**：同 Wave 多 task 各调一次 \`dispatch_worker\`，共用本 Wave 的 mission_id（保 Wave 内并行）
 3. **Wave 间 mission 串行**：上一 Wave 全 worker 终态 + 回收完成后，下一 Wave 起新 mission（不把全 Wave 塞一个 mission，否则失串行）
 

@@ -312,6 +312,39 @@ function writeWorkerAnswer({ runtimeRoot, stage, reviewRunId, gr }) {
   }
 }
 
+/**
+ * 发起会话展示锚点（2026-11-13-review-dispatch-origin-session / 主仓
+ * 2026-11-12-review-dispatch-session-display 跨仓契约）。
+ *
+ * 读 env SILLYHUB_SESSION_ID（daemon 托管会话内注入——spawn-env.ts:244；agent-session-log.js:1130
+ * 同源消费先例）。非空 → { originSessionId, originKind }（kind 由调用方给，厚道/薄道评审恒
+ * 'review'）；空（手工终端 CLI / 未注入）→ null 静默不传（回退现状，平台端点空转零噪音）。
+ * **影子链路（dispatchShadowReview）刻意不调用本函数**——静默对照评审不进会话页（防噪音）。
+ */
+function originAnchorFromEnv(kind) {
+  const v = typeof process.env.SILLYHUB_SESSION_ID === 'string'
+    ? process.env.SILLYHUB_SESSION_ID.trim()
+    : '';
+  if (!v) return null;
+  return { originSessionId: v, originKind: kind };
+}
+
+/**
+ * 回收成功后的 best-effort 收口（converge_mission 纯置位）。
+ * external mission 平台侧跳过 finalize merge/cleanup 只置 converged_at；失败仅告警
+ * 不影响回收结果（展示状态不依赖 converged_at——主仓 D-010）。client 未注入或无
+ * convergeMission 方法（旧 mock/测试桩）时静默跳过。
+ */
+async function convergeMissionBestEffort(client, missionId) {
+  try {
+    if (!client || typeof client.convergeMission !== 'function' || !missionId) return;
+    const r = await client.convergeMission({ missionId });
+    if (!r || r.ok !== true) console.warn(`[sillyspec] converge_mission 收口未成功（不影响回收结果；平台任务列表语义未收口，可平台 UI 处理）: mission ${missionId}`);
+  } catch (e) {
+    console.warn(`[sillyspec] converge_mission 收口异常（best-effort 吞掉）: ${e && e.message ? e.message : String(e)}`);
+  }
+}
+
 /** 降级指引（channel_priority 去 platform 的剩余序渲染；probe 失败 / worker 失败共用）。 */
 export function renderFallbackGuidance(cwd) {
   const rest = readReviewChannelPriority(cwd).filter((c) => c !== 'platform')
@@ -388,7 +421,9 @@ export async function runReviewDispatch(opts = {}) {
       }
       const changeDir = join(specBase, 'changes', changeName)
       const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: runId, channelPriority: readReviewChannelPriority(cwd), probeLines: probeLinesForThick(specBase) })
-      const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd })
+      // 展示锚点（env 缺失 → null 不传，回退现状）
+      const origin = originAnchorFromEnv('review')
+      const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd, ...(origin || {}) })
       const missionId = mission && mission.missionId
       if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId', guidance: renderFallbackGuidance(cwd) }
       const cr = createDispatchRecord(specBase, changeName, {
@@ -465,6 +500,8 @@ export async function runReviewDispatch(opts = {}) {
           return { ok: false, state: 'bad-review', statusLine, errors: p.errors, guidance: `① 提取到的 review 不符 schema——按契约修整（终态原文参考：${answerPath || '同目录 worker-answer.md'}）后运行 sillyspec register-stage-review --change ${changeName} --stage ${rec.stage} --from <修整后的review.json> 回收\n② 确认平台确无结果才按通道优先序降级：\n${renderFallbackGuidance(cwd)}` }
         }
         clearDispatchRecord(specBase, changeName)
+        // 回收成功 → best-effort 收口（converge_mission 纯置位；失败仅告警不影响回收）
+        await convergeMissionBestEffort(client, rec.missionId)
         return { ok: true, state: 'completed', statusLine, reviewPath: p.reviewPath, verdict: `${review.specVerdict}/${review.qualityVerdict}`, nextStep: answerPath ? `终态原文已留存 ${answerPath}` : undefined }
       }
       if (st === 'failed' || st === 'killed') {
@@ -533,7 +570,7 @@ export async function runThinReviewInline(opts = {}) {
       '- 平台 worker 禁止写任何文件、禁止 git 操作：把完整 review.json 文本（上方 schema）作为产出返回。',
       '- 优先放 artifacts（kind 含 review，content 字段放纯 JSON 文本）；宿主不支持 artifacts 时放回答正文首个 ```json 代码块（CLI 回收链三通道兜底）。',
     ].join('\n')
-    const mission = await cl.createMission({ objective, orchestrationMode: 'external', budgetUsd })
+    const mission = await cl.createMission({ objective, orchestrationMode: 'external', budgetUsd, ...(originAnchorFromEnv('review') || {}) })
     const missionId = mission && mission.missionId
     if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId' }
     say(`🛰️ 平台评审已派发（mission ${String(missionId).slice(0, 8)}）——有界等待 ${Math.round(waitMs / 1000)}s（review_inline_wait）`)
@@ -576,6 +613,8 @@ export async function runThinReviewInline(opts = {}) {
           try { rmSync(reviewPath, { force: true }) } catch { /* 删件失败由下轮覆盖兜底 */ }
           return { ok: false, reason: `提取的 review 不符薄道 schema（${v.errors.join('；')}）——原文可参考平台 mission UI`, missionId, workerId }
         }
+        // 校验通过落盘成功 → best-effort 收口（纯置位；失败仅告警不影响本路结果）
+        await convergeMissionBestEffort(cl, missionId)
         return { ok: true, missionId, workerId, reviewPath }
       }
     }

@@ -14,7 +14,10 @@
  * tool 返回值惯例：从 result.content[0].text 再 JSON.parse 得到（tools/list 例外：result 直接是 {tools:[...]}）。
  *
  * 铁律：
- * - converge_mission 不封装不调用（D-004 SillySpec 自己 apply）。
+ * - converge_mission 仅封装为 best-effort 纯置位收口（2026-11-13-review-dispatch-origin-session
+ *   修订 D-004 边界）：**只允许 review-dispatch 回收成功链路调用**（external mission 平台侧
+ *   跳过 finalize merge/cleanup 仅置 converged_at，主仓 finalizer external 短路保证）；
+ *   execute 路径A派发指令仍禁调（D-004 原义——SillySpec 自己 diff/apply，不走平台合并）。
  * - worktree_path 仅作 dispatch_worker 入参传递，本文件不碰 DB（不持久化为新列）。
  * - 仅用 Node 原生 fetch（engine>=18），不引入新依赖。
  */
@@ -504,9 +507,14 @@ export class SillyHubMcpClient {
    * @param {string} [p.orchestrationMode] - 'team'(默认,不传走原逻辑零回归,FR-05) |
    *   'external'(路径A,SillySpec 外部调度:跳 orchestrator spawn + converge 跳 merge,FR-08/D-007)。
    *   传入时 args.orchestration_mode = mode；不传/Null 不加字段（team 默认，零回归）。
+   * @param {string} [p.originSessionId] - 发起会话展示锚点（2026-11-13-review-dispatch-origin-session，
+   *   主仓 2026-11-12-review-dispatch-session-display 跨仓契约）：与 originKind 成对才传
+   *   （平台侧参数对约束，缺一 400）；仅 external 模式合法。落 constraints 纯展示键，
+   *   平台会话页「审查/执行任务卡」按它回查。
+   * @param {string} [p.originKind] - 外派任务类型（'review' | 'execute'）。
    * @returns {Promise<{missionId: string|null}>} 未配置/失败 → { missionId: null }
    */
-  async createMission({ objective, changeId, budgetUsd, orchestrationMode } = {}) {
+  async createMission({ objective, changeId, budgetUsd, orchestrationMode, originSessionId, originKind } = {}) {
     if (!this._configured) return { missionId: null };
     const args = {
       objective,
@@ -517,6 +525,11 @@ export class SillyHubMcpClient {
     if (orchestrationMode !== undefined && orchestrationMode !== null) {
       args.orchestration_mode = orchestrationMode;
     }
+    // 展示锚点成对透传（单值不传——平台参数对约束缺一即 400，缺一整体放弃展示锚点）
+    if (originSessionId && originKind) {
+      args.origin_session_id = originSessionId;
+      args.origin_kind = originKind;
+    }
     const result = await this._callTool('create_mission', args);
     if (result === null) return { missionId: null };
     const value = this._parseToolReturnValue(result);
@@ -524,6 +537,25 @@ export class SillyHubMcpClient {
       ? (value.mission_id ?? value.missionId ?? null)
       : null;
     return { missionId };
+  }
+
+  /**
+   * 收口 external mission（调 converge_mission tool，best-effort 纯置位）。
+   *
+   * 2026-11-13-review-dispatch-origin-session（D-004 边界修订）：仅 review-dispatch
+   * 回收成功链路调用——external mission 平台侧跳过 finalize merge/cleanup 只置
+   * converged_at（主仓 finalizer external 短路保证），让平台任务语义干净收口；
+   * 展示状态不依赖它（失败仅告警，不影响回收结果）。execute 路径A派发指令仍禁调
+   * （D-004 原义：SillySpec 自己 diff/apply，不走平台合并）。
+   * @param {object} p
+   * @param {string} p.missionId
+   * @returns {Promise<{ok: boolean}>} 未配置/失败 → { ok: false }（不抛）
+   */
+  async convergeMission({ missionId } = {}) {
+    if (!this._configured || !missionId) return { ok: false };
+    const result = await this._callTool('converge_mission', { mission_id: missionId }, { quiet: true, label: 'converge_mission' });
+    if (result === null) return { ok: false };
+    return { ok: true };
   }
 
   /**
