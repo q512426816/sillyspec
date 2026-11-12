@@ -111,7 +111,7 @@ Agent 在「要不要做 X」的时点给出建议，而 X 早在历史变更中
 实证（2026-11-12）：先输出「架构级立项：生成式当前行为契约快照」的完整建议，事后 grep `L3` 才命中 `.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md` 的 D-001@v1——该能力已于四周前（28 天）被证伪冻结。全程 `flow start` 的知识注入、`knowledge search` 均未提示。
 
 ### 根因
-两层，第一层才是主因。
+三层，第一层是主因（后两层在 D-001@v1 上被第一层遮蔽，但同样各自独立成立）。
 
 **第一层：能力冻结类裁决根本不入库。**
 
@@ -122,7 +122,7 @@ if (s === 'rejected') return 'rejected'                            // 任意 typ
 if (IMPLEMENTED_TYPES.has(t) && IMPLEMENTED_STATUSES.has(s)) return 'implemented'
 return null
 // IMPLEMENTED_TYPES   = KNOWLEDGE_TYPES   = DECISION_TYPES.filter(t => t !== 'scope')  // decision-values.js:31
-// IMPLEMENTED_STATUSES = ['confirmed', 'accepted', 'implemented']                      // decision-values.js:42
+// IMPLEMENTED_STATUSES = ['confirmed', 'accepted', 'implemented']                      // decision-values.js:34
 ```
 
 即 **scope 类型（status 非 rejected 时）不入库**；`decision-values.js:12-13` 明载「scope 刻意不入知识库——范围裁决」。注意 `decision-distill.js:20-22` 的头注仍是「五类 type」的旧描述（2026-10-20 已改为派生正典值集），引用时以 `decision-values.js` 为准。
@@ -136,9 +136,19 @@ D-001@v1 的类型标为 `scope`，因此归档时 `flow-state` 虽记录 `disti
 
 `matchKnowledge`（`src/knowledge-match.js:708`）在路由零命中后有两条词片兜底，都不足以救回 D-001@v1：
 
-- `fallbackByQueryShingles`（`:390`）覆盖正常域文件，但要求词片在「标题 + 理由」中出现 **2 次以上**（`n >= 2`，`:411`）——单次词面命中不召回。
+- `fallbackByQueryShingles`（`:390`）覆盖正常域文件，但要求词片在「标题 + 理由」中出现次数落在 `2 <= n <= ceil`（`:411`，`ceil = max(2, 条目数*5%)`）——单次词面命中不召回。
 - 停车场兜底（`:713`）只对 `isParkingFile`（`decisions/unmapped.md` / `fr/unmapped.md`，`:335`）且 `status === 'rejected' || deathPath` 的条目生效——正常域的 `implemented` 决策（如 D-001@v1）不在覆盖范围。
 - 两条通道都依赖字面词片（`queryShingles` `:308`，中文 2 字滑窗）：用户语言「生成式 / 快照 / 说明书」与内部术语「L3 / 活规格 / 证伪条款」零交集时同样失效。
+
+**第三层：即使召回，防复潮注入面也只认 rejected / 死路。**
+
+`flow start` 真正呈现给 agent 的「否决决策/死路注记」在 `src/flow.js:357` 过滤：
+
+```js
+const rejected = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+```
+
+`implemented` 状态的决策（D-001@v1 正是）不满足任一条件——即便它已在知识库、也被词片召回，这个 agent 实际会看到的注入面仍然不会显示它。这是「裁决存在但永不露头」的最后一道闸。
 
 ### 诊断
 ```bash
@@ -155,7 +165,7 @@ grep -n "类型：scope" .sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjud
 
 # 4. 对照判定逻辑与正典值集（scope 不在 KNOWLEDGE_TYPES）
 sed -n '100,106p' src/decision-distill.js
-sed -n '20,43p' src/decision-values.js
+sed -n '20,34p' src/decision-values.js
 ```
 
 ### 处置
