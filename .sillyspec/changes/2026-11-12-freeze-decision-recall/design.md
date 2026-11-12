@@ -149,7 +149,7 @@ CLI：`sillyspec knowledge distill-backfill [--dry-run] [--apply] [--change <名
 |---|---|---|---|
 | R-01 | 噪音回流：agent 为绕过过滤给所有 scope 决策无脑写复潮条件，注入面被淹没 | P1 | 复潮条件须实质内容（空/占位不入选）；注入面保留 score 过滤；distill 摘要打印入选条目 id 供事后审计 |
 | R-02 | 空 status 放宽过度，把已失效条目（superseded 之外的历史散值）拉回 | P2 | 测试锁死 superseded/proposed/draft 仍排除；空 status 仅在有复潮条件时放行，且必须无 rejectReason 才入 implemented |
-| R-03 | backfill 改写既有条目而非只新增 | P2 | 幂等键 = 号 + 变更，跨变更同号不折叠；dry-run 先行核对 planned 清单与现有文件 diff |
+| R-03 | backfill 改写既有条目而非只新增 | P2 | 幂等键 = 号 + 变更，跨变更同号不折叠；dry-run 先行核对 planned 清单与现有文件 diff。**实证（2026-11-12）**：首轮回填发现 `distillIntoKnowledge` 复用存量条目的号却重新判定域，把经 redomain 治理过的 `D-unmapped-435/436` 从 docs-consistency/docs 拉回 unmapped——已修：存量条目所在域优先于 `resolveDomains`，域迁移归 `knowledge redomain-unmapped` 显式职责。修复后重跑零跨域漂移。**残留**：回填已完整入库的变更会把「最近确认」从真实 hash 降级为「未记录」（回放不冒充归档 HEAD 的既有纪律）——故回填应只对 truly-missing 条目的变更执行 `--change` 精确回填，不对已完整变更全量回放 |
 | R-04 | 四处注入面口径漂移（改了 flow.js 忘了 prompt.js / knowledge-graph.js） | P2 | 测试同时断言四处过滤结果一致；四处注释互指「同口径」并列出全部位置 |
 | R-05 | `full` 模式误跳「有基线但缺人工条目」的变更 | P2 | full 模式显式跳过 `existingBaselineChanges` 预筛，幂等交由 distill 内部「号 + 变更」键；测试覆盖该场景 |
 

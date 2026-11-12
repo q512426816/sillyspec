@@ -726,3 +726,23 @@ supersedes：D-001@v1
 文件：src/verify-probes.js, test/verify-facts-v2.test.mjs
 最近确认：53bcb058b7cb3d575eaba9b1b43db1da376f0124
 理由：改 `src/verify-probes.js` 的 `writeVerifyFacts`（verify-probes 命令的 facts 落盘点）：合并 prev 固化段之后、写盘之前，若变更目录存在 `verify-result.md` 则用本文件既有的三个解析器（parseHandoverRows / parseDbScriptDeclarations / countMatrixPartialRows）重解析并覆盖 `handover` / `dbScriptDeclarations` / `matrixPartialRows` 三段。理由：这三个字段是 verify-result.md 的纯派生（md 是真相源），此前唯一产出入口是 gates verify 收尾的 `backfillFactsFromMdAndTests`，导致 gate 拦截提示「重跑 verify-probes 幂等刷新 facts 即可消解」与实际行为不符（重跑只保留旧段不产新段，2026-11-11-workspace-ia-redesign 实证只能靠 `--done` 回填）。
+
+## D-core-engine-053@v1 FR 索引 L3 实验证伪条款裁决——L3 冻结不建，fr 索引降级保留为检索/注入面
+状态：implemented
+变更：2026-10-15-fr-chain-l3-adjudication
+原编号：D-001@v1
+锚点：未记录
+文件：src/knowledge-stats.js
+最近确认：未记录
+理由：观察期满足（epoch 2026-09-18 后归档变更 20 个，落在条款 20-30 带内）；证伪三条件全中——①承接引用率趋零（窗口 1/452≈0%，分子 fr-supersede 涉及变更数 1、分母索引来源变更数 452）；②fr-supersede 事件稀少（窗口 2 次、1 变更）；③重复 FR 仍靠人眼发现（fr-duplicate-warning 24 次、0 候选动作）。按条款明文裁决：**冻结 L3——活规格树/承接引用驱动取代链不建**；fr 索引降级保留为检索/注入面（L2 素材：fr-inject 注入、域路由、绑定面照常）。此为条款预设的合法结局而非失败（「已经有索引了」不构成「必须盖房」的义务）。
+supersedes：无（L3 从未落地，无可取代物）
+复潮条件：若未来出现（a）承接行被高频自然书写（fr-supersede 事件在无外部推动下增长）或（b）活规格树有了具体消费需求（跨变更需求谱系查询成为高频动作），可重启 L3 评估——重启须引用届时遥测证明条件 (a)/(b) 成立。
+
+## D-core-engine-054@v1 2026-10-15-fr-chain-l3-adjudication——按 2026-09-18-fr-index-l1 design 实验裁决条款（护栏①·证伪出口）执行正式裁决。
+状态：implemented
+变更：2026-10-15-fr-chain-l3-adjudication
+原编号：D-000@v1
+锚点：.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/design.md
+文件：src/knowledge-stats.js
+最近确认：未记录
+理由：按 2026-09-18-fr-index-l1 design 实验裁决条款（护栏①·证伪出口）执行正式裁决。观察期：epoch 2026-09-18 后归档变更 20 个（条款 20-30 带内达标）。证伪三条件全中：①承接引用率趋零（窗口 1/452≈0%）；②fr-supersede 事件稀少（窗口 2 次/1 变更）；③重复 FR 仍靠人眼发现（fr-duplicate-warning 24 次零候选动作）。条款明文结局：**冻结 L3（活规格树不建），fr 索引降级保留为检索/注入面**——「此为合法结局而非失败」。落地三件：decisions.md 落 D-001@v1 裁决条目（四类遥测计数+条款依据+复潮条件，随归档蒸馏入 knowledge/decisions/）；knowledge-stats.js FR 实验区两渲染位头行带已裁决注记（FR_L3_ADJUDICATED_NOTE 常量单一源）、裁决候选 Top-10 视图退役为冻结注记（adjudicationCandidates JSON 数据面保留）；fr 检索/注入/绑定面代码零触碰。

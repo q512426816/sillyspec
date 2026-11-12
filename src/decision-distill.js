@@ -844,17 +844,22 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   }
   const targetSets = new Map() // entry → Set(域)（跨文件清理时排除目标文件）
   for (const entry of batch) {
-    const domains = resolveDomains(entry, idx)
-    targetSets.set(entry, new Set(domains))
     // 号决策（2026-10-14-decision-global-id-epoch）：同变更同段存量（全域文件扫描，号或原编号匹配）
     // 复用其号——legacy 段保持局部形态（不补原编号不改前缀，存量零触碰）；epoch 段原编号随版本更新；
     // 无匹配 → 发号域=首域（resolveDomains 已 sanitize）批内 max+1，扇出多文件同一号（单一身份）。
     let reuse = null
+    let reuseDomain = null
     for (const d of allDomains) {
       const st = loadDomain(d)
       reuse = st.sections.find(s => sameDecisionNumber(s, entry)) || null
-      if (reuse) break
+      if (reuse) { reuseDomain = d; break }
     }
+    // 域稳定性（2026-11-12-freeze-decision-recall R-03 实证）：存量条目所在域优先于重新判定
+    // ——否则经 redomain 治理过的条目（如 D-unmapped-435 迁到 docs-consistency）会被回填/重跑
+    // 拉回 unmapped，破坏人工治理成果。域迁移是 knowledge redomain-unmapped 的显式职责，
+    // 不是蒸馏的副作用；仅新条目才走 resolveDomains。
+    const domains = reuseDomain ? [reuseDomain] : resolveDomains(entry, idx)
+    targetSets.set(entry, new Set(domains))
     const sectionNumber = reuse ? reuse.number : mintFor(domains[0])
     const originId = reuse && !reuse.origin ? null : `${entry.number}@v${entry.version}`
     for (const d of domains) {
