@@ -108,22 +108,25 @@ writeFileSync(f, lines.join("\r\n"))                  // 按原换行写回
 ### 症状
 Agent 在「要不要做 X」的时点给出建议，而 X 早在历史变更中已被明确裁决否决或冻结——建议本身是错的，且**在任何自动注入面上都不会被拦下**。
 
-实证（2026-11-12）：先输出「架构级立项：生成式当前行为契约快照」的完整建议，事后 grep `L3` 才命中 `.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md` 的 D-001@v1——该能力已于三周前被证伪冻结。全程 `flow start` 的知识注入、`knowledge search` 均未提示。
+实证（2026-11-12）：先输出「架构级立项：生成式当前行为契约快照」的完整建议，事后 grep `L3` 才命中 `.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md` 的 D-001@v1——该能力已于四周前（28 天）被证伪冻结。全程 `flow start` 的知识注入、`knowledge search` 均未提示。
 
 ### 根因
 两层，第一层才是主因。
 
 **第一层：能力冻结类裁决根本不入库。**
 
-`src/decision-distill.js:20-22` 的入选规则：
+入选裁决实际在 `src/decision-distill.js:100-106` 的 `dispositionOf`，值集来自 `src/decision-values.js`：
 
-```
-任意 type 的 status=rejected → rejected（留痕防复潮）
-type∈{architecture,compatibility,boundary,definition,process} 且 status∈{confirmed,accepted} → implemented
-type=scope 与 status=superseded 等其余组合不入选（解析保留在 entries 里）
+```js
+if (s === 'rejected') return 'rejected'                            // 任意 type（含 scope）都留痕
+if (IMPLEMENTED_TYPES.has(t) && IMPLEMENTED_STATUSES.has(s)) return 'implemented'
+return null
+// IMPLEMENTED_TYPES   = KNOWLEDGE_TYPES   = DECISION_TYPES.filter(t => t !== 'scope')  // decision-values.js:31
+// IMPLEMENTED_STATUSES = ['confirmed', 'accepted', 'implemented']                      // decision-values.js:42
 ```
 
-第 43 行注：「scope 排除是刻意设计（范围裁决不入库）」。
+即 **scope 类型（status 非 rejected 时）不入库**；`decision-values.js:12-13` 明载「scope 刻意不入知识库——范围裁决」。注意 `decision-distill.js:20-22` 的头注仍是「五类 type」的旧描述（2026-10-20 已改为派生正典值集），引用时以 `decision-values.js` 为准。
+另注：`scope + rejected` 因 rejected 分支优先**会**入库——被排除的只是「scope 且非 rejected」这一组合。
 
 D-001@v1 的类型标为 `scope`，因此归档时 `flow-state` 虽记录 `distill: done`，该条目也从未进入 `knowledge/decisions/core-engine.md`——同变更的 3 条 FR 已正常入 `knowledge/fr/core-engine.md`（`grep -n "fr-chain-l3-adjudication"` 可证），唯独决策缺席。
 
@@ -131,10 +134,11 @@ D-001@v1 的类型标为 `scope`，因此归档时 `flow-state` 虽记录 `disti
 
 **第二层：即使入库，意图查询也召不回。**
 
-`src/knowledge-match.js:708` 的 `matchKnowledge` 有「停车场兜底通道」（非停车场零命中时逐条匹配 rejected/死路决策），但：
+`matchKnowledge`（`src/knowledge-match.js:708`）在路由零命中后有两条词片兜底，都不足以救回 D-001@v1：
 
-- 只覆盖 `isParkingFile`（`decisions/unmapped.md` / `fr/unmapped.md`，`knowledge-match.js:335`）；正常域文件的决策不在覆盖范围，且 D-001@v1 的状态是 `implemented` 而非 `rejected`，本就不入围。
-- 即使覆盖，仍要求 `queryShingles`（`knowledge-match.js:308`，中文 2 字滑窗）与决策标题存在**字面交集**。「生成式 / 快照 / 说明书」这类用户语言与「L3 / 活规格 / 证伪条款」这类内部术语零交集时同样失效。
+- `fallbackByQueryShingles`（`:390`）覆盖正常域文件，但要求词片在「标题 + 理由」中出现 **2 次以上**（`n >= 2`，`:411`）——单次词面命中不召回。
+- 停车场兜底（`:713`）只对 `isParkingFile`（`decisions/unmapped.md` / `fr/unmapped.md`，`:335`）且 `status === 'rejected' || deathPath` 的条目生效——正常域的 `implemented` 决策（如 D-001@v1）不在覆盖范围。
+- 两条通道都依赖字面词片（`queryShingles` `:308`，中文 2 字滑窗）：用户语言「生成式 / 快照 / 说明书」与内部术语「L3 / 活规格 / 证伪条款」零交集时同样失效。
 
 ### 诊断
 ```bash
@@ -149,8 +153,9 @@ done
 # 3. 确认为类型标注导致排除（应为「类型：scope」）
 grep -n "类型：scope" .sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md
 
-# 4. 对照入选规则
+# 4. 对照判定逻辑与正典值集（scope 不在 KNOWLEDGE_TYPES）
 sed -n '100,106p' src/decision-distill.js
+sed -n '20,43p' src/decision-values.js
 ```
 
 ### 处置
