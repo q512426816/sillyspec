@@ -1,0 +1,40 @@
+{"ts":1794472934643,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1794473176444,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1794473183243,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473193350,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473196858,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473207102,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473226218,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473323232,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473383597,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473440245,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473594807,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1794473631833,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794473631833,"kind":"task-done","stage":"design","detail":"checked 0→6","provisional":true}
+{"ts":1794473702149,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794473708976,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794473715888,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794473786431,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1794473800238,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1794473800238,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1794473800238,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1794473857229,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1794473857229,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794473923973,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/knowledge-match.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794474042695,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/freeze-decision-recall.test.mjs.tmp.81840.d10d0cde2c2e——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1794474141192,"kind":"commit","stage":null,"detail":"8c4a84ee","provisional":true}
+{"ts":1794474147740,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1794474148058,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794474148058,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1794474162161,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1794474165094,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794474165094,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1794474166881,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1794474168836,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794474168836,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1794474609562,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794474635445,"kind":"commit","stage":null,"detail":"d15c2e23","provisional":true}
+{"ts":1794474685802,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1794474686319,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794474686319,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1794474954081,"kind":"gate-run","stage":"verify","detail":"门实测 passed（60.5s） · 20261112091551","provisional":true}

@@ -82,3 +82,4 @@
 | 2026-11-06 | 2026-11-07-knowledge-accept-channel | 待审知识收口通道——proposed 可合并生效 |
 | 2026-11-06 | 2026-11-07-knowledge-generated-retire | generated 切块死区退库 |
 | 2026-11-07 | 2026-11-07-explore-logic-prototype | 探索粗选件原型扩逻辑原型触发面 |
+| 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-freeze-decision-recall",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-12-freeze-decision-recall:flow:测试绑定FR-01",
+      "tests": [
+        "test/freeze-decision-recall.test.mjs「dispositionOf 复潮条件分流三态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-freeze-decision-recall"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-12-freeze-decision-recall:flow:测试绑定FR-02",
+      "tests": [
+        "test/freeze-decision-recall.test.mjs「implemented 条目渲染复潮条件行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-freeze-decision-recall"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-12-freeze-decision-recall:flow:测试绑定FR-03",
+      "tests": [
+        "test/freeze-decision-recall.test.mjs「四处防复潮过滤口径一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-freeze-decision-recall"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-12-freeze-decision-recall:flow:测试绑定FR-04",
+      "tests": [
+        "test/freeze-decision-recall.test.mjs「full 模式跳过已有基线预筛且二次执行幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-freeze-decision-recall"
+    }
+  ]
+}

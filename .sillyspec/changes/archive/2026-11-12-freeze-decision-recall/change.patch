@@ -1,0 +1,450 @@
+diff --git a/src/archive-baseline-replay.js b/src/archive-baseline-replay.js
+index e14b1ec4..9a89a0b2 100644
+--- a/src/archive-baseline-replay.js
++++ b/src/archive-baseline-replay.js
+@@ -40,13 +40,16 @@ function existingBaselineChanges(knowledgeRoot) {
+  * 纯读规划：归档集 → 回放候选/跳过归因。
+  * @param {string} archiveRoot 归档根（.sillyspec/changes/archive）
+  * @param {string} knowledgeRoot 知识根（<repo>/.sillyspec/knowledge）
+- * @param {{signals?: string[]}} [opts] signals 非空时仅概述段命中任一词者入选
++ * @param {{signals?: string[], full?: boolean}} [opts] signals 非空时仅概述段命中任一词者入选；
++ *   full=true 为完整蒸馏回填（2026-11-12-freeze-decision-recall FR-04）——不按「已有基线」
++ *   预筛：幂等由 distillIntoKnowledge 内部「号+变更」键保证，而按基线预筛会误跳「有基线但
++ *   缺人工条目」的变更，补齐人工条目恰是 full 模式的目标。
+  * @returns {{planned: Array<{change: string, dir: string}>, skipped: {noOverview: number,
+  *   gated: number, already: number, badDir: number}}
+  */
+ export function planBaselineReplay(archiveRoot, knowledgeRoot, opts = {}) {
+   const signals = (opts.signals || []).map(s => String(s).toLowerCase()).filter(Boolean)
+-  const already = existingBaselineChanges(knowledgeRoot)
++  const already = opts.full ? new Set() : existingBaselineChanges(knowledgeRoot)
+   const planned = []
+   const skipped = { noOverview: 0, gated: 0, already: already.size, badDir: 0 }
+   let dirs = []
+@@ -72,23 +75,72 @@ export function planBaselineReplay(archiveRoot, knowledgeRoot, opts = {}) {
+  * 执行回放：逐变更 baselineOnly 蒸馏（单变更失败留痕 continue，不阻断批次）。
+  * @param {string} archiveRoot 归档根
+  * @param {string} knowledgeRoot 知识根
+- * @param {{signals?: string[], headHashOf?: (change: string) => string}} [opts]
+- *   headHashOf 缺省恒 未记录（回放条目的「最近确认」为溯源占位，不冒充归档时 HEAD）
++ * @param {{signals?: string[], headHashOf?: (change: string) => string, full?: boolean}} [opts]
++ *   headHashOf 缺省恒 未记录（回放条目的「最近确认」为溯源占位，不冒充归档时 HEAD）；
++ *   full=true 走完整蒸馏（不带 baselineOnly），否则沿用基线回放行为（逐字不变）
+  * @returns {{applied: number, failed: Array<{change: string, error: string}>,
+  *   planned: number, skipped: object}}
+  */
+ export function applyBaselineReplay(archiveRoot, knowledgeRoot, opts = {}) {
+   const { planned, skipped } = planBaselineReplay(archiveRoot, knowledgeRoot, opts)
++  const scoped = opts.onlyChange ? planned.filter((p) => p.change === opts.onlyChange) : planned
+   const applied = []
+   const failed = []
+-  for (const { change, dir } of planned) {
++  for (const { change, dir } of scoped) {
+     try {
+       const headHash = (opts.headHashOf && opts.headHashOf(change)) || '未记录'
+-      const r = distillIntoKnowledge(dir, knowledgeRoot, headHash, null, { baselineOnly: true })
+-      if (r.written && r.written.length > 0) applied.push(change)
++      const r = distillIntoKnowledge(dir, knowledgeRoot, headHash, null, opts.full ? {} : { baselineOnly: true })
++      // applied 只计真正新增（action=append）——update/supersede 是幂等重跑的在位更新，
++      // 不算「本次回填产出」。非 full 模式有预筛兜底，此判定对其行为零影响。
++      if (r.written && r.written.some((w) => w && w.action === 'append')) applied.push(change)
+     } catch (e) {
+       failed.push({ change, error: String((e && e.message) || e) })
+     }
+   }
+-  return { applied: applied.length, appliedChanges: applied, failed, planned: planned.length, skipped }
++  return { applied: applied.length, appliedChanges: applied, failed, planned: scoped.length, skipped }
++}
++
++/**
++ * CLI 出口：`sillyspec knowledge distill-backfill [--apply] [--change <名>]`
++ * （2026-11-12-freeze-decision-recall FR-04）。
++ *
++ * 缺省 dry-run 只读规划，`--apply` 才落盘（与 knowledge redomain-unmapped 同惯例）；
++ * 走 full 模式完整蒸馏（非仅基线）。JSON envelope 与 redomain-unmapped 同族。
++ *
++ * @param {string} dir  仓根（CLI 传入；specDir 未显式给出时取 <dir>/.sillyspec）
++ * @param {string[]} args
++ * @param {{specDir?: string}} [opts]
++ */
++export async function cmdDistillBackfill(dir, args, opts = {}) {
++  const specBase = opts.specDir || join(dir, '.sillyspec')
++  const knowledgeRoot = join(specBase, 'knowledge')
++  const archiveRoot = join(specBase, 'changes', 'archive')
++  const apply = args.includes('--apply')
++  const changeIdx = args.indexOf('--change')
++  const onlyChange = changeIdx >= 0 ? args[changeIdx + 1] : null
++  const emit = (ok, data, error) => console.log(JSON.stringify({ ok, ...data, ...(error ? { error } : {}) }, null, 2))
++
++  // --change 缺值显式拒绝（静默回落全量 = 契约被切到更大破坏面）
++  if (changeIdx >= 0 && (!onlyChange || onlyChange.startsWith('--'))) {
++    emit(false, {}, { code: 'change_value_required', usage: '--change <变更名>' })
++    return
++  }
++  if (!existsSync(join(knowledgeRoot, 'INDEX.md'))) {
++    emit(false, {}, { code: 'knowledge_dir_missing', path: knowledgeRoot })
++    return
++  }
++  if (onlyChange && !existsSync(join(archiveRoot, onlyChange, 'design.md'))) {
++    emit(false, {}, { code: 'change_not_archived', change: onlyChange, archive_root: archiveRoot })
++    return
++  }
++
++  const planOpts = { full: true, ...(onlyChange ? { onlyChange } : {}) }
++  if (!apply) {
++    const { planned, skipped } = planBaselineReplay(archiveRoot, knowledgeRoot, planOpts)
++    const scoped = onlyChange ? planned.filter((p) => p.change === onlyChange) : planned
++    emit(true, { mode: 'dry-run', planned: scoped.length, changes: scoped.map((p) => p.change), skipped })
++    return
++  }
++  const res = applyBaselineReplay(archiveRoot, knowledgeRoot, planOpts)
++  emit(true, { mode: 'apply', ...res })
+ }
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 35b396e2..98742fdb 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -103,6 +103,14 @@ function dispositionOf(entry) {
+   const s = (entry.status || '').toLowerCase()
+   if (s === 'rejected') return 'rejected' // 任意 type（含 scope）的 rejected 都留痕
+   if (IMPLEMENTED_TYPES.has(t) && IMPLEMENTED_STATUSES.has(s)) return 'implemented'
++  // 复潮条件第二判据（2026-11-12-freeze-decision-recall D-001@v1）：复潮条件是决策者主动
++  // 声明的「未来重启条件」，信号强于类型分类——任何 type 写了它都必须可召回（type=scope
++  // 被整体排除的设计在此让位于该信号）。status 门排除已失效/未定案（superseded/proposed/
++  // draft）；空 status 视同定案（存量手写条目常见形态）。有否决理由 → 实为否决，走
++  // rejected 通道；否则按 implemented 入库。
++  if (entry.revisitWhen && (s === '' || IMPLEMENTED_STATUSES.has(s))) {
++    return entry.rejectReason ? 'rejected' : 'implemented'
++  }
+   return null
+ }
+ 
+@@ -374,6 +382,11 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName, sectionNu
+   if (entry.selected === 'rejected') {
+     lines.push(`否决理由：${oneLine(entry.rejectReason)}`)
+     lines.push(`复潮条件：${oneLine(entry.revisitWhen)}`)
++  } else if (entry.revisitWhen) {
++    // implemented 条目的复潮条件（2026-11-12-freeze-decision-recall FR-02）：此前只有 rejected
++    // 写这行，导致「带复潮条件的 scope 决策」入库后召回信号丢失——knowledge-match.js 按行
++    // 解析该字段（DECISION_FIELD_RE），写入即被读回，无需改解析侧。
++    lines.push(`复潮条件：${oneLine(entry.revisitWhen)}`)
+   }
+   return lines
+ }
+@@ -831,17 +844,22 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
+   }
+   const targetSets = new Map() // entry → Set(域)（跨文件清理时排除目标文件）
+   for (const entry of batch) {
+-    const domains = resolveDomains(entry, idx)
+-    targetSets.set(entry, new Set(domains))
+     // 号决策（2026-10-14-decision-global-id-epoch）：同变更同段存量（全域文件扫描，号或原编号匹配）
+     // 复用其号——legacy 段保持局部形态（不补原编号不改前缀，存量零触碰）；epoch 段原编号随版本更新；
+     // 无匹配 → 发号域=首域（resolveDomains 已 sanitize）批内 max+1，扇出多文件同一号（单一身份）。
+     let reuse = null
++    let reuseDomain = null
+     for (const d of allDomains) {
+       const st = loadDomain(d)
+       reuse = st.sections.find(s => sameDecisionNumber(s, entry)) || null
+-      if (reuse) break
++      if (reuse) { reuseDomain = d; break }
+     }
++    // 域稳定性（2026-11-12-freeze-decision-recall R-03 实证）：存量条目所在域优先于重新判定
++    // ——否则经 redomain 治理过的条目（如 D-unmapped-435 迁到 docs-consistency）会被回填/重跑
++    // 拉回 unmapped，破坏人工治理成果。域迁移是 knowledge redomain-unmapped 的显式职责，
++    // 不是蒸馏的副作用；仅新条目才走 resolveDomains。
++    const domains = reuseDomain ? [reuseDomain] : resolveDomains(entry, idx)
++    targetSets.set(entry, new Set(domains))
+     const sectionNumber = reuse ? reuse.number : mintFor(domains[0])
+     const originId = reuse && !reuse.origin ? null : `${entry.number}@v${entry.version}`
+     for (const d of domains) {
+diff --git a/src/flow.js b/src/flow.js
+index 2b49c4a8..c9370795 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -32,6 +32,9 @@ import { DatabaseSync } from 'node:sqlite'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { scopeTelemetryRefs } from './knowledge-graph.js'
++// 防复潮过滤单一源（2026-11-12-freeze-decision-recall FR-03）：两处注入面共用谓词，
++// 防「改一处漏一处」的口径漂移。
++import { isRecallRelevant, isRecallRelevantScored } from './knowledge-match.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+@@ -354,7 +357,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
+     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
+     // 蹭进回显是行为实测三例的噪音源，不再注入）
+-    const rejected = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
++    const rejected = (km.decisionHits || []).filter((h) => isRecallRelevantScored(h))
+     summary.rejectedDecisions = rejected.length
+     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
+     if (rejected.length > 0) {
+@@ -376,7 +379,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     }
+     // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节——路由 rejected top-5
+     // 不被热文件历史否决挤占（独立语义：触碰过的文件曾被否决/记死路）
+-    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
++    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => isRecallRelevant(h)).slice(0, 3)
+     if (scopeRejected.length > 0) {
+       lines.push(`   🧭 触达文件关联否决（scope 视角——触碰过的文件曾被否决/记死路，防复潮——除非复潮条件满足勿重提）：`)
+       for (const h of scopeRejected) {
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index d6b0e9f1..4c673d08 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -20,7 +20,7 @@
+ 
+ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge } from './knowledge-match.js'
++import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge, isRecallRelevant } from './knowledge-match.js'
+ import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
+ 
+@@ -1099,7 +1099,7 @@ export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
+ export function scopeTelemetryRefs(result, { includeRejected = true } = {}) {
+   const shown = [
+     ...(includeRejected
+-      ? ((result && result.scopeDecisionHits) || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
++      ? ((result && result.scopeDecisionHits) || []).filter((h) => isRecallRelevant(h)).slice(0, 3)
+       : []),
+     ...((result && result.scopeEntries) || []).slice(0, 3),
+   ]
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 6561627e..476442b1 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -339,6 +339,22 @@ export function isParkingFile(file) {
+   return PARKING_FILES.has(String(file || '').replace(/\\/g, '/'))
+ }
+ 
++/** 防复潮条目判定·无 score 门（2026-11-12-freeze-decision-recall FR-03 单一源）：
++ *  死路 ∪ 否决 ∪ 带复潮条件。四处注入面（flow.js rejectedDecisions/scopeRejected、
++ *  run/prompt.js {DECISION_HITS}、knowledge-graph.js scopeDecisionHits 遥测）共用，
++ *  防「改了三处漏一处」的口径漂移（该处注释明写遥测须与实际渲染面对齐）。
++ *  带复潮条件的 implemented 条目（能力冻结裁决）此前恒不进该集合——正是本变更的缺口。 */
++export function isRecallRelevant(h) {
++  return Boolean(h && (h.deathPath || h.status === 'rejected' || h.revisitWhen))
++}
++
++/** 防复潮条目判定·带主题重叠 score 门（2026-09-28-knowledge-gate-denoise 收紧口径）：
++ *  rejected 与带复潮条件条目须 score>0（零主题重叠的靠状态蹭进回显是噪音源）；
++ *  deathPath 不受 score 门约束（既有行为不变）。给 flow start 主段与 brainstorm 渲染段用。 */
++export function isRecallRelevantScored(h) {
++  return Boolean(h && (h.deathPath || ((h.status === 'rejected' || h.revisitWhen) && h.score > 0)))
++}
++
+ /** 已修复条目显式词（FR-03，2026-11-02-knowledge-rank-denoise）：只认 INDEX display/anchor
+  *  的显式词，不读正文 heading（锚点→heading 归一脆弱）；绿色标记不作唯一键（平台实测
+  *  6 条绿色非词条目中 4 条是现行事实/债务，误杀代价高于漏 2 条已解决项）。 */
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 19d3280a..55634725 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -95,7 +95,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
+ // 机械知识注入（2026-09-14-knowledge-loop-close task-04，FR-04）：两者均为 fs/path 叶子模块，
+ // 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
+ // buildKnowledgeInjection docstring）。
+-import { matchKnowledge } from '../knowledge-match.js'
++import { matchKnowledge, isRecallRelevantScored } from '../knowledge-match.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
+ import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
+ import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
+@@ -1432,9 +1432,10 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
+       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
+       // 语料；与 execute 分支的 changeName 基底同口径）
+       const decResult = await matchKnowledgeHybrid(decKnowledgeDir, changeName || '', { cwd })
+-      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
+-      // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
+-      const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
++      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected ∪ 带复潮条件的条目（与 flow 注入段/
++      // knowledge-gate/图谱遥测四处同口径，单一源 isRecallRelevantScored；
++      // score 零不弹——2026-09-28-knowledge-gate-denoise）
++      const rejectedHits = (decResult.decisionHits || []).filter(h => isRecallRelevantScored(h))
+       let decInjected = ''
+       if (rejectedHits.length > 0) {
+         const lines = [
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index f6108d8d..645ac593 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -633,11 +633,12 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       '  accept --id proposed/<slug> [--file <目标>] [--dry-run]   合并待审提议为正式知识（用户确认后执行；category 有效时可省 --file 自动路由）',
+       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
+       '  redomain-unmapped [--face decisions|fr] [--apply]  unmapped 停车场存量批量清偿（文件锚/覆盖面投票目标域；dry-run 先行）',
++      '  distill-backfill [--apply] [--change <名>]  对已归档变更完整重跑决策蒸馏（蒸馏规则变更后的存量回填；dry-run 先行）',
+       '',
+       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
+     ]
+     for (const l of lines) console.log(l)
+-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'accept', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped'] })
++    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'accept', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped', 'distill-backfill'] })
+     return
+   }
+   const subCommand = args[0] || ''
+@@ -677,6 +678,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       }
+       return mod.cmdRedomainUnmapped(dir, args.slice(1), opts)
+     }
++    case 'distill-backfill': {
++      // 存量决策回填（FR-04，2026-11-12-freeze-decision-recall）：蒸馏入选规则变更后，
++      // 已归档变更不会自动重蒸——本命令走 full 模式完整蒸馏，幂等键=号+变更（重跑零漂移）。
++      const mod = await tryImportSubcommandImpl('../archive-baseline-replay.js', 'archive-baseline-replay.js')
++      if (!mod || typeof mod.cmdDistillBackfill !== 'function') {
++        output(false, {}, { code: 'not_implemented', subcommand: 'distill-backfill' })
++        return
++      }
++      return mod.cmdDistillBackfill(dir, args.slice(1), opts)
++    }
+     case 'graph': {
+       // 知识图谱查询面（2026-10-08-knowledge-graph）：neighbors/path/impact/orphans/dangling，
+       // --edges 边型筛选；全 JSON 出口（与 search/validate 同族）。
+diff --git a/test/freeze-decision-recall.test.mjs b/test/freeze-decision-recall.test.mjs
+new file mode 100644
+index 00000000..8d8ddd00
+--- /dev/null
++++ b/test/freeze-decision-recall.test.mjs
+@@ -0,0 +1,142 @@
++/**
++ * freeze-decision-recall.test.mjs — 复潮条件作为独立入选判据（2026-11-12-freeze-decision-recall）
++ *
++ * 锁定语义：
++ *   ① 判据分流（FR-01）：无复潮条件→null；有复潮条件无否决理由→implemented；
++ *      有否决理由→rejected；superseded/proposed/draft 仍排除；空 status 视同定案。
++ *   ② 渲染（FR-02）：implemented 条目写入「复潮条件：」行，parseDecisionEntries 可读回。
++ *   ③ 防复潮谓词（FR-03）：isRecallRelevant 无 score 门、isRecallRelevantScored 有——
++ *      四处注入面共用单一源，防口径漂移。
++ *   ④ full 回填（FR-04）：不按「已有基线」预筛，二次执行幂等。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++const { parseDecisions, distillIntoKnowledge } = await import('../src/decision-distill.js')
++const { isRecallRelevant, isRecallRelevantScored, parseDecisionEntries } = await import('../src/knowledge-match.js')
++const { planBaselineReplay, applyBaselineReplay } = await import('../src/archive-baseline-replay.js')
++
++const tmpRoots = []
++function mkTmp(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(d)
++  return d
++}
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* 清理失败无碍 */ } } })
++
++function mkChange(md) {
++  const root = mkTmp('fdr-')
++  writeFileSync(join(root, 'decisions.md'), md)
++  return root
++}
++
++const entry = (fields) => [
++  '## D-001@v1 探针决策',
++  ...fields,
++  '- 模块域：core-engine',
++  '- 答案：探针答案',
++  '',
++].join('\n')
++
++const selectedOf = (fields) => parseDecisions(mkChange(entry(fields))).entries[0].selected
++
++test('① 判据分流：复潮条件驱动三态，status 门仍生效', () => {
++  // 无复潮条件 → 排除（纯范围取舍，既有行为不变）
++  assert.equal(selectedOf(['- 类型：scope', '- 状态：confirmed']), null, 'scope 无复潮条件恒排除')
++
++  // 有复潮条件、无否决理由 → implemented
++  assert.equal(selectedOf(['- 类型：scope', '- 状态：implemented', '- 复潮条件：条件满足时可重启']), 'implemented', 'scope+复潮条件→implemented')
++
++  // 有否决理由 + 复潮条件 → rejected
++  assert.equal(selectedOf(['- 类型：scope', '- 状态：implemented', '- 否决理由：不值得', '- 复潮条件：需求出现时']), 'rejected', '有否决理由→rejected 通道')
++
++  // 空 status 视同定案（存量手写条目形态）
++  assert.equal(selectedOf(['- 类型：scope', '- 复潮条件：需求出现时', '- 否决理由：不值得']), 'rejected', '空 status + 否决理由→rejected')
++
++  // status 门：已失效/未定案仍排除
++  for (const s of ['superseded', 'proposed', 'draft']) {
++    assert.equal(selectedOf(['- 类型：scope', '- 状态：' + s, '- 复潮条件：x']), null, `scope+${s}+复潮条件 仍排除`)
++  }
++
++  // 任何 type 带复潮条件都入选（不只 scope）
++  assert.equal(selectedOf(['- 类型：boundary', '- 状态：confirmed', '- 复潮条件：x']), 'implemented', '非 scope 类型同样受益')
++})
++
++test('② 渲染：implemented 条目写出复潮条件行并可读回', () => {
++  const dir = mkChange(entry(['- 类型：scope', '- 状态：implemented', '- 复潮条件：跨变更需求谱系查询成为高频动作时']))
++  const knowledge = mkTmp('fdr-k-')
++  const res = distillIntoKnowledge(dir, knowledge, 'deadbeef', null)
++  assert.equal(res.needsWait, null)
++  assert.ok((res.written || []).length > 0, '条目写盘')
++  const domainFile = join(knowledge, 'decisions', 'core-engine.md')
++  assert.equal(existsSync(domainFile), true, '域文件落盘')
++  const text = readFileSync(domainFile, 'utf8')
++  assert.match(text, /^复潮条件：跨变更需求谱系查询成为高频动作时$/m, 'implemented 条目含复潮条件行')
++  // 解析侧读回（单一源契约：写入即可召回）
++  // parseDecisionEntries 的入参是知识根（内部经 INDEX.md 路由发现 decisions/*.md）
++  const entries = parseDecisionEntries(knowledge)
++  const hit = entries.find((e) => e.title.includes('探针决策'))
++  assert.ok(hit, '条目可被 parseDecisionEntries 读到')
++  assert.equal(hit.revisitWhen, '跨变更需求谱系查询成为高频动作时', 'revisitWhen 读回')
++  assert.equal(hit.status, 'implemented', '状态为 implemented')
++})
++
++test('③ 防复潮谓词：两档 score 门语义', () => {
++  // 无 score 门版：死路 ∪ 否决 ∪ 复潮条件
++  assert.equal(isRecallRelevant({ deathPath: true }), true)
++  assert.equal(isRecallRelevant({ status: 'rejected', score: 0 }), true, '无门版不卡 score')
++  assert.equal(isRecallRelevant({ status: 'implemented', revisitWhen: 'x', score: 0 }), true, '复潮条件无条件计入')
++  assert.equal(isRecallRelevant({ status: 'implemented', score: 9 }), false, '普通 implemented 不计入')
++  assert.equal(isRecallRelevant(null), false, '空值安全')
++
++  // 带 score 门版：rejected/revisitWhen 须 score>0，deathPath 不受门约束
++  assert.equal(isRecallRelevantScored({ deathPath: true, score: 0 }), true, 'deathPath 不受 score 门')
++  assert.equal(isRecallRelevantScored({ status: 'rejected', score: 0 }), false, '零主题重叠的 rejected 不弹')
++  assert.equal(isRecallRelevantScored({ status: 'rejected', score: 1 }), true)
++  assert.equal(isRecallRelevantScored({ status: 'implemented', revisitWhen: 'x', score: 0 }), false, '零主题重叠的复潮条件不弹')
++  assert.equal(isRecallRelevantScored({ status: 'implemented', revisitWhen: 'x', score: 1 }), true)
++  assert.equal(isRecallRelevantScored({ status: 'implemented', score: 9 }), false, '普通 implemented 不计入')
++})
++
++test('④ full 回填：跳过「已有基线」预筛，二次执行幂等', () => {
++  const spec = mkTmp('fdr-spec-')
++  const archiveRoot = join(spec, 'changes', 'archive')
++  const knowledgeRoot = join(spec, 'knowledge')
++  mkdirSync(archiveRoot, { recursive: true })
++  mkdirSync(join(knowledgeRoot, 'decisions'), { recursive: true })
++
++  const changeDir = join(archiveRoot, '2026-01-01-probe')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), '# 设计文档\n\n## 做法概述\n\n探针做法。\n')
++  writeFileSync(join(changeDir, 'decisions.md'), entry(['- 类型：scope', '- 状态：implemented', '- 复潮条件：条件 A 出现时']))
++  // 预置该变更的基线条目 —— 模拟「有基线但缺人工条目」的目标场景
++  writeFileSync(join(knowledgeRoot, 'decisions', 'core-engine.md'), [
++    '## D-000@v1 基线探针',
++    '原编号：D-000@v1',
++    '变更：2026-01-01-probe',
++    '状态：implemented',
++    '',
++  ].join('\n'))
++
++  // 非 full：按已有基线预筛 → 跳过
++  const legacy = planBaselineReplay(archiveRoot, knowledgeRoot, {})
++  assert.equal(legacy.planned.length, 0, '非 full 模式按基线预筛跳过')
++  assert.equal(legacy.skipped.already, 1, 'already 计数 1')
++
++  // full：不预筛 → 入选
++  const full = planBaselineReplay(archiveRoot, knowledgeRoot, { full: true })
++  assert.equal(full.planned.length, 1, 'full 模式不预筛')
++
++  // 首次 apply 写入人工条目
++  const first = applyBaselineReplay(archiveRoot, knowledgeRoot, { full: true })
++  assert.equal(first.applied, 1, '首次写入 1 个变更')
++  assert.match(readFileSync(join(knowledgeRoot, 'decisions', 'core-engine.md'), 'utf8'), /探针决策/, '人工条目已入库')
++
++  // 二次 apply 幂等（幂等键 = 号 + 变更，零新增）
++  const second = applyBaselineReplay(archiveRoot, knowledgeRoot, { full: true })
++  assert.equal(second.applied, 0, '二次执行零写入')
++  assert.deepEqual(second.failed, [], '无失败')
++})

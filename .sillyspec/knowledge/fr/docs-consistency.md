@@ -1928,3 +1928,96 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-11-04-archive-baseline-entry
   status: active
+
+## FR-docs-consistency-090 复潮条件作为独立入选判据
+变更：2026-11-12-freeze-decision-recall
+状态：active
+摘要：三条存量分流
+场景正文：
+- 场景：三条存量分流 — Given 三条 type=scope 的归档决策（friction-signal-hint 无复潮条件、L3-adjudication 有复潮条件无否决理由、calibe；When 对各自跑 `dispositionOf`；Then 分别返回 null、'implemented'、'rejected'
+全文：.sillyspec/changes/archive/2026-11-12-freeze-decision-recall/requirements.md#FR-01
+最近确认：d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-freeze-decision-recall:flow:测试绑定FR-01
+  tests: test/freeze-decision-recall.test.mjs「dispositionOf 复潮条件分流三态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-freeze-decision-recall
+  status: active
+
+## FR-docs-consistency-091 implemented 条目渲染复潮条件行
+变更：2026-11-12-freeze-decision-recall
+状态：active
+摘要：入库后信号不丢
+场景正文：
+- 场景：入库后信号不丢 — Given 一条 scope+revisitWhen+无否决理由的决策；When 蒸馏写入 knowledge/decisions/*.md；Then 该条目段内存在「复潮条件：」行，且 `parseDecisionEntries` 读出的 `revisitWhen` 非空
+全文：.sillyspec/changes/archive/2026-11-12-freeze-decision-recall/requirements.md#FR-02
+最近确认：d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-freeze-decision-recall:flow:测试绑定FR-02
+  tests: test/freeze-decision-recall.test.mjs「implemented 条目渲染复潮条件行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-freeze-decision-recall
+  status: active
+
+## FR-docs-consistency-092 四处防复潮过滤同步
+变更：2026-11-12-freeze-decision-recall
+状态：active
+摘要：入口提示覆盖
+场景正文：
+- 场景：入口提示覆盖 — Given 一个带复潮条件的 implemented 决策已入库；When 跑 flow start 或 brainstorm 渲染；Then 该决策出现在防复潮提示段中
+全文：.sillyspec/changes/archive/2026-11-12-freeze-decision-recall/requirements.md#FR-03
+最近确认：d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-freeze-decision-recall:flow:测试绑定FR-03
+  tests: test/freeze-decision-recall.test.mjs「四处防复潮过滤口径一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-freeze-decision-recall
+  status: active
+
+## FR-docs-consistency-093 存量回填通道
+变更：2026-11-12-freeze-decision-recall
+状态：active
+摘要：幂等回填
+场景正文：
+- 场景：幂等回填 — Given 归档目录含 3 条 scope 决策，其中一条已有基线但缺人工条目；When 连续跑两次 `knowledge distill-backfill --apply`；Then 第一次写入缺失条目，第二次零新增（幂等键 = 号 + 变更）
+全文：.sillyspec/changes/archive/2026-11-12-freeze-decision-recall/requirements.md#FR-04
+最近确认：d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-12-freeze-decision-recall:flow:测试绑定FR-04
+  tests: test/freeze-decision-recall.test.mjs「full 模式跳过已有基线预筛且二次执行幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-12-freeze-decision-recall
+  status: active
+
+## FR-docs-consistency-094 本仓存量回填验证
+变更：2026-11-12-freeze-decision-recall
+状态：active
+摘要：D-001 真的回来
+场景正文：
+- 场景：D-001 真的回来 — Given 回填已执行；When `grep "活规格树" .sillyspec/knowledge/decisions/`；Then 命中 D-001@v1 条目
+全文：.sillyspec/changes/archive/2026-11-12-freeze-decision-recall/requirements.md#FR-05
+最近确认：d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27

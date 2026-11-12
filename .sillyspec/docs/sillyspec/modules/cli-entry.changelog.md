@@ -116,3 +116,4 @@
 | 2026-11-09 | 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查 |
 | 2026-11-11 | 2026-11-11-deps-hub-symbol-narrow | 枢纽模块回归面按触达导出符号收敛 |
 | 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |
+| 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |

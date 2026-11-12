@@ -1,0 +1,158 @@
+{
+  "change": "2026-11-12-freeze-decision-recall",
+  "baseline": "ec25ef2f6cada5cb759c4b9f6c1bcf2355d7bde0",
+  "head": "d15c2e235e2c43f4a33b4ebec7504aa6cfe19e27",
+  "files": [
+    "src/archive-baseline-replay.js",
+    "src/decision-distill.js",
+    "src/flow.js",
+    "src/knowledge-graph.js",
+    "src/knowledge-match.js",
+    "src/run/prompt.js",
+    "src/stages/knowledge.js",
+    "test/freeze-decision-recall.test.mjs"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 263,
+    "deletions": 20
+  },
+  "savedAt": "2026-11-12T09:16:29.159Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "ec25ef2f6cada5cb759c4b9f6c1bcf2355d7bde0",
+    "totals": {
+      "files": 8,
+      "additions": 263,
+      "deletions": 20
+    },
+    "rows": [
+      {
+        "path": "src/archive-baseline-replay.js",
+        "additions": 60,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/decision-distill.js",
+        "additions": 21,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 16,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 12,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/freeze-decision-recall.test.mjs",
+        "additions": 142,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9a262f8d1b3c718d5216c2b24c7b1ce7623fbdaea776a061bdfc3832952821c7",
+  "patchStatus": "ok"
+}
