@@ -59,3 +59,12 @@
 文件：docs/sillyspec/platform-interface-map.md, test/backlog-batch-e.test.mjs, test/prompt-golden.json, test/runtime-relayout.test.mjs, test/spec-dir-home-guard.test.mjs, test/thin-user-decision-record.test.mjs
 最近确认：2fb976f8fef83434e51e49b6bb206579f8672b5c
 理由：三类归因三类修法，全部锚定「修被误伤面，不改测试迁就错误」（AGENTS 规则 5 例外说明：FR-05 的测试断言更新属「测试锚定对象本身有意演进」——锚的不是逻辑是文案，文案演进提交 a556e117 是应然，故改测试是正确方向）： 1. **知识 SKILL 误回退恢复（FR-01）**：`git checkout 2b1fd2fb^ -- .claude/skills/sillyspec-knowledge/SKILL.md` 原样恢复 2026-11-07 三知识变更累积版（accept 命令行/refresh 退役/propose --body-file/K 形态四段模板）。选恢复而非改测试：SKILL 文档是功能面（accept 命令是 6a68770c 根因修复的对外入口），回退是 2b1fd2fb 的误伤（项目地图变更与知识 SKILL 无关），测试断言正确地拦住了它。 2. **残渣治理（FR-02）**：backlog-batch-e ③ MCP gate 段首尾加 `process.chdir` 到隔离 tmp 目录并复原——gate 的 `_pathWithDir` mkdir-p 语义决定了「cwd 落哪 runtime 目录建哪」，源头修掉；spec-dir-home-guard Test 5 前对 `test/.sillyspec` 做前置 rmSync 防护（auto-pull-throttle 残渣的源头未必只有一处，防护保证该测试不再依赖仓内整洁态）。顺手删除现存残渣（不进 git 的运行产物）。 3. **文案/行号锚对齐（FR-03/04/05）**：doc-ref 行号按当前源码实测更新（890→895/839、1217/1068/1144→1254/1282/1353、942→947、spec-sync.js:56→120、936 核对）；prompt-golden 走官方 `SILLYSPEC_REGEN_PROMPT_GOLDEN=1` 再生成（diff 随提交可审）；thin-record 断言更新到 a556e117 演进后的现行句。
+
+## D-docs-003@v1 2026-11-12-knowledge-recall-gap-observe——在 `docs/troubleshooting.md` 追加第三条条目，登记「意图查询无法召回历史裁决」缺口。
+状态：implemented
+变更：2026-11-12-knowledge-recall-gap-observe
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-12-knowledge-recall-gap-observe/design.md
+文件：docs/troubleshooting.md
+最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
+理由：在 `docs/troubleshooting.md` 追加第三条条目，登记「意图查询无法召回历史裁决」缺口。不改任何代码——本变更只做观察项留痕，缺陷修复另立变更。 实证来源：2026-11-12 本会话先输出「架构级立项做生成式当前行为契约快照」的建议，事后 grep 才命中 `.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md` 的 D-001@v1——该能力已于四周前（28 天）被证伪冻结。 核查后根因比初始判断精确：该裁决按入选规则（`type=scope` 且 status 非 rejected → 不入库；值集见 `src/decision-values.js:31`，判定见 `src/decision-distill.js:100-106`）从未进入 `knowledge/decisions/`，同变更的 3 条 FR 已正常入 `knowledge/fr/core-engine.md`，唯独决策缺席。即问题不在召回算法，在决策根本没进召回池。 选 troubleshooting.md 而非 ROADMAP：ROADMAP 收规划面，本条已有实证后果（一次错误建议），符合 troubleshooting「撞过的问题」定位（CLAUDE.md 规则 18 同时点名两处，按性质择一）。

@@ -40,3 +40,4 @@
 | 2026-10-23 | 2026-10-23-flow-done-shared-repo-multi-session-frictions | flow done 归档提交未落库守卫与回归锚 |
 | 2026-11-07 | 2026-11-07-explore-logic-prototype | 探索粗选件原型扩逻辑原型触发面 |
 | 2026-11-09 | 2026-11-09-legacy-red-fixes | 修复八个预存测试失败归因清偿 |
+| 2026-11-12 | 2026-11-12-knowledge-recall-gap-observe | 知识召回缺口记录：历史裁决不被意图查询命中 |

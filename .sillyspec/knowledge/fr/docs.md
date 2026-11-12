@@ -1732,3 +1732,30 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-02-series-final-cleanup
   status: active
+
+## FR-docs-091 docs/troubleshooting.md 新增条目「意图查询无法召回历史裁决」，含症状、根因、诊断、处置四段
+变更：2026-11-12-knowledge-recall-gap-observe
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 打开 `docs/troubleshooting.md`；When 扫描一级标题并定位到该条目；Then 条目存在，且包含症状、根因、诊断、处置四个二级段落
+全文：.sillyspec/changes/archive/2026-11-12-knowledge-recall-gap-observe/requirements.md#FR-01
+最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
+
+## FR-docs-092 条目以本次 L3 裁决未被召回为实证，指明召回机制（knowledge-scope / 注入面）的缺口位置
+变更：2026-11-12-knowledge-recall-gap-observe
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 读该条目的症状与根因段；When 核对实证与缺口定位；Then 能定位到 `2026-10-15-fr-chain-l3-adjudication` 的 D-001@v1，且缺口描述指向「意图查询 → 历史裁决」的召回缺口而
+全文：.sillyspec/changes/archive/2026-11-12-knowledge-recall-gap-observe/requirements.md#FR-02
+最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
+
+## FR-docs-093 文档头部 updated_at 更新为 2026-11-12
+变更：2026-11-12-knowledge-recall-gap-observe
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 打开 `docs/troubleshooting.md`；When 读取 frontmatter；Then `updated_at` 字段值为 `2026-11-12`
+全文：.sillyspec/changes/archive/2026-11-12-knowledge-recall-gap-observe/requirements.md#FR-03
+最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
