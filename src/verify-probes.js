@@ -2036,13 +2036,29 @@ export function renderProbe7Lines(p7) {
   // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
   // 这些路径并在「代码审查」节登记走查结论——把二次复核「提前兑现移交项」的打法固化）。
   let zeroCoverage = 0
+  // 既有用例候选体积治理（2026-11-13-probe7-existing-tests-cap）：该集合变更级一次计算、
+  // 跨无归属卡共享——每卡全量 join 会产出 N 份同样的数百路径超长行（平台仓实证 4 行 ×
+  // 21,756 字节，占 verify-result.md 的 69%）。展示帽沿用同函数 attribCell/hintCell 的
+  // slice(0,5) 先例；全量落 verify-facts.json 的 probe7ExistingTests 段（buildVerifyFacts）；
+  // 同集跨卡按内容签名折叠为「同上（见首卡）」。
+  const seenExistingSets = new Map() // 内容签名 → 首张渲染卡 task
   for (const t of (p7.tasks || [])) {
     L.push('')
     L.push(`**${t.task}**`)
     if (Array.isArray(t.existingTests) && t.existingTests.length > 0) {
       // 既有用例注记（2026-10-06-verify-docs-prefill task-02）：归属列里的这些测试是 FR 关联回归
       // 候选（本变更未改动）——与自身新建测试区分，判定仍由 agent 复核（命中≠结论）
-      L.push(`- ℹ️ 既有用例候选（FR 关联回归面，本变更未改动；判定仍由你复核，命中≠结论）：${t.existingTests.map(f => `\`${f}\``).join('、')}`)
+      const sig = JSON.stringify([...t.existingTests].sort())
+      const firstTask = seenExistingSets.get(sig)
+      if (firstTask) {
+        L.push(`- ℹ️ 既有用例候选（FR 关联回归面，本变更未改动）：同上（见 ${firstTask}，共 ${t.existingTests.length} 个）`)
+      } else {
+        seenExistingSets.set(sig, t.task)
+        const shown = t.existingTests.slice(0, 5).map(f => `\`${f}\``).join('、')
+        const tail = t.existingTests.length > 5
+          ? ` …共 ${t.existingTests.length} 个（全量见 verify-facts.json probe7ExistingTests）` : ''
+        L.push(`- ℹ️ 既有用例候选（FR 关联回归面，本变更未改动；判定仍由你复核，命中≠结论）：${shown}${tail}`)
+      }
     }
     if (t.fmError) {
       // 坏 YAML 如实陈述（2026-09-20-taskcard-yaml-hardgate）：非「无 acceptance」防御——
@@ -2925,6 +2941,25 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
     },
   }
   if (result && result.apiFace && typeof result.apiFace === 'object') factsSkeleton.apiFace = result.apiFace
+  // 既有用例候选全量落盘（2026-11-13-probe7-existing-tests-cap）：md 展示帽只留前 5 + 计数，
+  // 全量按候选集内容分组存机器底稿（兑现 renderProbe7Lines 折叠尾巴的指向承诺）。同集多卡
+  // 合并为一组（tasks 列承接卡）；无候选/无 probe7 → 不落键（存量调用方零回归，同 apiFace 口径）。
+  if (result && result.probe7 && Array.isArray(result.probe7.tasks)) {
+    const groups = []
+    const bySig = new Map()
+    for (const t of result.probe7.tasks) {
+      if (!t || !Array.isArray(t.existingTests) || t.existingTests.length === 0) continue
+      const sig = JSON.stringify([...t.existingTests].sort())
+      if (!bySig.has(sig)) {
+        const g = { tasks: [], count: t.existingTests.length, files: [...t.existingTests] }
+        bySig.set(sig, g)
+        groups.push(g)
+      }
+      const g = bySig.get(sig)
+      if (!g.tasks.includes(t.task)) g.tasks.push(t.task)
+    }
+    if (groups.length > 0) factsSkeleton.probe7ExistingTests = groups
+  }
   return factsSkeleton
 }
 
