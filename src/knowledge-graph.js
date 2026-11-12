@@ -20,7 +20,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge } from './knowledge-match.js'
+import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge, isRecallRelevant } from './knowledge-match.js'
 import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
 
@@ -1099,7 +1099,7 @@ export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
 export function scopeTelemetryRefs(result, { includeRejected = true } = {}) {
   const shown = [
     ...(includeRejected
-      ? ((result && result.scopeDecisionHits) || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
+      ? ((result && result.scopeDecisionHits) || []).filter((h) => isRecallRelevant(h)).slice(0, 3)
       : []),
     ...((result && result.scopeEntries) || []).slice(0, 3),
   ]

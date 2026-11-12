@@ -339,6 +339,22 @@ export function isParkingFile(file) {
   return PARKING_FILES.has(String(file || '').replace(/\\/g, '/'))
 }
 
+/** 防复潮条目判定·无 score 门（2026-11-12-freeze-decision-recall FR-03 单一源）：
+ *  死路 ∪ 否决 ∪ 带复潮条件。四处注入面（flow.js rejectedDecisions/scopeRejected、
+ *  run/prompt.js {DECISION_HITS}、knowledge-graph.js scopeDecisionHits 遥测）共用，
+ *  防「改了三处漏一处」的口径漂移（该处注释明写遥测须与实际渲染面对齐）。
+ *  带复潮条件的 implemented 条目（能力冻结裁决）此前恒不进该集合——正是本变更的缺口。 */
+export function isRecallRelevant(h) {
+  return Boolean(h && (h.deathPath || h.status === 'rejected' || h.revisitWhen))
+}
+
+/** 防复潮条目判定·带主题重叠 score 门（2026-09-28-knowledge-gate-denoise 收紧口径）：
+ *  rejected 与带复潮条件条目须 score>0（零主题重叠的靠状态蹭进回显是噪音源）；
+ *  deathPath 不受 score 门约束（既有行为不变）。给 flow start 主段与 brainstorm 渲染段用。 */
+export function isRecallRelevantScored(h) {
+  return Boolean(h && (h.deathPath || ((h.status === 'rejected' || h.revisitWhen) && h.score > 0)))
+}
+
 /** 已修复条目显式词（FR-03，2026-11-02-knowledge-rank-denoise）：只认 INDEX display/anchor
  *  的显式词，不读正文 heading（锚点→heading 归一脆弱）；绿色标记不作唯一键（平台实测
  *  6 条绿色非词条目中 4 条是现行事实/债务，误杀代价高于漏 2 条已解决项）。 */

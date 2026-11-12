@@ -32,6 +32,9 @@ import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { scopeTelemetryRefs } from './knowledge-graph.js'
+// 防复潮过滤单一源（2026-11-12-freeze-decision-recall FR-03）：两处注入面共用谓词，
+// 防「改一处漏一处」的口径漂移。
+import { isRecallRelevant, isRecallRelevantScored } from './knowledge-match.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
@@ -354,7 +357,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
     // 蹭进回显是行为实测三例的噪音源，不再注入）
-    const rejected = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+    const rejected = (km.decisionHits || []).filter((h) => isRecallRelevantScored(h))
     summary.rejectedDecisions = rejected.length
     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
     if (rejected.length > 0) {
@@ -376,7 +379,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     }
     // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节——路由 rejected top-5
     // 不被热文件历史否决挤占（独立语义：触碰过的文件曾被否决/记死路）
-    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
+    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => isRecallRelevant(h)).slice(0, 3)
     if (scopeRejected.length > 0) {
       lines.push(`   🧭 触达文件关联否决（scope 视角——触碰过的文件曾被否决/记死路，防复潮——除非复潮条件满足勿重提）：`)
       for (const h of scopeRejected) {

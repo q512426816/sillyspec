@@ -95,7 +95,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // 机械知识注入（2026-09-14-knowledge-loop-close task-04，FR-04）：两者均为 fs/path 叶子模块，
 // 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
 // buildKnowledgeInjection docstring）。
-import { matchKnowledge } from '../knowledge-match.js'
+import { matchKnowledge, isRecallRelevantScored } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
@@ -1432,9 +1432,10 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
       // 语料；与 execute 分支的 changeName 基底同口径）
       const decResult = await matchKnowledgeHybrid(decKnowledgeDir, changeName || '', { cwd })
-      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
-      // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
-      const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
+      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected ∪ 带复潮条件的条目（与 flow 注入段/
+      // knowledge-gate/图谱遥测四处同口径，单一源 isRecallRelevantScored；
+      // score 零不弹——2026-09-28-knowledge-gate-denoise）
+      const rejectedHits = (decResult.decisionHits || []).filter(h => isRecallRelevantScored(h))
       let decInjected = ''
       if (rejectedHits.length > 0) {
         const lines = [

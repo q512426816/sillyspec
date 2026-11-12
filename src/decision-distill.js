@@ -103,6 +103,14 @@ function dispositionOf(entry) {
   const s = (entry.status || '').toLowerCase()
   if (s === 'rejected') return 'rejected' // 任意 type（含 scope）的 rejected 都留痕
   if (IMPLEMENTED_TYPES.has(t) && IMPLEMENTED_STATUSES.has(s)) return 'implemented'
+  // 复潮条件第二判据（2026-11-12-freeze-decision-recall D-001@v1）：复潮条件是决策者主动
+  // 声明的「未来重启条件」，信号强于类型分类——任何 type 写了它都必须可召回（type=scope
+  // 被整体排除的设计在此让位于该信号）。status 门排除已失效/未定案（superseded/proposed/
+  // draft）；空 status 视同定案（存量手写条目常见形态）。有否决理由 → 实为否决，走
+  // rejected 通道；否则按 implemented 入库。
+  if (entry.revisitWhen && (s === '' || IMPLEMENTED_STATUSES.has(s))) {
+    return entry.rejectReason ? 'rejected' : 'implemented'
+  }
   return null
 }
 
@@ -373,6 +381,11 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName, sectionNu
   if (entry.retireWhen) lines.push(`退役判据：${oneLine(entry.retireWhen)}`)
   if (entry.selected === 'rejected') {
     lines.push(`否决理由：${oneLine(entry.rejectReason)}`)
+    lines.push(`复潮条件：${oneLine(entry.revisitWhen)}`)
+  } else if (entry.revisitWhen) {
+    // implemented 条目的复潮条件（2026-11-12-freeze-decision-recall FR-02）：此前只有 rejected
+    // 写这行，导致「带复潮条件的 scope 决策」入库后召回信号丢失——knowledge-match.js 按行
+    // 解析该字段（DECISION_FIELD_RE），写入即被读回，无需改解析侧。
     lines.push(`复潮条件：${oneLine(entry.revisitWhen)}`)
   }
   return lines

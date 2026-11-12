@@ -633,11 +633,12 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  accept --id proposed/<slug> [--file <目标>] [--dry-run]   合并待审提议为正式知识（用户确认后执行；category 有效时可省 --file 自动路由）',
       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
       '  redomain-unmapped [--face decisions|fr] [--apply]  unmapped 停车场存量批量清偿（文件锚/覆盖面投票目标域；dry-run 先行）',
+      '  distill-backfill [--apply] [--change <名>]  对已归档变更完整重跑决策蒸馏（蒸馏规则变更后的存量回填；dry-run 先行）',
       '',
       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
     ]
     for (const l of lines) console.log(l)
-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'accept', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped'] })
+    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'accept', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped', 'distill-backfill'] })
     return
   }
   const subCommand = args[0] || ''
@@ -676,6 +677,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
         return
       }
       return mod.cmdRedomainUnmapped(dir, args.slice(1), opts)
+    }
+    case 'distill-backfill': {
+      // 存量决策回填（FR-04，2026-11-12-freeze-decision-recall）：蒸馏入选规则变更后，
+      // 已归档变更不会自动重蒸——本命令走 full 模式完整蒸馏，幂等键=号+变更（重跑零漂移）。
+      const mod = await tryImportSubcommandImpl('../archive-baseline-replay.js', 'archive-baseline-replay.js')
+      if (!mod || typeof mod.cmdDistillBackfill !== 'function') {
+        output(false, {}, { code: 'not_implemented', subcommand: 'distill-backfill' })
+        return
+      }
+      return mod.cmdDistillBackfill(dir, args.slice(1), opts)
     }
     case 'graph': {
       // 知识图谱查询面（2026-10-08-knowledge-graph）：neighbors/path/impact/orphans/dangling，
