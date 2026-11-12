@@ -5568,3 +5568,79 @@
   confirmed_at: null
   source_change: 2026-11-12-verify-probes-md-facts-refresh
   status: active
+
+## FR-core-engine-295 src/verify-probes.js 既有用例候选行有展示帽（前 5 + 「…共 N 个」折叠），单行不超过约 1KB
+变更：2026-11-13-probe7-existing-tests-cap
+状态：active
+摘要：332 项候选；≤5 项候选
+全文：.sillyspec/changes/archive/2026-11-13-probe7-existing-tests-cap/requirements.md#FR-01
+最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-01
+  tests: test/pitfall-probe7-noise.test.mjs「既有用例候选行展示帽：前 5 + 共 N 个折叠」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-probe7-existing-tests-cap
+  status: active
+
+## FR-core-engine-296 同一变更内多张无归属卡共享同一候选集时，第二张起折叠为「同上（见 task-XX）」不再重复全量
+变更：2026-11-13-probe7-existing-tests-cap
+状态：active
+摘要：两卡共享同一候选集
+全文：.sillyspec/changes/archive/2026-11-13-probe7-existing-tests-cap/requirements.md#FR-02
+最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-02
+  tests: test/pitfall-probe7-noise.test.mjs「相邻无归属卡共享候选集折叠为同上」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-probe7-existing-tests-cap
+  status: active
+
+## FR-core-engine-297 全量候选写入 verify-facts.json，兑现代码注释承诺
+变更：2026-11-13-probe7-existing-tests-cap
+状态：active
+摘要：探针带 probe7 结果；存量调用方无 probe7
+全文：.sillyspec/changes/archive/2026-11-13-probe7-existing-tests-cap/requirements.md#FR-03
+最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-03
+  tests: test/pitfall-probe7-noise.test.mjs「buildVerifyFacts 落 probe7ExistingTests 全量、缺省零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-probe7-existing-tests-cap
+  status: active
+
+## FR-core-engine-298 新增测试覆盖上述三条行为，相关测试面绿，既有 verify 相关测试无回归
+变更：2026-11-13-probe7-existing-tests-cap
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-11-13-probe7-existing-tests-cap/requirements.md#FR-04
+最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-04
+  tests: test/pitfall-probe7-noise.test.mjs「既有用例候选行展示帽：前 5 + 共 N 个折叠」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-probe7-existing-tests-cap
+  status: active

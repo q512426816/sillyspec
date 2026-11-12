@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-13-probe7-existing-tests-cap",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-01",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「既有用例候选行展示帽：前 5 + 共 N 个折叠」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-probe7-existing-tests-cap"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-02",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「相邻无归属卡共享候选集折叠为同上」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-probe7-existing-tests-cap"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-03",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「buildVerifyFacts 落 probe7ExistingTests 全量、缺省零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-probe7-existing-tests-cap"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-13-probe7-existing-tests-cap:flow:测试绑定FR-04",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「既有用例候选行展示帽：前 5 + 共 N 个折叠」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-probe7-existing-tests-cap"
+    }
+  ]
+}

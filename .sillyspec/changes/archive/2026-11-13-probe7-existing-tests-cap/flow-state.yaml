@@ -1,0 +1,47 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  探针7既有用例候选行加展示帽并去重
+
+
+  verify 阶段预填的 verify-result.md 在平台仓出现 4 行完全相同的「既有用例候选」超长行，各 21,756 字节、332 个完整测试路径，合计 87KB，占文件 69%（126KB 总量）。根因是
+  src/verify-probes.js:2045 渲染 existingTests 时全量 join 无展示帽，且该集合变更级共享，每张无归属测试的卡各注入一份；代码注释声称的「全量在 facts/trace」实测也不成立。
+
+
+  成功标准：
+
+  - src/verify-probes.js 既有用例候选行有展示帽（前 5 + 「…共 N 个」折叠），单行不超过约 1KB
+
+  - 同一变更内多张无归属卡共享同一候选集时，第二张起折叠为「同上（见 task-XX）」不再重复全量
+
+  - 全量候选写入 verify-facts.json，兑现代码注释承诺
+
+  - 新增测试覆盖上述三条行为，相关测试面绿，既有 verify 相关测试无回归
+autopilot: false
+prestage_ack: false
+baseline_commit: 3c7839d82838fb7a5cc8900a3ebfc76f71fa8709
+updatedAt: '2026-11-12T17:15:31.731Z'
+baseline_sha256: 0e62fc57de742df4237655a4b5535fdc5cf3d206710e14cccc9a8b6e49843328
+spec_approved: true
+spec_approved_at: '2026-11-12T16:40:12.580Z'
+spec_approved_by: claude-probe7-cap
+spec_approved_channel: agent-self
+spec_attested_by: claude-probe7-cap
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js10)（6.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261112171521\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 17 个
+

@@ -1,0 +1,19 @@
+{"ts":1794499771770,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1794499785167,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794499795224,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1794500997658,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1794501825482,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1794501825584,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794501825584,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1794501843484,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1794501845741,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794501845741,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1794501847721,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1794501849362,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794501849362,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1794501851725,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1794501852880,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1794501852880,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1794501892462,"kind":"commit","stage":null,"detail":"06236b4d","provisional":true}
+{"ts":1794502793163,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1794503723477,"kind":"gate-run","stage":"verify","detail":"门实测 passed（6.5s） · 20261112171521","provisional":true}

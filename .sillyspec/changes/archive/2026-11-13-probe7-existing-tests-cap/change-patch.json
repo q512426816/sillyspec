@@ -1,0 +1,71 @@
+{
+  "change": "2026-11-13-probe7-existing-tests-cap",
+  "baseline": "3c7839d82838fb7a5cc8900a3ebfc76f71fa8709",
+  "head": "06236b4defccc512597eb3aaf97d8ef97fc0b7e0",
+  "files": [
+    "src/verify-probes.js",
+    "test/pitfall-probe7-noise.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 131,
+    "deletions": 2
+  },
+  "savedAt": "2026-11-12T17:15:30.407Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3c7839d82838fb7a5cc8900a3ebfc76f71fa8709",
+    "totals": {
+      "files": 2,
+      "additions": 131,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/verify-probes.js",
+        "additions": 36,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pitfall-probe7-noise.test.mjs",
+        "additions": 95,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2937a1522ba8f562fe7ab33749e00a8af08958999885142bae8e0856c2ea359b",
+  "patchStatus": "ok"
+}

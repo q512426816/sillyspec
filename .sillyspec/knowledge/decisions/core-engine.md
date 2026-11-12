@@ -830,3 +830,12 @@ supersedes：无（L3 从未落地，无可取代物）
 理由：存量 3 条 scope 决策怎么回填？
 否决理由：不可复用、不可审计——distill 规则今后再变时还得再写一次；一次性脚本不进入产品路径，回填动作无留痕。
 复潮条件：若 distill 规则此后长期不再变更（仅此一次调整），一次性脚本的复用价值归零，可简化为脚本。
+
+## D-core-engine-064@v1 2026-11-13-probe7-existing-tests-cap——三处小改，全部围绕探针 7（`src/verify-probes.js`）的既有用例候选链路： ① `renderProbe7Lines` 的既有用例候选行改为
+状态：implemented
+变更：2026-11-13-probe7-existing-tests-cap
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-13-probe7-existing-tests-cap/design.md
+文件：src/verify-probes.js, test/pitfall-probe7-noise.test.mjs
+最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
+理由：三处小改，全部围绕探针 7（`src/verify-probes.js`）的既有用例候选链路： ① `renderProbe7Lines` 的既有用例候选行改为「前 5 + …共 N 个」展示帽（与同函数既有 `attribCell`/`hintCell` 的 `slice(0,5)` 先例同款）；② 同一渲染批次内按候选集内容签名去重——首卡全量（带帽）渲染，后续卡折叠为「同上（见 task-XX，共 N 个）」；③ `buildVerifyFacts` 在 `result.probe7` 在场时把 existingTests 全量去重后按候选集分组写入 verify-facts.json 顶层 `probe7ExistingTests` 段，兑现原注释「候选全量在 facts/trace」的承诺，md 只留展示帽与计数。 不改收集路径（`collectFrLinkedTests` 的注入条件与顺序全保持），不动矩阵其它列，不动 `verify-postcheck` 的解析口径（该行本就非门禁锚点）。

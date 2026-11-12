@@ -124,3 +124,4 @@
 | 2026-11-11 | 2026-11-11-deps-hub-symbol-narrow | 枢纽模块回归面按触达导出符号收敛 |
 | 2026-11-11 | 2026-11-12-verify-probes-md-facts-refresh | verify-probes 落盘时刷新 md 派生段 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+| 2026-11-12 | 2026-11-13-probe7-existing-tests-cap | 探针7既有用例候选行加展示帽并去重 |
