@@ -1,0 +1,54 @@
+{
+  "change": "2026-11-13-stages-module-doc-brainstorm-gate",
+  "baseline": "ac62faa25c96d1b5957fdf952ebb0efabd1cce47",
+  "head": "b869cd1a99fdae3c802c28f36598d8ff12d7943f",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/stages.md"
+  ],
+  "totals": {
+    "files": 1,
+    "additions": 4,
+    "deletions": 1
+  },
+  "savedAt": "2026-11-13T15:25:34.517Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "ac62faa25c96d1b5957fdf952ebb0efabd1cce47",
+    "totals": {
+      "files": 1,
+      "additions": 4,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.md",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "3d12b9e7b602dcd8e24bdc6748de3613ff526c148f25b69037ce653f243faccf",
+  "patchStatus": "ok"
+}

@@ -23,3 +23,24 @@ author: sillyspec-fr-index
 摘要：（无场景名）
 全文：.sillyspec/changes/archive/workspace-spec-root-managed-p0/requirements.md#FR-05
 最近确认：98d3e56dd
+
+## FR-unmapped-732 stages 模块卡含 2026-11-13-brainstorm-solution-constraint-gate 注记节，内容与 src/stages/brainstorm.js「提出 2-3 种方案」prompt 一致
+变更：2026-11-13-stages-module-doc-brainstorm-gate
+状态：active
+摘要：模块卡与源码对表
+全文：.sillyspec/changes/archive/2026-11-13-stages-module-doc-brainstorm-gate/requirements.md#FR-01
+最近确认：b869cd1a99fdae3c802c28f36598d8ff12d7943f
+
+## FR-unmapped-733 模块卡头部 updated_at 更新为 2026-11-13
+变更：2026-11-13-stages-module-doc-brainstorm-gate
+状态：active
+摘要：时间戳
+全文：.sillyspec/changes/archive/2026-11-13-stages-module-doc-brainstorm-gate/requirements.md#FR-02
+最近确认：b869cd1a99fdae3c802c28f36598d8ff12d7943f
+
+## FR-unmapped-734 文档改动随变更提交入库（显式 pathspec）
+变更：2026-11-13-stages-module-doc-brainstorm-gate
+状态：active
+摘要：提交面核对
+全文：.sillyspec/changes/archive/2026-11-13-stages-module-doc-brainstorm-gate/requirements.md#FR-03
+最近确认：b869cd1a99fdae3c802c28f36598d8ff12d7943f
