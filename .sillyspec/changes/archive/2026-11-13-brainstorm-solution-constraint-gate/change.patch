@@ -1,0 +1,192 @@
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 1dfe4b11..685aa802 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -51,7 +51,7 @@
+       {
+         "index": 3,
+         "name": "提出 2-3 种方案",
+-        "prompt": "基于需求理解和澄清结果，提出 2-3 种实现方案。\n{UI_VISUAL_GUIDANCE}\n### 操作\n1. 每种方案列出：核心思路、优势、劣势\n2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策\n3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案\n4. 给出推荐方案和理由\n5. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里\n6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则\n\n### 铁律 — 必须等待用户选择方案\n- 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说\"推荐方案 A\"然后当用户选了**（命令由 CLI 在下方注入）\n\n### 输出\n方案对比表 + 推荐方案\n\n### 注意\n- 方案差异要实质性的，不要为了凑数\n- 推荐理由要具体",
++        "prompt": "基于需求理解和澄清结果，提出 2-3 种实现方案。\n{UI_VISUAL_GUIDANCE}\n### 操作\n0. **先固守约束（准入门槛）**：生成方案前，先把下列来源汇总为编号硬约束清单 C1..Cn 并输出：\n   - 前一阶段确认清单中带 `[用户]` 标记的需求点（`[推断]` 项不算硬约束）\n   - `{SPEC_ROOT}/changes/<change-name>/decisions.md` 中 `status: accepted` 条目的 `normalized_requirement`\n   - 用户原话中的硬边界（技术栈 / 禁止项 / 兼容要求 / 不可改面）\n   每个候选方案必须逐条满足全部 C1..Cn——任一不满足的方案**不得作为候选列入对比表**（它是违约项，不是方案）。约束清单列不出来 = 不具备生成方案的前提，先回去补齐。\n   - 若两条硬约束**真实互斥**（现有条件下无法同时满足）：**先停下提冲突**——列出冲突编号、各自代价、建议取舍并在本轮向用户提问；禁止构造一个故意违反某条硬约束的假选项充作备选\n1. 每种方案列出：核心思路、落点（触及模块/文件）、优势、劣势、失败模式、成本（改动面/工作量）\n2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策\n3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案\n4. 给出推荐方案和理由\n5. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里\n6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则\n7. **数量纪律**：合格方案目标 2-3 个；若穷尽可行路径后**只有 1 个**满足全部硬约束，**如实只报这 1 个**，并在方案后单列「淘汰方案 × 各自违反的约束编号」，禁止为凑足 2-3 个而纳入违约方案或结构雷同的变体\n\n### 自检 — 提交方案前逐条打勾（任一不过不得提交）\n| 检查项 | 判定 |\n|---|---|\n| 每个候选方案对 C1..Cn 全部打 ✓ | 有 ✗ 的方案 → 剔除，不进入对比表 |\n| 两两方案在至少一个取舍轴（实现路径 / 依赖引入 / 改动面 / 运行成本 / 迁移成本 / 可维护性 / 失败代价）上位置不同 | 全轴位置相同 → 合并，不凑数 |\n| 每个方案都写到核心思路 + 落点 + 成本 + 失败模式 | 某方案只有一行概述 → 补全或剔除 |\n| 只有 1 个合格方案时已如实上报并列出淘汰项违反编号 | 硬凑 2-3 个 → 重写 |\n\n### 铁律 — 必须等待用户选择方案\n- 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说\"推荐方案 A\"然后当用户选了**（命令由 CLI 在下方注入）\n\n### 输出\n硬约束清单 C1..Cn + 方案对比表（每方案附逐条满足矩阵）+ 推荐方案\n\n### 注意\n- 方案差异要实质性的，不要为了凑数\n- 推荐理由要具体",
+         "outputHint": "方案对比和推荐",
+         "optional": false,
+         "requiresWait": true,
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index 9b3372b2..0998c68c 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -283,18 +283,33 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 基于需求理解和澄清结果，提出 2-3 种实现方案。
+ {UI_VISUAL_GUIDANCE}
+ ### 操作
+-1. 每种方案列出：核心思路、优势、劣势
++0. **先固守约束（准入门槛）**：生成方案前，先把下列来源汇总为编号硬约束清单 C1..Cn 并输出：
++   - 前一阶段确认清单中带 `[用户]` 标记的需求点（`[推断]` 项不算硬约束）
++   - `{SPEC_ROOT}/changes/<change-name>/decisions.md` 中 `status: accepted` 条目的 `normalized_requirement`
++   - 用户原话中的硬边界（技术栈 / 禁止项 / 兼容要求 / 不可改面）
++   每个候选方案必须逐条满足全部 C1..Cn——任一不满足的方案**不得作为候选列入对比表**（它是违约项，不是方案）。约束清单列不出来 = 不具备生成方案的前提，先回去补齐。
++   - 若两条硬约束**真实互斥**（现有条件下无法同时满足）：**先停下提冲突**——列出冲突编号、各自代价、建议取舍并在本轮向用户提问；禁止构造一个故意违反某条硬约束的假选项充作备选
++1. 每种方案列出：核心思路、落点（触及模块/文件）、优势、劣势、失败模式、成本（改动面/工作量）
+ 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+ 3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query "<机制词>"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案
+ 4. 给出推荐方案和理由
+ 5. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+ 6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则
++7. **数量纪律**：合格方案目标 2-3 个；若穷尽可行路径后**只有 1 个**满足全部硬约束，**如实只报这 1 个**，并在方案后单列「淘汰方案 × 各自违反的约束编号」，禁止为凑足 2-3 个而纳入违约方案或结构雷同的变体
++
++### 自检 — 提交方案前逐条打勾（任一不过不得提交）
++| 检查项 | 判定 |
++|---|---|
++| 每个候选方案对 C1..Cn 全部打 ✓ | 有 ✗ 的方案 → 剔除，不进入对比表 |
++| 两两方案在至少一个取舍轴（实现路径 / 依赖引入 / 改动面 / 运行成本 / 迁移成本 / 可维护性 / 失败代价）上位置不同 | 全轴位置相同 → 合并，不凑数 |
++| 每个方案都写到核心思路 + 落点 + 成本 + 失败模式 | 某方案只有一行概述 → 补全或剔除 |
++| 只有 1 个合格方案时已如实上报并列出淘汰项违反编号 | 硬凑 2-3 个 → 重写 |
+ 
+ ### 铁律 — 必须等待用户选择方案
+ - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
+ 
+ ### 输出
+-方案对比表 + 推荐方案
++硬约束清单 C1..Cn + 方案对比表（每方案附逐条满足矩阵）+ 推荐方案
+ 
+ ### 注意
+ - 方案差异要实质性的，不要为了凑数
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 4f10b02a..eea50f91 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -247,18 +247,33 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+       prompt: `基于需求理解和澄清结果，提出 2-3 种实现方案。
+ {UI_VISUAL_GUIDANCE}
+ ### 操作
+-1. 每种方案列出：核心思路、优势、劣势
++0. **先固守约束（准入门槛）**：生成方案前，先把下列来源汇总为编号硬约束清单 C1..Cn 并输出：
++   - 前一阶段确认清单中带 \`[用户]\` 标记的需求点（\`[推断]\` 项不算硬约束）
++   - \`{SPEC_ROOT}/changes/<change-name>/decisions.md\` 中 \`status: accepted\` 条目的 \`normalized_requirement\`
++   - 用户原话中的硬边界（技术栈 / 禁止项 / 兼容要求 / 不可改面）
++   每个候选方案必须逐条满足全部 C1..Cn——任一不满足的方案**不得作为候选列入对比表**（它是违约项，不是方案）。约束清单列不出来 = 不具备生成方案的前提，先回去补齐。
++   - 若两条硬约束**真实互斥**（现有条件下无法同时满足）：**先停下提冲突**——列出冲突编号、各自代价、建议取舍并在本轮向用户提问；禁止构造一个故意违反某条硬约束的假选项充作备选
++1. 每种方案列出：核心思路、落点（触及模块/文件）、优势、劣势、失败模式、成本（改动面/工作量）
+ 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+ 3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案
+ 4. 给出推荐方案和理由
+ 5. 用户选定方案后，把选择结果**当场追加**到 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+ 6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则
++7. **数量纪律**：合格方案目标 2-3 个；若穷尽可行路径后**只有 1 个**满足全部硬约束，**如实只报这 1 个**，并在方案后单列「淘汰方案 × 各自违反的约束编号」，禁止为凑足 2-3 个而纳入违约方案或结构雷同的变体
++
++### 自检 — 提交方案前逐条打勾（任一不过不得提交）
++| 检查项 | 判定 |
++|---|---|
++| 每个候选方案对 C1..Cn 全部打 ✓ | 有 ✗ 的方案 → 剔除，不进入对比表 |
++| 两两方案在至少一个取舍轴（实现路径 / 依赖引入 / 改动面 / 运行成本 / 迁移成本 / 可维护性 / 失败代价）上位置不同 | 全轴位置相同 → 合并，不凑数 |
++| 每个方案都写到核心思路 + 落点 + 成本 + 失败模式 | 某方案只有一行概述 → 补全或剔除 |
++| 只有 1 个合格方案时已如实上报并列出淘汰项违反编号 | 硬凑 2-3 个 → 重写 |
+ 
+ ### 铁律 — 必须等待用户选择方案
+ - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
+ 
+ ### 输出
+-方案对比表 + 推荐方案
++硬约束清单 C1..Cn + 方案对比表（每方案附逐条满足矩阵）+ 推荐方案
+ 
+ ### 注意
+ - 方案差异要实质性的，不要为了凑数
+diff --git a/test/brainstorm-solution-constraint-gate.test.mjs b/test/brainstorm-solution-constraint-gate.test.mjs
+new file mode 100644
+index 00000000..55f91d62
+--- /dev/null
++++ b/test/brainstorm-solution-constraint-gate.test.mjs
+@@ -0,0 +1,93 @@
++/**
++ * brainstorm-solution-constraint-gate.test.mjs — 头脑风暴方案硬约束准入（2026-11-13-brainstorm-solution-constraint-gate）
++ *
++ * 锁住「提出 2-3 种方案」步骤的方案质量规则：
++ *   FR-01 硬约束清单 C1..Cn 与准入门槛（不满足者不得作为候选列入对比表）
++ *   FR-02 仅 1 个合格方案时如实上报，禁止凑数补到 2-3 个
++ *   FR-03 约束真实互斥时先提冲突取舍，禁止构造故意违约的假选项
++ *   FR-04 提交前自检表（逐方案×逐约束打勾 + 取舍轴差异检查）
++ *   FR-05 源码 / _extracted.json / docs/prompt/brainstorm.md 三面逐字一致
++ *   FR-06 既有方案步锁点（等待选择铁律 / 机制词检索 / rejected 条目）不被冲销
++ *
++ * 读法：直接读源文件文本按步骤定义切段断言——不 import stages/index.js（其顶层
++ * stageRegistry 对本文件 definition 求值，测试入口直 import 会触发路径无关的初始化面）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const SRC = readFileSync(join(REPO_ROOT, 'src', 'stages', 'brainstorm.js'), 'utf8')
++const EXTRACTED = JSON.parse(readFileSync(join(REPO_ROOT, 'docs', 'prompt', '_extracted.json'), 'utf8'))
++const MIRROR = readFileSync(join(REPO_ROOT, 'docs', 'prompt', 'brainstorm.md'), 'utf8')
++
++const STEP_NAME = '提出 2-3 种方案'
++
++/** 按步骤定义起点（`name: 'X',`）切段：返回从该步定义到下一步定义前的文本。 */
++function seg(stepName) {
++  const start = SRC.indexOf(`name: '${stepName}',`)
++  assert.ok(start >= 0, `步骤「${stepName}」定义在场`)
++  const nextIdx = SRC.indexOf("\n      name: '", start + 1)
++  return SRC.slice(start, nextIdx === -1 ? SRC.length : nextIdx)
++}
++
++/** 从步骤定义里取回 prompt 模板字面量的运行时原文（还原 \` 转义）。 */
++function sourcePrompt(stepName) {
++  const segText = seg(stepName)
++  const startTok = 'prompt: `'
++  const start = segText.indexOf(startTok)
++  assert.ok(start >= 0, `步骤「${stepName}」含 prompt 模板`)
++  const from = start + startTok.length
++  const end = segText.indexOf('`,\n', from)
++  assert.ok(end >= 0, `步骤「${stepName}」prompt 模板闭合在场`)
++  return segText.slice(from, end).replace(/\\`/g, '`')
++}
++
++const SOLUTIONS = seg(STEP_NAME)
++
++test('FR-01 硬约束准入门槛：编号清单 C1..Cn + 来源三面 + 不满足者不得列入对比表', () => {
++  assert.match(SOLUTIONS, /硬约束清单/, '硬约束清单在场')
++  assert.match(SOLUTIONS, /C1\.\.Cn/, '约束编号形态在场')
++  assert.match(SOLUTIONS, /\[用户\]/, '来源之一：用户确认需求点')
++  assert.match(SOLUTIONS, /status: accepted/, '来源之二：accepted 决策')
++  assert.match(SOLUTIONS, /normalized_requirement/, '来源之二的字段锚在场')
++  assert.match(SOLUTIONS, /硬边界/, '来源之三：用户硬边界')
++  assert.match(SOLUTIONS, /不得作为候选列入对比表/, '不满足约束者不得作为候选')
++})
++
++test('FR-02 单方案如实上报：只报 1 个 + 淘汰方案违反编号 + 禁止凑数', () => {
++  assert.match(SOLUTIONS, /只有 1 个/, '单方案边界在场')
++  assert.match(SOLUTIONS, /如实只报这 1 个/, '如实上报唯一合格方案')
++  assert.match(SOLUTIONS, /违反的约束编号/, '淘汰方案须列违反编号')
++  assert.match(SOLUTIONS, /禁止为凑足/, '禁止凑数文案在场')
++})
++
++test('FR-03 约束冲突：先提冲突取舍，禁止构造故意违约的假选项', () => {
++  assert.match(SOLUTIONS, /真实互斥/, '约束互斥情形在场')
++  assert.match(SOLUTIONS, /先停下提冲突/, '冲突须先停下提出')
++  assert.match(SOLUTIONS, /故意违反.*假选项/, '禁止构造故意违约的假选项')
++})
++
++test('FR-04 提交前自检表：逐方案×逐约束打勾 + 取舍轴差异检查', () => {
++  assert.match(SOLUTIONS, /自检/, '自检表在场')
++  assert.match(SOLUTIONS, /全部打 ✓/, '逐方案×逐约束打勾')
++  assert.match(SOLUTIONS, /取舍轴/, '取舍轴差异检查在场')
++  assert.match(SOLUTIONS, /合并/, '同位置方案必须合并')
++})
++
++test('FR-05 三面一致：源码 prompt == _extracted.json == docs/prompt/brainstorm.md', () => {
++  const step = EXTRACTED.brainstorm?.steps?.find((s) => s.name === STEP_NAME)
++  assert.ok(step, '_extracted.json 含该步骤')
++  const expected = sourcePrompt(STEP_NAME)
++  assert.equal(step.prompt, expected, '源码与提取产物逐字一致（漏跑 _extract.mjs 即红）')
++  assert.ok(MIRROR.includes(expected), 'docs/prompt/brainstorm.md 镜像逐字包含该 prompt')
++})
++
++test('FR-06 回归保护：既有方案步锁点不被冲销', () => {
++  assert.match(SOLUTIONS, /必须等待用户选择方案/, '等待选择铁律保留')
++  assert.match(SOLUTIONS, /knowledge search/, '机制词检索固定动作保留')
++  assert.match(SOLUTIONS, /status 用 rejected/, '落选方案 rejected 条目规则保留')
++  assert.match(SOLUTIONS, /方案差异要实质性的/, '差异性要求保留')
++})

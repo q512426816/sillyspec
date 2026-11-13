@@ -41,3 +41,4 @@
 | 2026-11-07 | 2026-11-07-explore-logic-prototype | 探索粗选件原型扩逻辑原型触发面 |
 | 2026-11-09 | 2026-11-09-legacy-red-fixes | 修复八个预存测试失败归因清偿 |
 | 2026-11-12 | 2026-11-12-knowledge-recall-gap-observe | 知识召回缺口记录：历史裁决不被意图查询命中 |
+| 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |

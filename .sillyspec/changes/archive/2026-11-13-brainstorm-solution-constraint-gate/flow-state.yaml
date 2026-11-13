@@ -1,0 +1,52 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  头脑风暴方案须逐条满足约束，禁止凑数
+
+
+  动机与背景：头脑风暴「提出 2-3 种方案」步骤当前只要求列核心思路/优劣并给推荐，未要求每个候选方案满足前置阶段已确认的硬约束（[用户] 需求点、decisions.md 中 accepted 的
+  normalized_requirement、用户硬边界）。实证表现为备选方案像凑数、用户实际只能选推荐方案。本次在 prompt 中增加硬约束准入门槛、单方案如实上报规则与提交前自检表。
+
+
+  成功标准：
+
+  - src/stages/brainstorm.js「提出 2-3 种方案」步骤 prompt 新增硬约束准入门槛：每个候选方案必须逐条满足已确认需求点（[用户]）、decisions.md 中 status=accepted 的
+  normalized_requirement 与用户硬边界，不满足者不得列入对比表
+
+  - 仅 1 个方案满足全部硬约束时，如实只报 1 个并列出淘汰方案各自违反的约束编号，禁止凑数补到 2-3 个
+
+  - 约束间真实冲突时先提出冲突与取舍建议，禁止构造故意违反约束的假选项
+
+  - 新增提交前自检表（逐方案×逐约束打勾、取舍轴差异检查）
+
+  - node docs/prompt/_extract.mjs 刷新 _extracted.json，docs/prompt/brainstorm.md 镜像逐字同步
+
+  - 相关测试用例跑绿且覆盖上述新规则文案
+autopilot: false
+prestage_ack: false
+baseline_commit: 7bf40a5bd6d983107a9523fc2ba0912edad03927
+updatedAt: '2026-11-13T13:47:29.039Z'
+baseline_sha256: 54de80404fd81fc8a758ca4c1e663f7331a198d60dd6eec453ed15a28b1b7cdf
+spec_approved: true
+spec_approved_at: '2026-11-13T13:42:39.171Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js18)（6.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261113134725\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 4 个
+

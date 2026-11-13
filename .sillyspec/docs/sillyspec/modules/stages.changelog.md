@@ -83,3 +83,4 @@
 | 2026-11-06 | 2026-11-07-knowledge-generated-retire | generated 切块死区退库 |
 | 2026-11-07 | 2026-11-07-explore-logic-prototype | 探索粗选件原型扩逻辑原型触发面 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+| 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |

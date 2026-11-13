@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-13-brainstorm-solution-constraint-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「硬约束准入门槛文案存在」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「单方案如实上报与禁凑数文案存在」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「约束冲突处理文案存在」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-04",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「提交前自检表文案存在」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-05",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「镜像与提取产物同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-06",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「相关测试全部通过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-13-brainstorm-solution-constraint-gate"
+    }
+  ]
+}

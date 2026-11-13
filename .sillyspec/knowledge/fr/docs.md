@@ -1759,3 +1759,117 @@ created_at: 2026-10-15T09:21:13.934Z
 - 场景：主路径 — Given 打开 `docs/troubleshooting.md`；When 读取 frontmatter；Then `updated_at` 字段值为 `2026-11-12`
 全文：.sillyspec/changes/archive/2026-11-12-knowledge-recall-gap-observe/requirements.md#FR-03
 最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
+
+## FR-docs-094 src/stages/brainstorm.js「提出 2-3 种方案」步骤 prompt 新增硬约束准入门槛：每个候选方案必须逐条满足已确认需求点（[用户]）、decisions.md 中 status=accepted 的 normalized_requirement 与用户硬边界，不满足者不得列入对比表
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-01
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-01
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「硬约束准入门槛文案存在」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active
+
+## FR-docs-095 仅 1 个方案满足全部硬约束时，如实只报 1 个并列出淘汰方案各自违反的约束编号，禁止凑数补到 2-3 个
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：单方案边界
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-02
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-02
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「单方案如实上报与禁凑数文案存在」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active
+
+## FR-docs-096 约束间真实冲突时先提出冲突与取舍建议，禁止构造故意违反约束的假选项
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：约束冲突
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-03
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-03
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「约束冲突处理文案存在」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active
+
+## FR-docs-097 新增提交前自检表（逐方案×逐约束打勾、取舍轴差异检查）
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：凑数方案自检
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-04
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-04
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「提交前自检表文案存在」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active
+
+## FR-docs-098 node docs/prompt/_extract.mjs 刷新 _extracted.json，docs/prompt/brainstorm.md 镜像逐字同步
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：镜像同步
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-05
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-05
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「镜像与提取产物同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active
+
+## FR-docs-099 相关测试用例跑绿且覆盖上述新规则文案
+变更：2026-11-13-brainstorm-solution-constraint-gate
+状态：active
+摘要：回归
+全文：.sillyspec/changes/archive/2026-11-13-brainstorm-solution-constraint-gate/requirements.md#FR-06
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-13-brainstorm-solution-constraint-gate:flow:测试绑定FR-06
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「相关测试全部通过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-13-brainstorm-solution-constraint-gate
+  status: active

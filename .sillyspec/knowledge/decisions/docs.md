@@ -68,3 +68,12 @@
 文件：docs/troubleshooting.md
 最近确认：5da372df2670ba19a5e7b05fc3274fe198251a1c
 理由：在 `docs/troubleshooting.md` 追加第三条条目，登记「意图查询无法召回历史裁决」缺口。不改任何代码——本变更只做观察项留痕，缺陷修复另立变更。 实证来源：2026-11-12 本会话先输出「架构级立项做生成式当前行为契约快照」的建议，事后 grep 才命中 `.sillyspec/changes/archive/2026-10-15-fr-chain-l3-adjudication/decisions.md` 的 D-001@v1——该能力已于四周前（28 天）被证伪冻结。 核查后根因比初始判断精确：该裁决按入选规则（`type=scope` 且 status 非 rejected → 不入库；值集见 `src/decision-values.js:31`，判定见 `src/decision-distill.js:100-106`）从未进入 `knowledge/decisions/`，同变更的 3 条 FR 已正常入 `knowledge/fr/core-engine.md`，唯独决策缺席。即问题不在召回算法，在决策根本没进召回池。 选 troubleshooting.md 而非 ROADMAP：ROADMAP 收规划面，本条已有实证后果（一次错误建议），符合 troubleshooting「撞过的问题」定位（CLAUDE.md 规则 18 同时点名两处，按性质择一）。
+
+## D-docs-004@v1 2026-11-13-brainstorm-solution-constraint-gate——只改 `src/stages/brainstorm.js` 中「提出 2-3 种方案」步骤的 `definition.steps[].prompt`：在「操作」
+状态：implemented
+变更：2026-11-13-brainstorm-solution-constraint-gate
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-13-brainstorm-solution-constraint-gate/design.md
+文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, src/stages/brainstorm.js, test/brainstorm-solution-constraint-gate.test.mjs
+最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
+理由：只改 `src/stages/brainstorm.js` 中「提出 2-3 种方案」步骤的 `definition.steps[].prompt`：在「操作」开头新增第 0 步「先固守约束」——把前置阶段 `[用户]` 需求点、`decisions.md` 中 accepted 的 `normalized_requirement`、用户硬边界汇总为编号硬约束清单 C1..Cn，作为候选方案的准入门槛；补充单方案如实上报、约束冲突处理、提交前自检表三段规则。随后运行 `node docs/prompt/_extract.mjs` 刷新提取产物并逐字同步 `docs/prompt/brainstorm.md`，新增测试锁住新文案。不改 CLI 代码路径、不改步骤名/waitOptions/输出契约。

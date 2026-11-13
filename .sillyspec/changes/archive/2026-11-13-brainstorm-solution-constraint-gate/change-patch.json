@@ -1,0 +1,101 @@
+{
+  "change": "2026-11-13-brainstorm-solution-constraint-gate",
+  "baseline": "7bf40a5bd6d983107a9523fc2ba0912edad03927",
+  "head": "6150f50df9edc022c835b2fa0a70f5064c5684f7",
+  "files": [
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "src/stages/brainstorm.js",
+    "test/brainstorm-solution-constraint-gate.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 128,
+    "deletions": 5
+  },
+  "savedAt": "2026-11-13T13:47:27.797Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7bf40a5bd6d983107a9523fc2ba0912edad03927",
+    "totals": {
+      "files": 4,
+      "additions": 128,
+      "deletions": 5
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/brainstorm-solution-constraint-gate.test.mjs",
+        "additions": 93,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "f3d33d19cd984276483008588d3d123b99d4925184f2f75748877469b59d03d4",
+  "patchStatus": "ok"
+}
