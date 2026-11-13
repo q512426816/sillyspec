@@ -106,6 +106,37 @@ test('④ 非 git 目录 → 回退磁盘模式 + warning（不炸不静默）',
   assert.ok(r.warnings.some(w => w.includes('回退磁盘模式')), `附回退 warning（实际 ${JSON.stringify(r.warnings)}）`)
 })
 
+test('⑥ 未跟踪**目录**（porcelain 只出 `?? dir/` 一行）→ HEAD 模式不校验（2026-11-13 共享仓推送误拦实证）', () => {
+  const dir = makeRepo()
+  initRepo(dir)
+  mkdirSync(join(dir, 'docs'), { recursive: true })
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  writeFileSync(join(dir, 'src', 'app.js'), 'function ok() {\n  return 1\n}\n', 'utf8')
+  writeFileSync(join(dir, 'docs', 'arch.md'), '# 架构\n见 `src/app.js:1`（ok）。\n', 'utf8')
+  git(dir, ['add', '.'])
+  git(dir, ['commit', '-q', '-m', 'init'])
+  // 并行会话进行中变更：整个目录未跟踪（git status 只列目录一行，不展开子文件）
+  mkdirSync(join(dir, '.sillyspec', 'changes', 'wip-change'), { recursive: true })
+  writeFileSync(
+    join(dir, '.sillyspec', 'changes', 'wip-change', 'design.md'),
+    '# 设计\n见 `src/ghost.js:99`（进行中，锚点尚未对齐）。\n',
+    'utf8',
+  )
+
+  const wt = runDocsCheck({ projectRoot: dir, paths: ['.sillyspec/changes/**/*.md'] })
+  assert.ok(
+    wt.invalid.some(i => i.doc === '.sillyspec/changes/wip-change/design.md'),
+    '工作区模式校验未跟踪目录内文档（现状语义）',
+  )
+
+  const hd = runDocsCheck({ projectRoot: dir, paths: ['.sillyspec/changes/**/*.md'], against: 'HEAD' })
+  assert.ok(
+    !hd.invalid.some(i => i.doc === '.sillyspec/changes/wip-change/design.md'),
+    'HEAD 模式跳过未跟踪目录内文档（不随推送走）',
+  )
+  assert.equal(hd.invalid.length, 0, 'HEAD 模式整体 0 失效')
+})
+
 test('⑤ 干净树两模式结果一致（无漂移时零行为差异）', () => {
   const dir = makeRepo()
   initRepo(dir)

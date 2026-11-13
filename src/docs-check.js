@@ -57,6 +57,12 @@ function _rdExists(absPath) {
  * git status 只列差异文件：不在 status 里的 tracked 文件 = 干净（磁盘读即 HEAD 读）；
  * ?? 未跟踪 → HEAD 无此文件（existsAt=false, readText=null）；M/D/R → HEAD 仍在
  * （existsAt=true），内容经 git show（带缓存，脏文件数量级 = 并行会话在途编辑数）。
+ *
+ * 未跟踪目录前缀匹配（2026-11-13 实证）：git status 对整目录未跟踪只输出一条
+ * `?? dir/`（尾斜杠、不展开子文件），精确路径匹配会让目录下所有文件误走「干净：
+ * 磁盘即 HEAD」分支——pre-push docs gate 因此把进行中变更目录的在途文档失效计入
+ * 计数，共享仓推送到处误拦（--against HEAD 形同虚设）。故先收集未跟踪目录前缀，
+ * 其下任意文件按「HEAD 无此文件」处理。
  */
 export function createHeadReader(projectRoot, ref = 'HEAD') {
   const root = pathResolve(projectRoot)
@@ -78,6 +84,9 @@ export function createHeadReader(projectRoot, ref = 'HEAD') {
       status.set(p, st)
     }
   } catch { return null }
+  // 未跟踪目录前缀（porcelain 目录条目带尾斜杠）：其下任意文件 HEAD 均无。
+  const untrackedDirPrefixes = [...status.keys()].filter((k) => k.endsWith('/') && status.get(k) === 'U')
+  const isUnderUntrackedDir = (rel) => untrackedDirPrefixes.some((d) => rel.startsWith(d))
   const showCache = new Map()
   const relOf = (abs) => pathRelative(root, pathResolve(abs)).split(pathSep).join('/')
   return {
@@ -85,6 +94,7 @@ export function createHeadReader(projectRoot, ref = 'HEAD') {
     readText(absPath) {
       const rel = relOf(absPath)
       const st = status.get(rel)
+      if (st === undefined && isUnderUntrackedDir(rel)) return null // 未跟踪目录内：HEAD 无此文件
       if (st === undefined) {
         try { return readFileSync(absPath, 'utf8') } catch { return null } // 干净：磁盘即 HEAD
       }
@@ -96,7 +106,9 @@ export function createHeadReader(projectRoot, ref = 'HEAD') {
       return text
     },
     existsAt(absPath) {
-      const st = status.get(relOf(absPath))
+      const rel = relOf(absPath)
+      const st = status.get(rel)
+      if (st === undefined && isUnderUntrackedDir(rel)) return false // 未跟踪目录内 → HEAD 不存在
       if (st === 'U') return false // 未跟踪 → HEAD 不存在
       if (st === 'D' || st === 'M') return true // 工作区删/改 → HEAD 仍在
       return existsSync(absPath)
