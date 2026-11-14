@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-11-13T00:00:00+08:00
+updated_at: 2026-11-14T00:00:00+08:00
 ---
 
 # stages
@@ -103,6 +103,8 @@ doctor 阶段 6 步 → 3 步：step1 noAI `_cliAction doctorRunDiagnostics`（r
 
 ## 方案硬约束准入与禁凑数（2026-11-13-brainstorm-solution-constraint-gate）
 brainstorm「提出 2-3 种方案」步 prompt 新增操作 0：生成方案前把 `[用户]` 需求点 / `decisions.md` 中 `status: accepted` 的 `normalized_requirement` / 用户硬边界汇总为编号硬约束清单 C1..Cn；每个候选方案必须逐条满足才可进入对比表（不满足者禁止当候选），仅 1 个合格时如实只报 1 个并列出淘汰方案违反编号（禁止凑数补 2-3 个），约束真实互斥先停下提冲突与取舍（禁止构造故意违约的假选项）；新增提交前自检表（逐方案×逐约束打勾 + 取舍轴差异同位置合并）。文本钉 `test/brainstorm-solution-constraint-gate.test.mjs`；`docs/prompt/brainstorm.md` 镜像由 `node docs/prompt/_extract.mjs` 再生同步。验收：本卡注记与源码文案逐条对照，测试锁点全绿。
+
+（2026-11-14-wait-ask-tool-and-selfcheck-output 增补）「### 输出」契约补自检结果产物：四行检查逐行打勾、有 ✗ 回到对应处理重新输出不得跳过——自检从过程动作升级为可审计产物（2026-11-13 版上线实测自检表被整体跳过的根因修复）。
 
 ## archive 三重核对机械化（2026-09-09 ql-20260909-004）
 archive extract-module-impact 步的三重核对（module-impact × diff × module-map）由 CLI 代算：archive-delta 新增 auditModuleImpactAgainstDiff（resolveVerifyChangedFiles 三源取真实 diff × 矩阵反引号路径集合比对，输出一致/两类不一致清单）；run/prompt.js 经 {ARCHIVE_IMPACT_AUDIT} 注入报告——agent 只裁决不一致项（删「重跑 git diff 手工比对」教学）。

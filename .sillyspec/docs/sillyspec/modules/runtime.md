@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-22T00:00:00+08:00
+updated_at: 2026-11-14T00:00:00+08:00
 ---
 # runtime
 
@@ -135,3 +135,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 ## verify 收尾次序接线（2026-09-08-ir-verify-facts）
 
 gates.js verify 完成门重排：前置 slot-backfill（verify-result.md 槽段固化进 verify-facts.json——只固化既有底稿）+ verifyStartAt（ProgressManager.getStageCompletedAt 读 DB stages.completed_at，新只读访问器，change-registry 同款容错）注入 runValidators context；test 实测后 tests 段二次回填；cannot_verify 硬门（runVerifyRequiredEvidenceCheck status=blocked → rollback，逐 item verification 明细 + 修复指引）。无槽存量 md 走 legacy 降级不阻断。
+
+## wait 提问方式指引注入（2026-11-14-wait-ask-tool-and-selfcheck-output）
+
+outputStep「完成后执行」段（prompt.js）requiresWait 与 mayNeedWait（WAIT_MARKER_RE 正文命中）两分支注入提问方式指引：优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）把 waitReason 与候选项（waitOptions " / " 连接）呈现给用户作答、回答逐字带入 `--answer` 一步合并收口，harness 无询问工具才退纯文字提问——对齐 flow.js 三断点横幅既有实践（此前 run 层只给命令模板，agent 只发纯文字问题不触发询问卡）。auto 模式（autoMeta）不注入（脚本驱动无交互 UI，命令模板零变化）。锁点 test/output-step-render.test.mjs Case 4/11/12。
