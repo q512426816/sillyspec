@@ -1873,3 +1873,98 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-13-brainstorm-solution-constraint-gate
   status: active
+
+## FR-docs-100 src/stages/brainstorm.js 方案步「### 输出」行补自检结果产物（四行检查逐行打勾，有 ✗ 回到对应处理），使自检可审计
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+状态：active
+摘要：自检可审计
+全文：.sillyspec/changes/archive/2026-11-14-wait-ask-tool-and-selfcheck-output/requirements.md#FR-01
+最近确认：0af491509194727609f0123bb9157859f570de0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-01
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「输出契约含自检结果产物」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
+  status: active
+
+## FR-docs-101 src/run/prompt.js 完成后执行段的 requiresWait 分支与 mayNeedWait 分支注入提问方式指引：优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）呈现问题与候选项，拿到回答逐字带入 --answer 收口；harness 无该工具才退纯文字提问
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+状态：active
+摘要：wait 步触发询问卡
+全文：.sillyspec/changes/archive/2026-11-14-wait-ask-tool-and-selfcheck-output/requirements.md#FR-02
+最近确认：0af491509194727609f0123bb9157859f570de0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-02
+  tests: test/output-step-render.test.mjs「requiresWait/mayNeedWait 注入含 AskUserQuestion 指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
+  status: active
+
+## FR-docs-102 auto 模式不注入该指引（脚本驱动无交互 UI）
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+状态：active
+摘要：auto 模式零变化
+全文：.sillyspec/changes/archive/2026-11-14-wait-ask-tool-and-selfcheck-output/requirements.md#FR-03
+最近确认：0af491509194727609f0123bb9157859f570de0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-03
+  tests: test/output-step-render.test.mjs「auto 模式不注入询问指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
+  status: active
+
+## FR-docs-103 docs/prompt/_extracted.json 与 docs/prompt/brainstorm.md 镜像逐字同步，README 注入框架节同步新指引
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+状态：active
+摘要：三面一致
+全文：.sillyspec/changes/archive/2026-11-14-wait-ask-tool-and-selfcheck-output/requirements.md#FR-04
+最近确认：0af491509194727609f0123bb9157859f570de0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-04
+  tests: test/brainstorm-solution-constraint-gate.test.mjs「三面一致（源码==提取产物==镜像）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
+  status: active
+
+## FR-docs-104 test/brainstorm-solution-constraint-gate.test.mjs 与 test/output-step-render.test.mjs 补断言并全绿
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+状态：active
+摘要：回归
+全文：.sillyspec/changes/archive/2026-11-14-wait-ask-tool-and-selfcheck-output/requirements.md#FR-05
+最近确认：0af491509194727609f0123bb9157859f570de0d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-05
+  tests: test/output-step-render.test.mjs「相关测试全部通过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
+  status: active

@@ -42,3 +42,4 @@
 | 2026-11-09 | 2026-11-09-legacy-red-fixes | 修复八个预存测试失败归因清偿 |
 | 2026-11-12 | 2026-11-12-knowledge-recall-gap-observe | 知识召回缺口记录：历史裁决不被意图查询命中 |
 | 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |
+| 2026-11-14 | 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物 |

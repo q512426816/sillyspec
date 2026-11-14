@@ -93,3 +93,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-09-terminal-sync-background | 终态同步后台化三态marker补报免卡前台
 - 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查
 - 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall
+- 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物

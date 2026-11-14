@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-14-wait-ask-tool-and-selfcheck-output",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「输出契约含自检结果产物」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-wait-ask-tool-and-selfcheck-output"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-02",
+      "tests": [
+        "test/output-step-render.test.mjs「requiresWait/mayNeedWait 注入含 AskUserQuestion 指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-wait-ask-tool-and-selfcheck-output"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-03",
+      "tests": [
+        "test/output-step-render.test.mjs「auto 模式不注入询问指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-wait-ask-tool-and-selfcheck-output"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-04",
+      "tests": [
+        "test/brainstorm-solution-constraint-gate.test.mjs「三面一致（源码==提取产物==镜像）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-wait-ask-tool-and-selfcheck-output"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-14-wait-ask-tool-and-selfcheck-output:flow:测试绑定FR-05",
+      "tests": [
+        "test/output-step-render.test.mjs「相关测试全部通过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-wait-ask-tool-and-selfcheck-output"
+    }
+  ]
+}

@@ -77,3 +77,12 @@
 文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, src/stages/brainstorm.js, test/brainstorm-solution-constraint-gate.test.mjs
 最近确认：6150f50df9edc022c835b2fa0a70f5064c5684f7
 理由：只改 `src/stages/brainstorm.js` 中「提出 2-3 种方案」步骤的 `definition.steps[].prompt`：在「操作」开头新增第 0 步「先固守约束」——把前置阶段 `[用户]` 需求点、`decisions.md` 中 accepted 的 `normalized_requirement`、用户硬边界汇总为编号硬约束清单 C1..Cn，作为候选方案的准入门槛；补充单方案如实上报、约束冲突处理、提交前自检表三段规则。随后运行 `node docs/prompt/_extract.mjs` 刷新提取产物并逐字同步 `docs/prompt/brainstorm.md`，新增测试锁住新文案。不改 CLI 代码路径、不改步骤名/waitOptions/输出契约。
+
+## D-docs-005@v1 2026-11-14-wait-ask-tool-and-selfcheck-output——两处纯提示词/注入文本修改：① `src/stages/brainstorm.js` 方案步「### 输出」行把自检结果列为必产物（四行检查逐行打勾、✗ 回到对
+状态：implemented
+变更：2026-11-14-wait-ask-tool-and-selfcheck-output
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-14-wait-ask-tool-and-selfcheck-output/design.md
+文件：docs/prompt/README.md, docs/prompt/_extracted.json, docs/prompt/brainstorm.md, src/run/prompt.js, src/stages/brainstorm.js, test/brainstorm-solution-constraint-gate.test.mjs, test/output-step-render.test.mjs
+最近确认：0af491509194727609f0123bb9157859f570de0d
+理由：两处纯提示词/注入文本修改：① `src/stages/brainstorm.js` 方案步「### 输出」行把自检结果列为必产物（四行检查逐行打勾、✗ 回到对应处理），使 FR-04 自检从过程动作升级为可审计产物——2026-11-13 变更上线实测自检表被整体跳过，根因是输出契约未包含它；② `src/run/prompt.js` outputStep 的「完成后执行」段在 requiresWait / mayNeedWait 两分支注入提问方式指引（优先 harness 交互询问工具、回答逐字带入 --answer），对齐 flow.js 三断点横幅已有的 AskUserQuestion 实践——完整流程 wait 步只给命令模板导致 agent 只发纯文字问题。auto 模式（autoMeta）跳过注入，零变化。

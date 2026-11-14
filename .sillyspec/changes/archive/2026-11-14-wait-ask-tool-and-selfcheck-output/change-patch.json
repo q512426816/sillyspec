@@ -1,0 +1,135 @@
+{
+  "change": "2026-11-14-wait-ask-tool-and-selfcheck-output",
+  "baseline": "e218a8e2422bbb8546fe6b437988b7348c69d89f",
+  "head": "0af491509194727609f0123bb9157859f570de0d",
+  "files": [
+    "docs/prompt/README.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "src/run/prompt.js",
+    "src/stages/brainstorm.js",
+    "test/brainstorm-solution-constraint-gate.test.mjs",
+    "test/output-step-render.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 64,
+    "deletions": 15
+  },
+  "savedAt": "2026-11-14T14:22:07.556Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 3,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "e218a8e2422bbb8546fe6b437988b7348c69d89f",
+    "totals": {
+      "files": 7,
+      "additions": 64,
+      "deletions": 15
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/README.md",
+        "additions": 10,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 9,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/brainstorm-solution-constraint-gate.test.mjs",
+        "additions": 5,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/output-step-render.test.mjs",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "56854451a60414386244909753226dd77cb2a1ef29c4b714e02fc077abad2161",
+  "patchStatus": "ok"
+}

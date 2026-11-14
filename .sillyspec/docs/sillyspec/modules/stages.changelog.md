@@ -84,3 +84,4 @@
 | 2026-11-07 | 2026-11-07-explore-logic-prototype | 探索粗选件原型扩逻辑原型触发面 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
 | 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |
+| 2026-11-14 | 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物 |
