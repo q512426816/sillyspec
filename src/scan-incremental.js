@@ -238,8 +238,26 @@ export async function computeIncrementalPlan(opts = {}) {
   if (probe.available && scope.length > 0) {
     const files = await listIndexFiles(projectRoot)
     if (files) {
-      const effective = files.filter((f) => !isExcludedPath(f.path))
-      const uncovered = effective.filter((f) => !inScope(f.path, scope)).map((f) => f.path)
+      // 项目责任域与口径对齐（2026-11-15-scan-audit-domain）：索引路径是全仓相对、子项目
+      // map paths 历史上两种口径并存（backend=项目相对 app/core/**；sillyhub-daemon=全仓相对
+      // sillyhub-daemon/src/**）——按注册 path 剥前缀得 rel，覆盖判定双口径兼容（rel 或全仓
+      // 原路径任一命中即覆盖）；剥不动的文件（其他项目域内）不进对账分母与未归属（跨域污染
+      // 修复，backend 项目实测误报 3296）。空前缀（主项目 path:. / 未注册单项目仓）不剥不滤
+      // ——根级散文件仍是真实盲区，行为不变（FR-02）。uncovered 报全仓原始路径（可定位）。
+      const pre = readProjectPathPrefix(specBase, projectName)
+      const effective = []
+      for (const f of files) {
+        if (isExcludedPath(f.path)) continue
+        let rel
+        if (pre) {
+          if (!f.path.startsWith(pre)) continue // 其他项目域内
+          rel = f.path.slice(pre.length)
+        } else {
+          rel = f.path
+        }
+        effective.push({ rel, orig: f.path })
+      }
+      const uncovered = effective.filter((e) => !inScope(e.rel, scope) && !inScope(e.orig, scope)).map((e) => e.orig)
       audit = {
         uncoveredFiles: uncovered,
         totalIndexed: effective.length,
@@ -282,6 +300,19 @@ export async function computeIncrementalPlan(opts = {}) {
 }
 
 // ── 内部工具 ───────────────────────────────────────────────────────────────
+
+/** 读注册项目 path 的前缀形态（'backend' → 'backend/'；主项目 '.'/未注册/读失败 → ''） */
+function readProjectPathPrefix(specBase, projectName) {
+  try {
+    const p = join(specBase, 'projects', `${projectName}.yaml`)
+    if (!existsSync(p)) return ''
+    const m = readFileSync(p, 'utf8').match(/^path:\s*(\S+)\s*$/m)
+    const v = m ? m[1].replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '') : ''
+    return !v || v === '.' ? '' : `${v}/`
+  } catch {
+    return ''
+  }
+}
 
 /** module-map 全部 paths 去重归一（scan-diff/scan-refresh 同口径内联先例，防双向耦合） */
 function collectScope(moduleIndex) {

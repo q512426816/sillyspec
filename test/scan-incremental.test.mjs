@@ -188,3 +188,44 @@ test('对账：listIndexFiles mock（含索引目录与 node_modules 样本）�
   assert.match(rep.c, /orphan\/z\.py/)
   assert.match(rep.c, /source_commit: bbbbbbb/)
 })
+
+// ── 对账域过滤（2026-11-15-scan-audit-domain FR-01/FR-02）───────────────────
+
+test('对账域过滤：多项目仓子项目按注册 path 剥前缀比对（域外文件不计入）', async () => {
+  // 本项目注册为子项目（path: proj-sub）——map paths 是项目相对（src/**），索引是全仓相对
+  const f = mkFixture({ mapYaml: MAP })
+  mkdirSync(join(f.specBase, 'projects'), { recursive: true })
+  writeFileSync(join(f.specBase, 'projects', 'proj.yaml'), 'name: proj\npath: proj-sub\n')
+  writeFileSync(join(f.specBase, 'projects', 'other.yaml'), 'name: other\n')
+  const files = [
+    { path: 'proj-sub/src/a.js', language: 'javascript', nodeCount: 1, size: 1 }, // 剥后 src/a.js → inScope ✓
+    { path: 'proj-sub/lib/other2.js', language: 'javascript', nodeCount: 1, size: 1 }, // 剥后未命中 → uncovered
+    { path: 'frontend/app.tsx', language: 'tsx', nodeCount: 1, size: 1 },  // 其他项目域 → 跳过
+    { path: 'backend/api.py', language: 'python', nodeCount: 1, size: 1 }, // 其他项目域 → 跳过
+  ]
+  const r = await computeIncrementalPlan({ ...f, deps: {
+    safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }),
+    probeCodegraph: probeOk,
+    listIndexFiles: async () => files,
+    writeFile: () => {},
+  } })
+  assert.deepEqual(r.audit.uncoveredFiles, ['proj-sub/lib/other2.js'], 'uncovered=域内未归属（报全仓原始路径）；lib/other2.js 未被 lib/helper.js 精确路径覆盖')
+  assert.equal(r.audit.totalIndexed, 2, '分母只算域内')
+})
+
+test('对账域过滤：单项目仓不启用（根级散文件仍报，行为不变）', async () => {
+  const f = mkFixture({ mapYaml: MAP })
+  rmSync(join(f.specBase, 'projects'), { recursive: true, force: true }) // 隔离上一用例的多项目注册残留
+  const files = [
+    { path: 'src/a.js', language: 'javascript', nodeCount: 1, size: 1 },
+    { path: 'sync_tool.py', language: 'python', nodeCount: 1, size: 1 },
+  ]
+  const r = await computeIncrementalPlan({ ...f, deps: {
+    safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }),
+    probeCodegraph: probeOk,
+    listIndexFiles: async () => files,
+    writeFile: () => {},
+  } })
+  assert.deepEqual(r.audit.uncoveredFiles, ['sync_tool.py'], '根级散文件不被域过滤藏掉')
+  assert.equal(r.audit.totalIndexed, 2)
+})

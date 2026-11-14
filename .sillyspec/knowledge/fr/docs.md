@@ -1968,3 +1968,66 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-14-wait-ask-tool-and-selfcheck-output
   status: active
+
+## FR-docs-105 子项目对账只统计本项目责任域内的未归属文件（backend 项目不再把 frontend 等其他项目文件算进 uncovered）
+变更：2026-11-15-scan-audit-domain
+状态：active
+摘要：多项目仓子项目对账
+场景正文：
+- 场景：多项目仓子项目对账 — Given projects/ 注册 2 个项目，本项目 map paths=[backend/**]，索引清单含 backend/orphan.py（域内未归属）、fro；When computeIncrementalPlan 计算对账；Then uncoveredFiles=[backend/orphan.py]（域外 frontend 文件不计入），totalIndexed=2（域内 2 个），报告正
+全文：.sillyspec/changes/archive/2026-11-15-scan-audit-domain/requirements.md#FR-01
+最近确认：8f76681fb6d3515737e5b11a9c6da44838180d75
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-scan-audit-domain:flow:测试绑定FR-01
+  tests: test/scan-incremental.test.mjs「对账域过滤：多项目仓子项目只统计域内未归属」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-scan-audit-domain
+  status: active
+
+## FR-docs-106 单项目仓对账行为不变（multi-agent-platform 根项目仍报 1 未归属）
+变更：2026-11-15-scan-audit-domain
+状态：active
+摘要：单项目仓根级散文件仍是盲区
+场景正文：
+- 场景：单项目仓根级散文件仍是盲区 — Given 单项目仓（projects/ 仅 1 个 yaml 或缺失），map paths=[src/**]，索引清单含 src/a.js、sync_tool.py（根级；When computeIncrementalPlan 计算对账；Then uncoveredFiles=[sync_tool.py]（不因域过滤被藏掉）
+全文：.sillyspec/changes/archive/2026-11-15-scan-audit-domain/requirements.md#FR-02
+最近确认：8f76681fb6d3515737e5b11a9c6da44838180d75
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-scan-audit-domain:flow:测试绑定FR-02
+  tests: test/scan-incremental.test.mjs「对账域过滤：单项目仓不启用（根级散文件仍报）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-scan-audit-domain
+  status: active
+
+## FR-docs-107 既有 scan-incremental 单测零回归+新增域过滤用例
+变更：2026-11-15-scan-audit-domain
+状态：active
+摘要：回归与新增
+场景正文：
+- 场景：回归与新增 — Given 上游 test/scan-incremental.test.mjs 12 用例全绿；When 新增域过滤用例并入该文件后全量跑；Then 全部用例通过（既有用例断言值不变——单项目 fixture 不受影响）
+全文：.sillyspec/changes/archive/2026-11-15-scan-audit-domain/requirements.md#FR-03
+最近确认：8f76681fb6d3515737e5b11a9c6da44838180d75
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-scan-audit-domain:flow:测试绑定FR-03
+  tests: test/scan-incremental.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-scan-audit-domain
+  status: active

@@ -86,3 +86,12 @@
 文件：docs/prompt/README.md, docs/prompt/_extracted.json, docs/prompt/brainstorm.md, src/run/prompt.js, src/stages/brainstorm.js, test/brainstorm-solution-constraint-gate.test.mjs, test/output-step-render.test.mjs
 最近确认：0af491509194727609f0123bb9157859f570de0d
 理由：两处纯提示词/注入文本修改：① `src/stages/brainstorm.js` 方案步「### 输出」行把自检结果列为必产物（四行检查逐行打勾、✗ 回到对应处理），使 FR-04 自检从过程动作升级为可审计产物——2026-11-13 变更上线实测自检表被整体跳过，根因是输出契约未包含它；② `src/run/prompt.js` outputStep 的「完成后执行」段在 requiresWait / mayNeedWait 两分支注入提问方式指引（优先 harness 交互询问工具、回答逐字带入 --answer），对齐 flow.js 三断点横幅已有的 AskUserQuestion 实践——完整流程 wait 步只给命令模板导致 agent 只发纯文字问题。auto 模式（autoMeta）跳过注入，零变化。
+
+## D-docs-006@v1 2026-11-15-scan-audit-domain——上游变更 2026-11-14-scan-incremental 的 `_module-map` 对账存在多项目跨域污染：`computeIncremental
+状态：implemented
+变更：2026-11-15-scan-audit-domain
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-15-scan-audit-domain/design.md
+文件：docs/sillyspec/file-lifecycle.md, src/scan-incremental.js, test/scan-incremental.test.mjs
+最近确认：8f76681fb6d3515737e5b11a9c6da44838180d75
+理由：上游变更 2026-11-14-scan-incremental 的 `_module-map` 对账存在多项目跨域污染：`computeIncrementalPlan` 的对账用「codegraph 索引全仓文件清单 × 本项目 scope」求未归属——多项目仓（如 multi-agent-platform 的 backend/frontend/daemon/SillyHub 子项目）里，其他项目的文件全部落在本项目 scope 之外，被误报为「未归属」（backend 项目实测误报 3296 个，真实盲区是根项目口径的 1 个）。 修复：对账按**注册项目 path 剥前缀对齐口径**——读 `projects/<projectName>.yaml` 的 `path`（子项目=其仓内目录如 `backend`；主项目 `path: .`/未注册=空前缀）：索引文件路径剥项目前缀后与 map paths（项目相对口径）比对，剥不动的文件（其他项目域内）不进对账分母与未归属（跨域污染修复）；空前缀项目（主项目/单项目仓）不剥不滤，根级散文件仍是该报的真实盲区（行为不变）。真机暴露的深层根因：子项目 map paths 是项目相对（`app/core/**`）而索引是全仓相对（`backend/app/...`）——上游「3296 未归属」本质是口径错配，本修复同时纠正覆盖判定。改动点集中在 `src/scan-incremental.js` 对账段（数行）+ 单测补正反例。 文件变更清单：`src/scan-incremental.js`（对账段剥前缀+双口径+readProjectPathPrefix 内联）、`test/scan-incremental.test.mjs`（新增域过滤 2 用例）、`docs/sillyspec/file-lifecycle.md`（scan 增量模式段补记对账口径对齐，收口补证提交 8f76681f）。
