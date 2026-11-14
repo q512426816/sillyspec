@@ -44,3 +44,31 @@ author: sillyspec-fr-index
 摘要：提交面核对
 全文：.sillyspec/changes/archive/2026-11-13-stages-module-doc-brainstorm-gate/requirements.md#FR-03
 最近确认：b869cd1a99fdae3c802c28f36598d8ff12d7943f
+
+## FR-unmapped-735 stages 模块卡注记节含 2026-11-14-wait-ask-tool-and-selfcheck-output 增补行（自检结果入产物），与 src/stages/brainstorm.js 输出契约一致
+变更：2026-11-14-module-cards-wait-ask-note
+状态：active
+摘要：注记与源码对表
+全文：.sillyspec/changes/archive/2026-11-14-module-cards-wait-ask-note/requirements.md#FR-01
+最近确认：cda8a621816bbfb38a813e6cc1e3a263eff497ff
+
+## FR-unmapped-736 runtime 模块卡含「wait 提问方式指引注入（2026-11-14-wait-ask-tool-and-selfcheck-output）」节，与 src/run/prompt.js 注入行为一致
+变更：2026-11-14-module-cards-wait-ask-note
+状态：active
+摘要：注记与注入行为对表
+全文：.sillyspec/changes/archive/2026-11-14-module-cards-wait-ask-note/requirements.md#FR-02
+最近确认：cda8a621816bbfb38a813e6cc1e3a263eff497ff
+
+## FR-unmapped-737 两卡 frontmatter updated_at 更新为 2026-11-14
+变更：2026-11-14-module-cards-wait-ask-note
+状态：active
+摘要：时间戳
+全文：.sillyspec/changes/archive/2026-11-14-module-cards-wait-ask-note/requirements.md#FR-03
+最近确认：cda8a621816bbfb38a813e6cc1e3a263eff497ff
+
+## FR-unmapped-738 文档改动随变更提交入库（显式 pathspec）
+变更：2026-11-14-module-cards-wait-ask-note
+状态：active
+摘要：提交面核对
+全文：.sillyspec/changes/archive/2026-11-14-module-cards-wait-ask-note/requirements.md#FR-04
+最近确认：cda8a621816bbfb38a813e6cc1e3a263eff497ff

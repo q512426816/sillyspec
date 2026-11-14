@@ -1,0 +1,44 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  模块卡补询问指引与自检增补注记
+
+
+  动机与背景：已归档变更 2026-11-14-wait-ask-tool-and-selfcheck-output 收口时留下 stages/runtime 模块文档欠账；现已在 stages.md
+  既有注记节增补自检结果产物口径、runtime.md 追加「wait 提问方式指引注入」注记节，两卡 updated_at 更新为 2026-11-14。docs 模块卡描述平台仓 docs/，本次未触及，不改。
+
+
+  成功标准：
+
+  - stages 模块卡注记节含 2026-11-14-wait-ask-tool-and-selfcheck-output 增补行（自检结果入产物），与 src/stages/brainstorm.js 输出契约一致
+
+  - runtime 模块卡含「wait 提问方式指引注入（2026-11-14-wait-ask-tool-and-selfcheck-output）」节，与 src/run/prompt.js 注入行为一致
+
+  - 两卡 frontmatter updated_at 更新为 2026-11-14
+
+  - 文档改动随变更提交入库（显式 pathspec）
+autopilot: false
+prestage_ack: false
+baseline_commit: acf76522698295f5616858e4e4f11493100831b8
+updatedAt: '2026-11-14T14:38:31.932Z'
+baseline_sha256: f8b54ff37ef996c2a7cba0d6574ea8634c67896f887157c865d669d73e0ba538
+spec_approved: true
+spec_approved_at: '2026-11-14T14:30:52.336Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: 'test: —｜lint: —｜门文件 0 个'
+
