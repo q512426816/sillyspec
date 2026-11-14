@@ -259,3 +259,277 @@ created_at: 2026-09-20T15:18:10.810Z
   confirmed_at: null
   source_change: 2026-11-04-question-typing-subagent-guard
   status: active
+
+## FR-stages-021 增量模式自动判定
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-003@v1、D-006@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given 仓内有就绪 CodeGraph 索引（probeCodegraph available）且 scan 基线存在；When 用户运行 `sillyspec run scan`（不带显式 profile/force flag）；Then CLI 在既有 noAI 探测步输出路径判定（⚡增量：N 模块受影响 / M 篇章跳过 / 对账 X 未归属——一次给全依据），增量计划落盘 `.sillysp
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-01
+最近确认：c2191f4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-scan-incremental:task-01:acc-0-9f7b2ce5
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-01:acc-1-4fb14b3b
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-01:acc-2-c859e0e2
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-01:acc-3-db64c863
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-02:acc-0-6a3a7202
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-02:acc-1-524d1407
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-02:acc-2-59558f82
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-02:acc-3-3cc64a1d
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-03:acc-0-4b195515
+  tests: test/scan-incremental-wiring.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-03:acc-1-f89d3799
+  tests: test/scan-incremental-wiring.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-03:acc-2-a9deac6b
+  tests: test/scan-incremental-wiring.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-03:acc-3-8dd021a5
+  tests: test/scan-incremental-wiring.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-03:acc-4-adabce5d
+  tests: test/scan-incremental-wiring.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-06:acc-0-41102c32
+  tests: test/agent-session-log.test.mjs | test/align-execute-review-gate.test.mjs | test/apply-stash-conflict-scan.test.mjs | test/backfill-reviews.test.mjs | test/brainstorm-auto-retire.test.mjs | test/brainstorm-exit-thin-default.test.mjs | test/brainstorm-solution-constraint-gate.test.mjs | test/change-exists-validation.test.mjs | test/change-ownership-guards.test.mjs | test/change-title-flow.test.mjs | test/cli-top-level-aliases.test.mjs | test/config-known-failures.test.mjs | test/continue-idempotent.test.mjs | test/decision-caliber-unify.test.mjs | test/default-no-dir-and-affinity.test.mjs | test/dispatch-contract.test.mjs | test/doc-ref-check.test.mjs | test/doctor-anchor-batch.test.mjs | test/doctor-local-yaml.test.mjs | test/done-heartbeat.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-06:acc-1-e385b173
+  tests: test/agent-session-log.test.mjs | test/align-execute-review-gate.test.mjs | test/apply-stash-conflict-scan.test.mjs | test/backfill-reviews.test.mjs | test/brainstorm-auto-retire.test.mjs | test/brainstorm-exit-thin-default.test.mjs | test/brainstorm-solution-constraint-gate.test.mjs | test/change-exists-validation.test.mjs | test/change-ownership-guards.test.mjs | test/change-title-flow.test.mjs | test/cli-top-level-aliases.test.mjs | test/config-known-failures.test.mjs | test/continue-idempotent.test.mjs | test/decision-caliber-unify.test.mjs | test/default-no-dir-and-affinity.test.mjs | test/dispatch-contract.test.mjs | test/doc-ref-check.test.mjs | test/doctor-anchor-batch.test.mjs | test/doctor-local-yaml.test.mjs | test/done-heartbeat.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-06:acc-2-140cf9e2
+  tests: test/agent-session-log.test.mjs | test/align-execute-review-gate.test.mjs | test/apply-stash-conflict-scan.test.mjs | test/backfill-reviews.test.mjs | test/brainstorm-auto-retire.test.mjs | test/brainstorm-exit-thin-default.test.mjs | test/brainstorm-solution-constraint-gate.test.mjs | test/change-exists-validation.test.mjs | test/change-ownership-guards.test.mjs | test/change-title-flow.test.mjs | test/cli-top-level-aliases.test.mjs | test/config-known-failures.test.mjs | test/continue-idempotent.test.mjs | test/decision-caliber-unify.test.mjs | test/default-no-dir-and-affinity.test.mjs | test/dispatch-contract.test.mjs | test/doc-ref-check.test.mjs | test/doctor-anchor-batch.test.mjs | test/doctor-local-yaml.test.mjs | test/done-heartbeat.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-06:acc-3-a01a9738
+  tests: test/agent-session-log.test.mjs | test/align-execute-review-gate.test.mjs | test/apply-stash-conflict-scan.test.mjs | test/backfill-reviews.test.mjs | test/brainstorm-auto-retire.test.mjs | test/brainstorm-exit-thin-default.test.mjs | test/brainstorm-solution-constraint-gate.test.mjs | test/change-exists-validation.test.mjs | test/change-ownership-guards.test.mjs | test/change-title-flow.test.mjs | test/cli-top-level-aliases.test.mjs | test/config-known-failures.test.mjs | test/continue-idempotent.test.mjs | test/decision-caliber-unify.test.mjs | test/default-no-dir-and-affinity.test.mjs | test/dispatch-contract.test.mjs | test/doc-ref-check.test.mjs | test/doctor-anchor-batch.test.mjs | test/doctor-local-yaml.test.mjs | test/done-heartbeat.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+
+## FR-stages-022 受影响归属与选择性重生成
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-006@v1、D-009@v1
+场景正文：
+- 场景：默认场景 — Given 基线..HEAD 变化文件经 `matchFilesToModules` 归属到模块集合 A；When 增量路径执行；Then 只重生成 A 中模块的模块卡与映射增量条目；篇章按影响映射（结构信号→STRUCTURE/ARCHITECTURE，路由信号→INTEGRATIONS，证据不明
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-02
+最近确认：c2191f4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-14-scan-incremental:task-04:acc-0-0baaebbb
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-04:acc-1-891d7576
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-04:acc-2-2a12b226
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+- row: 2026-11-14-scan-incremental:task-04:acc-3-2fe0f954
+  tests: test/scan-facts.test.mjs | test/scan-paths.test.mjs
+  reason: spec
+  state: active
+  discovery: machine
+  confirmed_by: agent
+  confirmed_at: c2191f4eb1ce08a5280de2545bcbcd783860ac24
+  source_change: 2026-11-14-scan-incremental
+  status: active
+
+## FR-stages-023 降级链零回归
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 未装 CodeGraph / 无索引 / 探测失败 / 超时 / 输出不可解析；When 运行 scan；Then 自动回退现行全量路径（一行警告留痕原因），产物/退出码/流程与改动前版本一致，绝不阻断
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-03
+最近确认：c2191f4e
+
+## FR-stages-024 _module-map 对账报告
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-008@v1
+场景正文：
+- 场景：默认场景 — Given 索引全量文件清单（files flat，排除 .sillyspec/node_modules/构建产物等非源码前缀）与模块 paths 覆盖集；When 增量计划计算；Then 未归属文件清单与覆盖率落盘 `docs/<project>/scan/_module-map-audit.md`（`_` 前缀非基线载体，不参与 stalene
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-04
+最近确认：c2191f4e
+
+## FR-stages-025 基线推进兼容
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 增量 scan 正常完成（postcheck 通过）；When executeScanFinalize 增量分支执行；Then 重生成文档由 stampScanDocHeaders 盖章、未受影响文档经 bumpScanDocBaselines 推进——全部基线载体文档 source_c
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-05
+最近确认：c2191f4e
+
+## FR-stages-026 软门回退
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 漂移超限（scope 内变更 >100 文件或落后 >200 commit，对齐 REFRESH_SOFT_GATE 语义）；When 计划计算；Then 返回全量建议并留痕（`--force-incremental` 显式可越）
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-06
+最近确认：c2191f4e
+
+## FR-stages-027 flag 登记与指引
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-003@v1
+场景正文：
+- 场景：默认场景 — When 用户传 `--incremental`（显式请求增量，探测不可行时警告留痕+回退全量不 exit 非 0）或 `--force-incremental`；Then 两 flag 进入白名单与帮助文本，报错指引有效（防「指引指向未登记 flag」死路）
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-07
+最近确认：c2191f4e
+
+## FR-stages-028 既有测试零回归
+变更：2026-11-14-scan-incremental
+状态：active
+摘要：默认场景
+依据决策：D-001@v1
+场景正文：
+- 场景：默认场景 — When 变更测试面运行；Then scan-diff / scan-staleness / scan-refresh / scan-postcheck 既有测试零改动零失败；scan-refre
+全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-08
+最近确认：c2191f4e

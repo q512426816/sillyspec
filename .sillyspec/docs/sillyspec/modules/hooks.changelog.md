@@ -5,3 +5,4 @@ ql-20260911-030-bad4 | guard 白名单收口：git branch 整类只读放行改�
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
 - 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
 - 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿
+| 2026-11-14 | 2026-11-14-scan-incremental | worktree-guard 新增 mode='scan-incremental' 白名单分支（增量 scan 重生成面放行/外照拦——D-006；存量 guard 与 mode='scan-refresh' 分支零改动） |

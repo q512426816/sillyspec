@@ -38,3 +38,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
 | 2026-11-04 | 2026-11-04-archive-baseline-entry | 归档叙事基线条目机制与存量回放 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+| 2026-11-14 | 2026-11-14-scan-incremental | 新 src/scan-codegraph.js（探测三态/cmd-shim/形状映射）与 src/scan-incremental.js（增量计划：基线锚/归属/篇章映射/对账/软门）归本域；scan-staleness 基线语义兼容（增量收口统一 bump 后判 fresh） |
