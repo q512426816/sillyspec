@@ -361,6 +361,35 @@ export async function executeScanFinalize(cwd, platformOpts) {
   const stamped = stampScanDocHeaders({ cwd, specDir })
   if (stamped.fixed.length > 0) console.log(`  📝 frontmatter 已由 CLI 注入 ${stamped.fixed.length} 份文档（${stamped.stampedKeys} 个键，只补缺不覆盖）`)
 
+  // ── 增量 scan 统一推进（2026-11-14-scan-incremental FR-05/D-007）──
+  // 触发条件=本次会话 guard 的 mode==='scan-incremental'（guard 每次 scan 启动重写——是
+  // 会话态权威；不用计划文件存在性判断，防上次增量的审计残留让后续全量 scan 的 generator
+  // 错标，execute 审查 note 修正）。stamp（只补缺）后把全部基线载体统一 bump 至当前
+  // HEAD——增量核对了整个漂移窗口（受影响者重写、未受影响者经验证），staleness 判定转
+  // fresh（C6 兼容）。bump 在 stamp 之后执行使 generator 终态=sillyspec-scan-incremental。
+  // 全程 fail-soft：guard 缺失/读取失败/非 git 仓 → 跳过（非增量会话零行为变化）。
+  try {
+    const guardPath = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
+    let guardMode = null
+    try { guardMode = JSON.parse(readFileSync(guardPath, 'utf8')).mode || null } catch { /* 无 guard → 非增量 */ }
+    if (guardMode === 'scan-incremental') {
+      const headShortRes = safeGit(cwd, ['rev-parse', '--short', 'HEAD'])
+      const hs = headShortRes.error ? null : String(headShortRes.value).trim()
+      if (hs) {
+        const { bumpScanDocBaselines } = await import('../scan-postcheck.js')
+        const bump = bumpScanDocBaselines({ cwd, specDir, project: null, docs: SCAN_REQUIRED_DOCS, headShort: hs, generator: 'sillyspec-scan-incremental' })
+        if (bump.bumped.length > 0) {
+          console.log(`  ⚡ 增量收口：基线统一推进 ${bump.bumped.length} 份文档（source_commit→${hs} / generator→sillyspec-scan-incremental）`)
+        }
+        for (const s of bump.skipped) console.log(`  ⏭️  ${s.file}：${s.reason}`)
+      } else {
+        console.warn('  ⚠️ 增量收口跳过：git rev-parse --short HEAD 失败（非 git 仓？）')
+      }
+    }
+  } catch (e) {
+    console.warn(`  ⚠️ 增量收口失败（不阻断）：${String((e && e.message) || e).split('\n')[0]}`)
+  }
+
   for (const p of listRegisteredProjects(specBase, cwd)) {
     const tmp = join(specBase, 'docs', p, 'scan', '_env-detect.md')
     try { if (existsSync(tmp)) { unlinkSync(tmp); console.log(`  🧹 已清理 ${p}/scan/_env-detect.md`) } } catch { /* 清理失败不阻断 */ }

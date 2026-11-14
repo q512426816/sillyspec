@@ -82,12 +82,26 @@ function collectEndpointFacts(cwd, root) {
   }
 }
 
+/** scope 前缀命中（`src/**` 形 glob 展开为 src 前缀；与 scan-incremental inScope 同口径内联） */
+function inScopePrefix(p, scopes) {
+  const norm = p.replace(/\\/g, '/')
+  return scopes.some((s) => {
+    const pre = s.replace(/\\/g, '/').replace(/\/+$/, '')
+    const trimmed = pre.endsWith('/**') ? pre.slice(0, -3) : pre
+    if (!trimmed) return false
+    return norm === trimmed || norm.startsWith(trimmed + '/')
+  })
+}
+
 /**
  * 确定性收集 scan 机械事实（纯同步，不写盘）。
- * @param {{ cwd: string, projectPath?: string|null }} opts cwd：仓库根（引用解析锚）；projectPath：子项目相对路径（缺省主项目）
+ * @param {{ cwd: string, projectPath?: string|null, scope?: string[]|null }} opts
+ *   cwd：仓库根（引用解析锚）；projectPath：子项目相对路径（缺省主项目）；
+ *   scope：POSIX 路径前缀数组（可选，2026-11-14-scan-incremental D-011）——非空时端点抽取
+ *   限定在命中前缀的源文件内（manifest/规模等项目级事实保留全量口径）。
  * @returns {object} facts（renderScanFactsMd 的输入）
  */
-export function collectScanFacts({ cwd, projectPath = null }) {
+export function collectScanFacts({ cwd, projectPath = null, scope = null }) {
   const root = projectPath ? join(cwd, projectPath) : cwd
   const manifest = readManifestFacts(root)
   const size = (() => { try { return estimateSourceSize(root) } catch { return { fileCount: 0, sourceBytes: 0 } } })()
@@ -98,9 +112,10 @@ export function collectScanFacts({ cwd, projectPath = null }) {
     : manifest.manifests.includes('go.mod') ? 'go'
     : manifest.manifests.includes('Cargo.toml') ? 'rust'
     : 'generic'
-  return {
+  const facts = {
     generatedAt: toWallClock(new Date()),
     projectPath,
+    scopeApplied: Array.isArray(scope) && scope.length > 0 ? true : undefined,
     type,
     pkgName: manifest.pkgName,
     gitHead: git && git.value ? git.value.trim() : null,
@@ -109,8 +124,20 @@ export function collectScanFacts({ cwd, projectPath = null }) {
     depsTruncated: manifest.depsTruncated,
     scripts: manifest.scripts,
     size,
-    endpoints: collectEndpointFacts(cwd, root),
+    endpoints: (() => {
+      const ep = collectEndpointFacts(cwd, root)
+      if (!Array.isArray(scope) || scope.length === 0) return ep
+      // scope 限定（D-011）：端点只留 source 命中前缀的（ref 形如 `path:line`，取 path 段匹配）
+      const hit = (e) => inScopePrefix(String(e.ref).split(':')[0], scope)
+      return {
+        backend: ep.backend.filter(hit),
+        backendTotal: ep.backend.filter(hit).length,
+        frontend: ep.frontend.filter(hit),
+        frontendTotal: ep.frontend.filter(hit).length,
+      }
+    })(),
   }
+  return facts
 }
 
 /**
@@ -124,7 +151,7 @@ export function renderScanFactsMd(facts) {
   const lines = []
   lines.push(`# scan 事实底稿（CLI 确定性抽取）`)
   lines.push('')
-  lines.push(`> 生成：sillyspec scan facts · ${facts.generatedAt} · 范围：${scope} · git HEAD：${facts.gitHead || '（不可用）'}`)
+  lines.push(`> 生成：sillyspec scan facts · ${facts.generatedAt} · 范围：${scope} · git HEAD：${facts.gitHead || '（不可用）'}${facts.scopeApplied ? ' · ⚡ 增量模式：端点抽取限定受影响面（manifest/规模为项目级全量口径）' : ''}`)
   lines.push('> 本文件由 CLI 机器生成（零 AI token）。子代理**禁止重新 grep 发现**下列机械事实，只做解读与成文；与源码冲突时以本底稿为准并标注差异。')
   lines.push('')
   lines.push('## 项目类型与清单')
@@ -164,8 +191,8 @@ export function renderScanFactsMd(facts) {
  * @param {{ cwd: string, specDir: string, projectName: string, projectPath?: string|null }} opts
  * @returns {{ outPath: string, facts: object }}
  */
-export function buildAndWriteScanFacts({ cwd, specDir, projectName, projectPath = null }) {
-  const facts = collectScanFacts({ cwd, projectPath })
+export function buildAndWriteScanFacts({ cwd, specDir, projectName, projectPath = null, scope = null }) {
+  const facts = collectScanFacts({ cwd, projectPath, scope })
   const outDir = join(specDir, 'docs', projectName, 'scan')
   mkdirSync(outDir, { recursive: true })
   const outPath = join(outDir, '_facts.md')

@@ -152,5 +152,28 @@ console.log('\n=== Test 6: generatedAt 本地墙钟形 ===')
   clean(cwd)
 }
 
+// ── 7: scope 限定参数（2026-11-14-scan-incremental D-011）──
+console.log('\n=== Test 7: scope 限定参数（端点抽取按前缀过滤，缺省零变化） ===')
+{
+  const cwd = setup('t7')
+  writeFileSync(join(cwd, 'package.json'), '{"name":"ts"}')
+  // 两份"端点源"文件：src/inscope.js 命中 scope，other/out.js 不命中——用后端路由形态让扫描器各抽到 1 条
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  mkdirSync(join(cwd, 'other'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'inscope.js'), "router.get('/a', h)\n")
+  writeFileSync(join(cwd, 'other', 'out.js'), "router.get('/b', h)\n")
+  const full = collectScanFacts({ cwd })
+  const scoped = collectScanFacts({ cwd, scope: ['src/**'] })
+  assert(full.endpoints.backendTotal >= 1, '全量口径两文件端点均抽取（前提）')
+  assert(scoped.scopeApplied === true, 'scope 生效标记在场')
+  assert(full.scopeApplied === undefined, '缺省 scope 无标记（行为零变化）')
+  assert(scoped.endpoints.backend.every((e) => String(e.ref).split(':')[0].startsWith('src/')), 'scope 后端点只含命中前缀文件')
+  assert(!JSON.stringify(scoped.endpoints.backend).includes('other/out.js'), 'scope 外文件端点被过滤')
+  const md = renderScanFactsMd(scoped)
+  assert(md.includes('⚡ 增量模式'), 'md 头部带增量模式标注')
+  clean(cwd)
+}
+passed++
+
 console.log(`\n结果: ${passed} passed, ${failed} failed`)
 if (failed > 0) process.exit(1)

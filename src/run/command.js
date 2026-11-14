@@ -259,6 +259,7 @@ sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${
   quick 专属: --linked-changes none|a,b --files a.js,b.js --allow-new
              --allow-delete --force-baseline --confirm --file-notes
   scan  专属: --quick --standard --deep --force-rescan --diff [--base <commit>] [--full] [--report]
+             --incremental（显式请求增量，不可行时警告+回退全量） --force-incremental（越软门）
   archive专属: --confirm
 `)
 }
@@ -747,6 +748,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--req', '--cause', '--solution', '--result',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
+    '--incremental', '--force-incremental', // scan 增量模式（2026-11-14-scan-incremental FR-07：显式请求/越软门；启动层 stage.js 消费）
     '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',

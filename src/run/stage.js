@@ -16,9 +16,10 @@
  *     './stages/plan-postcheck.js' / './worktree-deps.js' → '../'（src/ 下退一层）
  *   - 'child_process'（execSync）裸模块名不变
  */
-import { join, dirname } from 'node:path'
+import { join, dirname, basename } from 'node:path'
 import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, unlinkSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
@@ -322,22 +323,129 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   if (stageName === 'scan') {
     try {
       const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
-      const scanGuard = {
-        name_zh: '扫描守卫',
-        sourceCommit: gitResult.value,
-        sourceCommitError: gitResult.error,
-        startedAt: new Date().toISOString(),
-        forceRescan: quickOpts?.isForceRescan || false,
+      const isForceRescan = quickOpts?.isForceRescan || false
+
+      // ── 增量探测（2026-11-14-scan-incremental D-003/D-006/D-007）──
+      // 启动入口层执行（quick/standard/deep 三档统一——挂步骤内会被 standard skipNames/quick
+      // 步表跳过）；--force-rescan 跳过探测走现行全量。探测/计划全程 fail-soft：任何异常
+      // 回退现行 guard 语义（零回归，D-002）。
+      let incremental = null // { planFile, guardDocs: Set, projects: [{project, plan}] }
+      if (!isForceRescan) {
+        try {
+          const flags = process.argv.slice(2)
+          const forceIncremental = flags.includes('--force-incremental')
+          const explicitIncremental = flags.includes('--incremental')
+          const { probeCodegraph } = await import('../scan-codegraph.js')
+          const { computeIncrementalPlan } = await import('../scan-incremental.js')
+          const probe = await probeCodegraph(cwd)
+          if (explicitIncremental && !probe.available) {
+            console.warn(`⚠️  --incremental 已请求但增量不可行：${probe.reason}——回退全量 scan（不阻断）`)
+          }
+          if (probe.available) {
+            // 多项目仓逐项目计算（已注册项目清单；无注册表时 basename 兜底单项目）；
+            // 探测只做一次（同 root 结果恒定），逐项目经 deps 注入复用——省 N-1 次 status 子进程
+            const projects = []
+            try {
+              const projectsDir = join(specBase, 'projects')
+              if (existsSync(projectsDir)) {
+                projects.push(...readdirSync(projectsDir).filter((f) => f.endsWith('.yaml')).map((f) => f.slice(0, -5)))
+              }
+            } catch { /* 读失败走兜底 */ }
+            if (projects.length === 0) projects.push(basename(cwd))
+            // listIndexFiles 全仓索引清单同 root 恒定——memoize 闭包按需跑一次（软门回退的项目不触发）
+            const { listIndexFiles } = await import('../scan-codegraph.js')
+            let filesCache = null
+            const memoList = async (root) => {
+              if (filesCache === null) filesCache = await listIndexFiles(root)
+              return filesCache
+            }
+            const perProject = []
+            for (const p of projects) {
+              const plan = await computeIncrementalPlan({
+                projectRoot: cwd, specBase, projectName: p, forceIncremental,
+                deps: { probeCodegraph: async () => probe, listIndexFiles: memoList },
+              })
+              perProject.push({ project: p, plan })
+            }
+            const incrProjects = perProject.filter((x) => x.plan.mode === 'incremental')
+            // 计划落盘（原子写，断点续扫与 finalize 共读；下次 scan 覆盖）
+            const planFile = runtimeStatePath(join(specBase, '.runtime'), 'scan-incremental-plan.json')
+            mkdirSync(dirname(planFile), { recursive: true })
+            writeAtomicSync(planFile, JSON.stringify({
+              changeType: 'scan-incremental',
+              startedAt: new Date().toISOString(),
+              projects: perProject.map((x) => ({
+                project: x.project, mode: x.plan.mode, reason: x.plan.reason,
+                base: x.plan.base, headShort: x.plan.headShort, behindCommits: x.plan.behindCommits,
+                docsToRegenerate: x.plan.docsToRegenerate, docsToSkip: x.plan.docsToSkip,
+                affectedModules: (x.plan.affectedModules || []).map((m) => m.id),
+                unmappedFiles: x.plan.unmappedFiles, warnings: x.plan.warnings,
+              })),
+            }, null, 2) + '\n')
+            // 路径判定输出（一次给全：各项目路径+原因+数字）
+            for (const x of perProject) {
+              if (x.plan.mode === 'incremental') {
+                const auditN = x.plan.audit ? x.plan.audit.uncoveredFiles.length : null
+                console.log(`⚡ 增量路径 [${x.project}]：基线 ${x.plan.base}..${x.plan.headShort}（落后 ${x.plan.behindCommits ?? '?'} commit），模块受影响 ${x.plan.affectedModules.length} 个（${x.plan.affectedModules.map((m) => m.id).join(', ') || '无'}），篇章重生成 ${x.plan.docsToRegenerate.length} 份 / 跳过 ${x.plan.docsToSkip.length} 份${auditN !== null ? `，对账未归属 ${auditN} 个（_module-map-audit.md）` : ''}——计划已落盘 ${planFile}`)
+                for (const w of x.plan.warnings) console.warn(`   ⚠️ ${w}`)
+              } else {
+                console.log(`🛡️ 全量路径 [${x.project}]：${x.plan.reason}`)
+              }
+            }
+            if (incrProjects.length > 0) incremental = { planFile, perProject, incrProjects }
+          } else if (!explicitIncremental) {
+            console.log(`🛡️ 全量路径：${probe.reason}——增量不可用，走现行 scan`)
+          }
+        } catch (e) {
+          console.warn(`⚠️ 增量探测失败（fail-soft 回退全量）：${String(e && e.message || e).split('\n')[0]}`)
+        }
+      } else {
+        console.log('🛡️ --force-rescan 已开启：跳过增量探测，走全量重扫')
       }
+
+      // ── guard 写入（增量模式=白名单握手 D-006；非增量=原样，逐字兼容存量）──
       const guardFile = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
       mkdirSync(dirname(guardFile), { recursive: true })
       // 原子写：hook 进程（worktree-guard 的 readScanGuard）并发读，裸 truncate→write 的
       // 半截窗口会被 JSON.parse 吞成 null → 覆盖保护静默失效（fail-open）
-      writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
-      if (scanGuard.forceRescan) {
-        console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
+      if (incremental) {
+        // 增量白名单=各增量项目 guardDocs 并集；docHashes 只记现存文件（审计面——新文件无
+        // 旧哈希=计划内新建，guard 放行依据是白名单 membership，Review Focus #2）
+        const guardDocs = new Set()
+        for (const x of incremental.incrProjects) for (const g of x.plan.guardDocs) guardDocs.add(g)
+        const docHashes = {}
+        for (const rel of guardDocs) {
+          try {
+            const abs = join(specBase, rel)
+            if (existsSync(abs)) docHashes[rel] = createHash('sha256').update(readFileSync(abs)).digest('hex')
+          } catch { /* 读失败不进 docHashes（membership 放行不受影响） */ }
+        }
+        const scanGuard = {
+          name_zh: '增量扫描守卫',
+          mode: 'scan-incremental',
+          incrementalDocs: [...guardDocs],
+          docHashes,
+          sourceCommit: gitResult.value,
+          sourceCommitError: gitResult.error,
+          startedAt: new Date().toISOString(),
+          forceRescan: false,
+        }
+        writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
+        console.log(`🛡️ scan 增量守卫已记录: 白名单 ${scanGuard.incrementalDocs.length} 个文件（白名单内放行重生成，白名单外照常保护）`)
       } else {
-        console.log('🛡️ scan 覆盖保护已记录: existing scan docs require current source_commit/updated_at')
+        const scanGuard = {
+          name_zh: '扫描守卫',
+          sourceCommit: gitResult.value,
+          sourceCommitError: gitResult.error,
+          startedAt: new Date().toISOString(),
+          forceRescan: isForceRescan,
+        }
+        writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
+        if (scanGuard.forceRescan) {
+          console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
+        } else {
+          console.log('🛡️ scan 覆盖保护已记录: existing scan docs require current source_commit/updated_at')
+        }
       }
     } catch (e) {
       console.warn(`⚠️ scan 覆盖保护记录失败: ${e.message}`)

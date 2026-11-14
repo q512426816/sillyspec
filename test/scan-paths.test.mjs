@@ -60,6 +60,31 @@ if (content.includes('{PROJECTS_ROOT}/')) {
   failed = true
 }
 
+// ── 增量注入段四要素（2026-11-14-scan-incremental task-04/D-009）──
+// 注入段是条件前缀（「仅当本次 scan 启动输出过⚡增量路径」才生效）——非增量会话子代理行为不变；
+// 文本断言：四步骤的增量纪律 token（跳过集/压制声明/豁免声明/计划读取）各在源文件中在场。
+{
+  const incrTokens = [
+    '⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用',
+    'scan-incremental-plan.json',
+    'docsToRegenerate',
+    'docsToSkip',
+    '压制下方「已存在则跳过」规则',
+    'unmappedFiles',
+    '覆盖等待豁免',
+    'MANUAL_NOTES',
+    '零触碰',
+  ]
+  for (const token of incrTokens) {
+    if (content.includes(token)) {
+      console.log(`✅ PASS: scan.js 注入段含「${token}」`)
+    } else {
+      console.error(`❌ FAIL: scan.js 注入段缺「${token}」`)
+      failed = true
+    }
+  }
+}
+
 if (failed) {
   console.error('\n💥 有测试失败！scan.js 路径占位符可能被回退为硬编码。')
   throw new Error("test failed")

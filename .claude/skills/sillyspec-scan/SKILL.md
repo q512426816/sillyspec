@@ -42,6 +42,14 @@ sillyspec run scan --reset                     # 重置阶段（从头开始）
 | `--deep` | 强制 deep profile（完整流程，不按规模裁剪） |
 | `--force-rescan` | 覆盖已有 scan 文档的保护（默认覆盖需 source_commit/updated_at 匹配） |
 | `--diff` | 增量漂移清单：`sillyspec scan diff`（或 `--diff` flag）算 source_commit..HEAD 的 A/D/M/R 四分类漂移，按 module-map paths 归模块，agent 据此定点补文档而非全量重扫（2026-08-16） |
+| `--incremental` | 显式请求增量模式（2026-11-14）：探测不可行时警告留痕+回退全量，不 exit 非 0 |
+| `--force-incremental` | 越过软门（漂移 >100 文件 / 落后 >200 commit 默认建议全量）强制增量，warnings 留痕 |
+
+### 增量模式（2026-11-14，默认自动判定）
+
+scan 启动时 CLI 在入口层自动探测（quick/standard/deep 三档统一生效）：仓内有就绪 CodeGraph 索引（`.sillyspec-codegraph/`）且 scan 基线可用时**自动走增量路径**——启动输出「⚡ 增量路径」行（受影响模块清单/篇章重生成与跳过/对账未归属数，原因一次给全），计划落盘 `.sillyspec/.runtime/scan-incremental-plan.json`；四生成步骤按条件前缀注入段只处理受影响面（`docsToSkip` 篇章零触碰，模块映射增量更新，模块卡覆盖等待豁免），收口统一推进基线至 HEAD（增量后 staleness 判定 fresh）。对账报告 `docs/<project>/scan/_module-map-audit.md` 列出索引全量文件中未归属任何模块 paths 的盲区文件。
+
+增量不可行（未装 CodeGraph/无索引/无基线/非祖先基线/quick 浅文档/软门超限）自动回退现行全量 scan——一行原因留痕，零行为回归。模块归属语义决策不做：索引只供结构事实，unmapped 新文件归属由 agent 补扫时判断。
 
 ### scanProfile（显式选择优先，否则按规模自动裁剪）
 

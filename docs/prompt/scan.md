@@ -132,6 +132,8 @@
 **提示词原文**
 
 ````markdown
+⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——`sillyspec scan facts` 照常执行，但 _env-detect.md 的补充线索只写受影响模块（plan.affectedModules）相关内容；_facts.md 为 CLI 产物直接沿用。
+
 生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。
 
 ### 操作
@@ -194,6 +196,8 @@
 **提示词原文**
 
 ````markdown
+⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——只为 `docsToRegenerate` 命中的篇章启动子代理；`docsToSkip` 篇章**跳过不碰**（⛔ 未受影响篇章零触碰——worktree-guard 也会拦白名单外的编辑），在输出中逐份报「跳过（增量判定未受影响）」；受影响测试清单（plan 内 affectedTests 如有）注入子代理作回归提示。
+
 按照 `{WORKFLOWS_ROOT}/scan-docs.yaml` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
 
 **你必须使用子代理执行，不要自己写文档。**
@@ -346,6 +350,8 @@ local.yaml 生成结果（已存在/已生成 + project.type + agent 补充的�
 **提示词原文**
 
 ````markdown
+⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**压制下方「已存在则跳过」规则**——_module-map.yaml 已存在时不整体跳过，改为增量更新：读取 `.sillyspec/.runtime/scan-incremental-plan.json`，只重抽受影响模块（affectedModules）的 paths/entrypoints/main_symbols，其余模块条目原样保留；unmappedFiles（含 hint 归属线索）逐个给出归属**建议**（你判断后写入，勿盲从 hint——索引只供结构事实）；顺带读 `scan/_module-map-audit.md` 对账报告核对盲区。
+
 生成当前项目的模块索引文件 `_module-map.yaml`。
 
 ### ⚠️ 重要：这个文件是唯一的结构化索引源
@@ -478,6 +484,8 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）
 **提示词原文**
 
 ````markdown
+⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**覆盖等待豁免**——增量重生成已获授权（授权链=启动时路径判定输出已明示重生成面+guard 白名单放行边界），下方 conditionalWait 覆盖检测**不触发等待**；只为 `.sillyspec/.runtime/scan-incremental-plan.json` 中受影响模块（affectedModules）重生成模块卡（人工备注区 MANUAL_NOTES 块从旧卡原样迁移）；未受影响模块卡**零触碰**（⛔ 越界编辑会被 worktree-guard 拦截）。
+
 根据当前项目的 `_module-map.yaml` 生成模块卡片文档。
 
 ### ⚠️ 重要：模块卡片只负责人类语义说明

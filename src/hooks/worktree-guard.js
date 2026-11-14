@@ -225,6 +225,16 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
     if (guard.refreshDocs.includes(refreshRel)) return { blocked: false }
   }
 
+  // 增量 scan 会话态分支（2026-11-14-scan-incremental D-006@v1）：scan 启动层探测可行时 guard 写
+  // mode='scan-incremental' + incrementalDocs 白名单（=计划 guardDocs：重生成篇章+受影响模块卡+
+  // _module-map/_module-map-audit/_facts）——白名单内=本次增量重生成面放行（新增文件无旧哈希=
+  // 计划内新建，放行依据是 membership，Review Focus #2）；白名单外照常走原保护（增量模式下
+  // 未受影响面的覆盖保护反而更强）。mode='scan-refresh' 分支与存量 guard（无 mode）不受影响。
+  if (guard.mode === 'scan-incremental' && Array.isArray(guard.incrementalDocs)) {
+    const incrRel = toPosixPath(path.relative(scanDocInfo.specRoot, filePath))
+    if (guard.incrementalDocs.includes(incrRel)) return { blocked: false }
+  }
+
   let frontmatter = {}
   try {
     frontmatter = parseFrontmatter(readFileSync(filePath, 'utf8'))
