@@ -55,7 +55,7 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
 11. **完成契约**（仅 step 0）— `renderStageContract(stageName)`，从 `stage-contract-spec.js` 渲染的「该阶段机械校验通过条件」（事前预知 == 事后校验）。
 12. **铁律**（仅 step 0）— 见下。
 13. **路径与平台规则**（step 1+，有 changeName 或平台模式时）— 安全关键，每步提醒。
-14. **完成后执行** — 根据 step 的 wait 配置，输出 `--wait` / `--continue --answer` / `--done` 命令模板。
+14. **完成后执行** — 根据 step 的 wait 配置，输出提问方式指引（AskUserQuestion 优先；auto 模式除外）+ `--done --answer` 合并式 / `--wait` 挂起 / `--done` 命令模板。
 
 ### persona 表（逐字，仅 step 0 注入）
 
@@ -83,22 +83,21 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
 - 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）
 - 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值
 
-### 完成后执行命令模板（逐字，根据 wait 配置）
+### 完成后执行命令模板（根据 wait 配置；2026-11-14-wait-ask-tool-and-selfcheck-output 起含提问方式指引，auto 模式除外）
 
-`outputStep` 在每个 step 末尾输出下列之一：
+`outputStep` 在每个 step 末尾输出提问方式指引（非 auto 模式）+ 下列之一：
 
 - **`requiresWait: true`**（必须等待用户）：
   ```
-  本步骤必须等待用户输入，不能直接 --done：
+  提问方式：优先用 harness 的交互询问工具（Claude Code 即 AskUserQuestion）把「<waitReason>」与候选项（<waitOptions，" / " 连接>）呈现给用户等其选择/作答——不要只发纯文字问题；拿到回答后逐字带入 --answer 按下方主路径收口。harness 无询问工具时才退回纯文字提问。
+  本步骤需要用户决策——主路径一步合并完成（--answer 自动补全 wait 状态，省 2 次 CLI 往返）：
+  sillyspec run <stage> --done --answer "用户回答" --change <change> --output "你的摘要"
+
+  若用户暂不可达需先挂起：
   sillyspec run <stage> --wait --reason "<waitReason>" --options "<waitOptions 逗号分隔>" --change <change> --output "你的问题/方案摘要"
-
-  用户回答后执行：
-  sillyspec run <stage> --continue --answer "用户回答" --change <change>
-
-  收到回答并完成本步骤总结后，再执行：
-  sillyspec run <stage> --done --change <change> --input "..." --output "..."
+  （挂起后拿到回答，仍用上方一步合并命令收口——无需 --continue 单独解等待）
   ```
-- **`conditionalWait` / 检测到 WAIT 指令**：先给 `--wait` 分支（"如果需要用户决策"），再给 `--done` 分支（"如果不需要用户决策，正常完成"）。
+- **`conditionalWait` / 检测到 WAIT 指令**：先给提问方式指引 + 合并式分支（"如果需要用户决策（选择方案/确认设计等），优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）呈现问题与选项提问，拿到回答后一步完成（--answer 自动补全 wait 状态）"），再给 `--done` 分支（"如果不需要用户决策，正常完成"）。
 - **普通步骤**：直接
   ```
   sillyspec run <stage> --done --change <change> --input "用户原始需求/反馈" --output "你的摘要"

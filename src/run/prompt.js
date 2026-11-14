@@ -2261,6 +2261,12 @@ ${maskVolatileForGuide(guideTemplate)}
   // 合并式主路径把每个 wait 步省 2 次调用；--wait 降级为「用户暂不可达需挂起」的备选。
   const answerDoneCommand = `sillyspec run ${cmdStage} --done --answer "用户回答"${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
   if (requiresWait) {
+    // 2026-11-14-wait-ask-tool-and-selfcheck-output FR-02：提问方式指引——只给命令模板时
+    // agent 只发纯文字问题、不触发交互询问卡（flow.js 三断点横幅已有同款实践）；auto 模式
+    // 脚本驱动无交互 UI，不注入（命令模板零变化）。
+    if (!autoMeta) {
+      console.log(`提问方式：优先用 harness 的交互询问工具（Claude Code 即 AskUserQuestion）把「${step.waitReason || '等待用户输入'}」与候选项（${(step.waitOptions || ['确认']).join(' / ')}）呈现给用户等其选择/作答——不要只发纯文字问题；拿到回答后逐字带入 --answer 按下方主路径收口。harness 无询问工具时才退回纯文字提问。`)
+    }
     console.log(`本步骤需要用户决策——主路径一步合并完成（--answer 自动补全 wait 状态，省 2 次 CLI 往返）：`)
     console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
     console.log(``)
@@ -2269,7 +2275,9 @@ ${maskVolatileForGuide(guideTemplate)}
     console.log(`（挂起后拿到回答，仍用上方一步合并命令收口——无需 --continue 单独解等待）`)
   } else {
     if (mayNeedWait) {
-      console.log(`如果需要用户决策（选择方案/确认设计等），拿到回答后一步完成（--answer 自动补全 wait 状态）：`)
+      console.log(autoMeta
+        ? `如果需要用户决策（选择方案/确认设计等），拿到回答后一步完成（--answer 自动补全 wait 状态）：`
+        : `如果需要用户决策（选择方案/确认设计等），优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）呈现问题与选项提问，拿到回答后一步完成（--answer 自动补全 wait 状态）：`)
       console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
       console.log(``)
       console.log(`如果不需要用户决策，正常完成：`)

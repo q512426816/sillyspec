@@ -118,6 +118,43 @@ console.log('\n--- quick requiresWait：--done --answer 一步合并主路径 + 
   assert(r.stdout.includes('sillyspec run quick --wait --reason "等待用户确认"'), '--wait 挂起备选含 reason')
   assert(r.stdout.includes('--options "确认,取消"'), '--wait 模板含 options')
   assert(!r.stdout.includes('--continue --answer'), '三段式 --continue 中段已移除（合并式取代）')
+  // 2026-11-14-wait-ask-tool-and-selfcheck-output FR-02：提问方式指引——
+  // agent 只发纯文字问题不触发交互询问卡，注入段须明示 AskUserQuestion 优先
+  assert(r.stdout.includes('AskUserQuestion'), 'requiresWait → 提问方式指引（AskUserQuestion 优先）')
+  assert(r.stdout.includes('等待用户确认'), '指引行携带 waitReason')
+  assert(r.stdout.includes('确认 / 取消'), '指引行携带候选项（waitOptions）')
+}
+
+// ── Case 11: mayNeedWait（WAIT 标记正文命中，非 requiresWait）→ 同样注入提问方式指引 ──
+console.log('\n--- mayNeedWait：[WAIT_FOR_USER] 标记步 → 提问方式指引 + 合并式命令 ---')
+{
+  const { cwd } = makeRepo('os-maywait-')
+  const cn = '2026-11-14-maywait'
+  const steps = [{
+    name: '条件决策步', prompt: '按需决策\n[WAIT_FOR_USER]\n如需用户选择则暂停', requiresWait: false,
+  }]
+  const r = await runCapturing(() =>
+    outputStep('brainstorm', 0, steps, cwd, cn, null, {}, null))
+
+  assert(!r.error, 'mayNeedWait 步不应 process.exit')
+  assert(r.stdout.includes('AskUserQuestion'), 'mayNeedWait → 提问方式指引在场')
+  assert(r.stdout.includes('sillyspec run brainstorm --done --answer "用户回答" --change ' + cn), 'mayNeedWait → 合并式命令在场')
+}
+
+// ── Case 12: auto 模式 requiresWait → 不注入提问方式指引（脚本驱动无交互 UI）──
+console.log('\n--- auto requiresWait：不注入 AskUserQuestion 指引（零变化回归） ---')
+{
+  const { cwd } = makeRepo('os-auto-wait-')
+  const steps = [{
+    name: '确认方案', prompt: '请用户确认方案', requiresWait: true,
+    waitReason: '等待用户确认', waitOptions: ['确认', '取消'],
+  }]
+  const r = await runCapturing(() =>
+    outputStep('quick', 0, steps, cwd, null, null, {}, null, null, { changeName: 'auto-c1' }))
+
+  assert(!r.error, 'auto requiresWait 不应 process.exit')
+  assert(!r.stdout.includes('AskUserQuestion'), 'auto 模式不注入提问方式指引（无交互 UI）')
+  assert(r.stdout.includes('sillyspec run auto --done --answer "用户回答"'), 'auto 模式命令模板不变（run auto 形态）')
 }
 
 // ── Case 5: 越界防御 → console.error + return false ──

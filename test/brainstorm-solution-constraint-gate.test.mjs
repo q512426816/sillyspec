@@ -85,6 +85,11 @@ test('FR-05 三面一致：源码 prompt == _extracted.json == docs/prompt/brain
   assert.ok(MIRROR.includes(expected), 'docs/prompt/brainstorm.md 镜像逐字包含该 prompt')
 })
 
+test('FR-01(2026-11-14) 输出契约把自检结果列为必产物（防自检被跳过）', () => {
+  assert.match(SOLUTIONS, /### 输出\n硬约束清单 C1\.\.Cn \+ 方案对比表（每方案附逐条满足矩阵）\+ 自检结果/, '输出契约行含自检结果产物')
+  assert.match(SOLUTIONS, /自检结果[^\n]*逐行打勾|✗[^\n]*回到对应处理|有 ✗/, '自检结果带 ✗ 处理指引')
+})
+
 test('FR-06 回归保护：既有方案步锁点不被冲销', () => {
   assert.match(SOLUTIONS, /必须等待用户选择方案/, '等待选择铁律保留')
   assert.match(SOLUTIONS, /knowledge search/, '机制词检索固定动作保留')
