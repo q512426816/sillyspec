@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-16-cross-exclude-dogfood-guard",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-16-cross-exclude-dogfood-guard:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「dogfood 仓豁免——目标仓跟踪 .sillyspec 时不追加 exclude」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-16-cross-exclude-dogfood-guard"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-16-cross-exclude-dogfood-guard:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-16-cross-exclude-dogfood-guard"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-16-cross-exclude-dogfood-guard:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「dogfood 仓豁免——目标仓跟踪 .sillyspec 时不追加 exclude」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-16-cross-exclude-dogfood-guard"
+    }
+  ]
+}

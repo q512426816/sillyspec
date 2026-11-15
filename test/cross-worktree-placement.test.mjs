@@ -205,6 +205,26 @@ test('缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02�
   assert.ok(!existsSync(expected), '落位目录被删');
 });
 
+test('dogfood 仓豁免——目标仓跟踪 .sillyspec 时不追加 exclude（cross-exclude-dogfood-guard FR-01）', () => {
+  const fx = makeFixture();
+  // dogfood 形态：跨仓仓自身跟踪 .sillyspec 内容（sillyspec 自托管仓形态特征）
+  mkdirSync(join(fx.cross, '.sillyspec', 'docs'), { recursive: true });
+  writeFileSync(join(fx.cross, '.sillyspec', 'docs', 'tracked.md'), 'dogfood spec content\n');
+  git(fx.cross, ['add', '.sillyspec/docs/tracked.md']);
+  git(fx.cross, ['commit', '-q', '-m', 'track spec content']);
+  const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
+  assert.equal(r.created.length, 1);
+  const excludePath = join(fx.cross, '.git', 'info', 'exclude');
+  const excludeContent = existsSync(excludePath) ? readFileSync(excludePath, 'utf8') : '';
+  assert.doesNotMatch(excludeContent, /^\.sillyspec\/$/m, 'dogfood 仓 exclude 不含 .sillyspec/ 条目');
+  // 跟踪内容的显式 pathspec add/commit 不再被本地 exclude 拦截（2026-11-16 生产实证的假失败面）
+  writeFileSync(join(fx.cross, '.sillyspec', 'docs', 'tracked.md'), 'updated\n');
+  git(fx.cross, ['add', '--', '.sillyspec/docs/tracked.md']);
+  git(fx.cross, ['commit', '-q', '-m', 'update tracked spec file']);
+  assert.match(git(fx.cross, ['log', '-1', '--name-only', '--pretty=format:']), /\.sillyspec\/docs\/tracked\.md/,
+    'pathspec 提交落盘成功（exclude 未误伤）');
+});
+
 test('旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）', () => {
   const fx = makeFixture();
   // 手工造一个 legacy 位置 worktree（模拟上一版本创建的存量）

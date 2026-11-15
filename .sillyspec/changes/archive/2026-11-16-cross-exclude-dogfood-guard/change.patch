@@ -1,0 +1,69 @@
+diff --git a/src/worktree-cross.js b/src/worktree-cross.js
+index 0b442bf6..0dc5873a 100644
+--- a/src/worktree-cross.js
++++ b/src/worktree-cross.js
+@@ -183,6 +183,22 @@ function isLegacyMainSpecbasePlacement(worktreePath, specBase) {
+   } catch { return false }
+ }
+ 
++/**
++ * 目标仓是否自身 git 跟踪 .sillyspec 内容（sillyspec 自托管/dogfood 形态）。
++ * dogfood 仓的 .sillyspec/ 是仓库内容而非外来 worktree 落位目录——exclude 它会误伤：
++ * 显式 pathspec 的 git add/commit 对该目录下已跟踪文件报「paths are ignored」exit 1
++ * （2026-11-16 生产实证：sillyspec 主仓被写入该条目，发布期提交被拦出假失败），
++ * 且新文件从 status 未跟踪提示中消失。ls-files 失败（git 不可达）按 false——
++ * 保守维持宿主仓 untracked 保障（上游 ensureCrossWorktrees 对 git 不可达另有抛错兜底）。
++ * @param {string} repoRoot 跨仓仓根
++ * @returns {boolean}
++ */
++function repoTracksSillyspec(repoRoot) {
++  try {
++    return git(repoRoot, ['ls-files', '.sillyspec']).trim().length > 0
++  } catch { return false }
++}
++
+ /**
+  * 仓内落位的 untracked 保障（坑 cross-wt-repo-local-placement）：.git/info/exclude 幂等追加
+  * 条目——本仓生效、不进版本库（不碰用户 .gitignore 工作区文件、无 pull 冲突面）。创建 worktree
+@@ -286,7 +302,9 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+ 
+     // 仓内落位的 untracked 保障：.git/info/exclude 幂等追加 .sillyspec/（本仓生效、不进版本库、
+     // 不碰用户 .gitignore）。创建 worktree 前落盘——worktree 目录一出现即被忽略。
+-    if (!rawPlacement) {
++    // dogfood 仓豁免（2026-11-16-cross-exclude-dogfood-guard）：目标仓自身跟踪 .sillyspec
++    // 内容时跳过——exclude 会误伤该仓 .sillyspec 下跟踪文件的显式 pathspec add/commit。
++    if (!rawPlacement && !repoTracksSillyspec(repoRoot)) {
+       ensureRepoLocalExclude(repoRoot, '.sillyspec/');
+     }
+ 
+diff --git a/test/cross-worktree-placement.test.mjs b/test/cross-worktree-placement.test.mjs
+index b3f4f5d4..8d50325a 100644
+--- a/test/cross-worktree-placement.test.mjs
++++ b/test/cross-worktree-placement.test.mjs
+@@ -205,6 +205,26 @@ test('缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02
+   assert.ok(!existsSync(expected), '落位目录被删');
+ });
+ 
++test('dogfood 仓豁免——目标仓跟踪 .sillyspec 时不追加 exclude（cross-exclude-dogfood-guard FR-01）', () => {
++  const fx = makeFixture();
++  // dogfood 形态：跨仓仓自身跟踪 .sillyspec 内容（sillyspec 自托管仓形态特征）
++  mkdirSync(join(fx.cross, '.sillyspec', 'docs'), { recursive: true });
++  writeFileSync(join(fx.cross, '.sillyspec', 'docs', 'tracked.md'), 'dogfood spec content\n');
++  git(fx.cross, ['add', '.sillyspec/docs/tracked.md']);
++  git(fx.cross, ['commit', '-q', '-m', 'track spec content']);
++  const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
++  assert.equal(r.created.length, 1);
++  const excludePath = join(fx.cross, '.git', 'info', 'exclude');
++  const excludeContent = existsSync(excludePath) ? readFileSync(excludePath, 'utf8') : '';
++  assert.doesNotMatch(excludeContent, /^\.sillyspec\/$/m, 'dogfood 仓 exclude 不含 .sillyspec/ 条目');
++  // 跟踪内容的显式 pathspec add/commit 不再被本地 exclude 拦截（2026-11-16 生产实证的假失败面）
++  writeFileSync(join(fx.cross, '.sillyspec', 'docs', 'tracked.md'), 'updated\n');
++  git(fx.cross, ['add', '--', '.sillyspec/docs/tracked.md']);
++  git(fx.cross, ['commit', '-q', '-m', 'update tracked spec file']);
++  assert.match(git(fx.cross, ['log', '-1', '--name-only', '--pretty=format:']), /\.sillyspec\/docs\/tracked\.md/,
++    'pathspec 提交落盘成功（exclude 未误伤）');
++});
++
+ test('旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）', () => {
+   const fx = makeFixture();
+   // 手工造一个 legacy 位置 worktree（模拟上一版本创建的存量）

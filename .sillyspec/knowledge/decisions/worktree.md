@@ -163,3 +163,12 @@ created_at: 2026-08-23T22:40:00+08:00
 文件：src/worktree.js, test/baseline-own-declared-skip.test.mjs
 最近确认：e4b93656e7446e58fd88c9379c1ed6600a399059
 理由：两处改动，同一根因（baseline overlay 把「本变更前置产物」与「并行会话脏文件」混进同一个 checkpoint）： ① `src/worktree.js`：`_overlayBaseline` 用既有 `loadOwnDeclaredSet` 计算 `ownDeclaredFiles`（本变更 task 卡声明集 ∩ overlay 文件），文件仍复制进 worktree（保持在场），但 `_createBaselineCheckpoint` 用 pathspec `:(exclude)` 把它们排除出 commit——以未提交态等本变更 Wave 提交收编，`diff baselineCommit..HEAD` 对账即可见。 ② 归档交付面口径：**撤销**。原诊断假设「baseline 带入的并行会话未提交脏文件会被算成本变更交付面」，实测不成立——原 `git diff baselineCommit`（工作区）口径本已排除 checkpoint 内容；改成「只算提交面」反而漏检未提交交付（change-ownership-guards ⑦a/⑦a2 实测变红）。保留原口径，归档残留文件的根因另行诊断（apply 的 docs 通道），本轮不修。
+
+## D-worktree-008@v1 2026-11-16-cross-exclude-dogfood-guard——改 `src/worktree-cross.js` 的 `ensureCrossWorktrees`：`ensureRepoLocalExclude(repoR
+状态：implemented
+变更：2026-11-16-cross-exclude-dogfood-guard
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-16-cross-exclude-dogfood-guard/design.md
+文件：src/worktree-cross.js, test/cross-worktree-placement.test.mjs
+最近确认：03e871bfb30c51a26d809d290c8b83b81e886e1c
+理由：改 `src/worktree-cross.js` 的 `ensureCrossWorktrees`：`ensureRepoLocalExclude(repoRoot, '.sillyspec/')` 调用前加 dogfood 豁免判定——目标仓 `git ls-files .sillyspec` 非空（自身跟踪 .sillyspec 内容，sillyspec 自托管/dogfood 形态）则跳过追加。选最小切口而非改 `ensureRepoLocalExclude` 本体：函数本体是通用幂等追加器（签名只管"写条目"），"要不要写"是跨仓语义，归调用点判；宿主仓路径零触碰。 背景（2026-11-16 生产实证）：sillyspec 主仓被写入该条目后，显式 pathspec 的 `git add/commit -- .sillyspec/...` 对已跟踪文件报「paths are ignored」exit 1（发布期两笔提交被拦出假失败——报错却部分生效），且 .sillyspec 下新文件从 status 未跟踪提示中消失。本机存量条目已手工清除，本变更为代码面根治。

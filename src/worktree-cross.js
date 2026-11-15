@@ -184,6 +184,22 @@ function isLegacyMainSpecbasePlacement(worktreePath, specBase) {
 }
 
 /**
+ * 目标仓是否自身 git 跟踪 .sillyspec 内容（sillyspec 自托管/dogfood 形态）。
+ * dogfood 仓的 .sillyspec/ 是仓库内容而非外来 worktree 落位目录——exclude 它会误伤：
+ * 显式 pathspec 的 git add/commit 对该目录下已跟踪文件报「paths are ignored」exit 1
+ * （2026-11-16 生产实证：sillyspec 主仓被写入该条目，发布期提交被拦出假失败），
+ * 且新文件从 status 未跟踪提示中消失。ls-files 失败（git 不可达）按 false——
+ * 保守维持宿主仓 untracked 保障（上游 ensureCrossWorktrees 对 git 不可达另有抛错兜底）。
+ * @param {string} repoRoot 跨仓仓根
+ * @returns {boolean}
+ */
+function repoTracksSillyspec(repoRoot) {
+  try {
+    return git(repoRoot, ['ls-files', '.sillyspec']).trim().length > 0
+  } catch { return false }
+}
+
+/**
  * 仓内落位的 untracked 保障（坑 cross-wt-repo-local-placement）：.git/info/exclude 幂等追加
  * 条目——本仓生效、不进版本库（不碰用户 .gitignore 工作区文件、无 pull 冲突面）。创建 worktree
  * 前调用，worktree 目录一出现即被 git 忽略。追加失败（只读仓等）仅 warn 不阻断——最坏回落
@@ -286,7 +302,9 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
 
     // 仓内落位的 untracked 保障：.git/info/exclude 幂等追加 .sillyspec/（本仓生效、不进版本库、
     // 不碰用户 .gitignore）。创建 worktree 前落盘——worktree 目录一出现即被忽略。
-    if (!rawPlacement) {
+    // dogfood 仓豁免（2026-11-16-cross-exclude-dogfood-guard）：目标仓自身跟踪 .sillyspec
+    // 内容时跳过——exclude 会误伤该仓 .sillyspec 下跟踪文件的显式 pathspec add/commit。
+    if (!rawPlacement && !repoTracksSillyspec(repoRoot)) {
       ensureRepoLocalExclude(repoRoot, '.sillyspec/');
     }
 
