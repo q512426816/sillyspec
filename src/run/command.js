@@ -31,6 +31,8 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc, deriveShortChangeTitle } from '../quicklog.js'
+// 变更身份行单一来源（2026-11-15-change-key-visibility）：净新建与 brainstorm 自动创建两处接线
+import { renderChangeIdentityLine } from '../change-identity.js'
 import { ProgressManager, resolveSessionIdentity } from '../progress.js'
 import { validateChangeExists, checkTransition } from '../stage-contract.js'
 import { READONLY_AUXILIARY_STAGES } from '../constants.js'
@@ -1322,7 +1324,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       // 优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
       // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
-      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
+      const _netFreshTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange
+      progress = pm.initChange(cwd, autoChange, { title: _netFreshTitle })
+      // 变更身份行（2026-11-15-change-key-visibility）：净新建注册成功即输出 key+名称+必须转述
+      // 指令——brainstorm 显式 --change 入口走此路径；title 为创建时点临时值（后续由真实标题刷新）
+      console.log(renderChangeIdentityLine(autoChange, _netFreshTitle))
     } else if (isAuxiliary) {
       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
@@ -1371,7 +1377,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
-        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        const _autoTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName
+        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: _autoTitle })
         if (!claim.created) {
           const activeChanges = claim.activeChanges || []
           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
@@ -1381,6 +1388,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
         }
         console.log(`🔄 自动创建变更：${autoName}`)
+        // 变更身份行（2026-11-15-change-key-visibility）：自动创建后 key+名称+必须转述指令；
+        // 无 --input 时 title 兜底=autoName（名称与 key 同值，如实展示）
+        console.log(renderChangeIdentityLine(autoName, _autoTitle))
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
         progress = claim.progress

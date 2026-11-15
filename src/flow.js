@@ -36,6 +36,8 @@ import { scopeTelemetryRefs } from './knowledge-graph.js'
 // 防「改一处漏一处」的口径漂移。
 import { isRecallRelevant, isRecallRelevantScored } from './knowledge-match.js'
 import { writeAtomicSync } from './fs-atomic.js'
+// 变更身份行单一来源（2026-11-15-change-key-visibility）：新建横幅与 adopt 收编两处接线
+import { renderChangeIdentityLine } from './change-identity.js'
 import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
@@ -789,6 +791,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
           if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
           console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
+          // 变更身份行（2026-11-15-change-key-visibility）：收编时点同款转述指令——推导失败随 try 块
+          // 静默跳过（best-effort，横幅 🧲 行仍含 key）
+          console.log(renderChangeIdentityLine(change, adoptTitle))
           if (!isValidChangeTitle(adoptTitle)) console.log(shortTitleRangeWarnLine(adoptTitle))
         } catch { /* adopt 标题 best-effort */ }
         const materials = materialPaths(specBase, change, changeDir)
@@ -1189,6 +1194,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   } catch { /* 域预判 best-effort：图/路径读取失败零输出 */ }
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+    // 变更身份行（2026-11-15-change-key-visibility）：key+名称嵌行内 + 必须转述指令——
+    // 用户痛点：创建变更后 agent 直接干活，用户不知道创建的变更名
+    renderChangeIdentityLine(change, changeTitle),
     `══════════════════════════════════════`,
     // 极速指引行（2026-10-14-thin-turbo-mode FR-01；2026-10-14-turbo-guide-tier-copy 评审 P3
     // 清偿）：承诺文案随档位收窄——thick 起步时 done 读态 turbo 不生效（D-007），文案如实告知
