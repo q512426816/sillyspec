@@ -264,3 +264,12 @@ supersedes：D-010@v1
 文件：src/git-helper.js, src/index.js, src/push.js, test/push-cli.test.mjs, test/push-plan.test.mjs
 最近确认：8cb0c352b4d4a88311d0aad6a77dc04283bf9644
 理由：两处代码修复，均在 `src/push.js`，加少量 `src/index.js` 渲染： 1. **参数容忍**：在 `parsePushArgs` 的现有循环内、flag 解析之后增加两级判定——遇到 `|`/`||`/`&&`/`;`/`&` 立即 `break`（shell 语义下当前命令参数到此结束，丢弃其后 token）；遇到 shell 重定向 token（`2>&1`、`1>&2`、`2>/dev/null`、`>nul`、裸 `>`/`>>`/`1>`/`2>` 及其目标文件等）则 `continue`（裸重定向符额外跳过后一个目标文件 token）。每次忽略/截断向 `warnings` 推一条可读告警。判定放在 flag 解析之后，保证 `--change <值>` 这类合法值不会被误剥离。返回结构增加 `warnings` 字段，由 `index.js` 在 human 模式打印。 2. **错误详情**：`pushBranch` 不再用 `stdio: inherit`（该模式让 `execFileSync` 拿不到 stderr，错误只剩 `Command failed` 首行）。改为默认 pipe 捕获，结束后把捕获的 stdout/stderr 转发到进程 stderr（human 模式）；失败时把 detail 合入错误信息，`--json` 模式保持 stdout 纯 JSON、不转发。 选择「循环内判定」而非「解析前整串预剥离」：预剥离会误吞 `--change 2>&1` 这类合法值（值位置还未被 flag 消费），内联判定天然尊重 flag 值消费顺序。
+
+## D-cli-entry-015@v1 2026-11-15-change-key-visibility——用户痛点：头脑风暴与轻量变更创建变更后 agent 直接干活，用户不知道创建的变更 key 与名称。
+状态：implemented
+变更：2026-11-15-change-key-visibility
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-15-change-key-visibility/design.md
+文件：src/change-identity.js, src/flow.js, src/run/command.js, test/change-identity-line.test.mjs
+最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
+理由：用户痛点：头脑风暴与轻量变更创建变更后 agent 直接干活，用户不知道创建的变更 key 与名称。CLI 输出里 key/标题虽已存在（flow start 横幅 `🏃`/`🏷️` 行、prompt 渲染头 `change:` 行），但零「必须转述给用户」指令——agent 无转述义务感。 方案：新增单一来源纯函数 `renderChangeIdentityLine(change, title)`（`src/change-identity.js`），把「完整 key + 名称 + 必须原样转述指令」渲染为一行可照抄的指令文案；在四个变更创建/收编时点接线输出：① `src/flow.js` flow start 新建路径横幅（`🏃` 行后）；② `src/flow.js` adopt 收编路径（`🏷️ 变更标题` 行后，best-effort 同 try 块）；③ `src/run/command.js` `run <stage> --change` 净新建 initChange 后（brainstorm 显式入口主受益面）；④ `src/run/command.js` brainstorm 零活跃自动创建（`🔄 自动创建变更` 行后）。选 console 输出层而非改阶段 prompt：agent 对 CLI stdout 与 prompt 同样可见，console 层零「提示词文档同步」负担（改 `src/stages/*.js` 须重跑 `docs/prompt/_extract.mjs` 并同步 md 镜像），改动面最小。

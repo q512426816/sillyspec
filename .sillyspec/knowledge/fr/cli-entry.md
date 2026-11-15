@@ -12326,3 +12326,87 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-11-deploy-skill-clean-snapshot/requirements.md#FR-02
 最近确认：33c389e45c86f492028d1486ecc9f0c79aeb9b36
+
+## FR-cli-entry-652 flow start 新建路径横幅含变更身份行：完整 key 与名称 + 必须转述给用户的指令
+变更：2026-11-15-change-key-visibility
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — 
+全文：.sillyspec/changes/archive/2026-11-15-change-key-visibility/requirements.md#FR-01
+最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-change-key-visibility:flow:测试绑定FR-01
+  tests: test/change-identity-line.test.mjs「FR-01 flow start 新建横幅含变更身份行（key+名称+转述指令）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-change-key-visibility
+  status: active
+
+## FR-cli-entry-653 flow start 头脑风暴收编（adopt）路径含同款变更身份指令行
+变更：2026-11-15-change-key-visibility
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 变更目录已有头脑风暴产物（proposal.md 等、无 flow-state），When agent 运行 `sillyspec flow start --c
+全文：.sillyspec/changes/archive/2026-11-15-change-key-visibility/requirements.md#FR-02
+最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-change-key-visibility:flow:测试绑定FR-02
+  tests: test/change-identity-line.test.mjs「FR-02 adopt 收编输出含变更身份行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-change-key-visibility
+  status: active
+
+## FR-cli-entry-654 run brainstorm 自动创建变更输出含完整 key + 名称 + 转述指令
+变更：2026-11-15-change-key-visibility
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 仓内零活跃变更，When agent 运行 `sillyspec run brainstorm`（无 --change），Then stdout 含「自动创建变
+全文：.sillyspec/changes/archive/2026-11-15-change-key-visibility/requirements.md#FR-03
+最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-change-key-visibility:flow:测试绑定FR-03
+  tests: test/change-identity-line.test.mjs「FR-03 run brainstorm 自动创建输出含变更身份行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-change-key-visibility
+  status: active
+
+## FR-cli-entry-655 run <stage> 显式 --change 净新建（brainstorm 显式入口走此路径）输出含完整 key + 名称 + 转述指令
+变更：2026-11-15-change-key-visibility
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 变更未存在（DB 无行、无目录），When agent 运行 `sillyspec run brainstorm --change <YYYY-MM-DD-名>
+全文：.sillyspec/changes/archive/2026-11-15-change-key-visibility/requirements.md#FR-04
+最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-change-key-visibility:flow:测试绑定FR-04
+  tests: test/change-identity-line.test.mjs「FR-04 run brainstorm 显式 --change 净新建输出含变更身份行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-change-key-visibility
+  status: active

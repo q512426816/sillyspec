@@ -117,3 +117,4 @@
 | 2026-11-11 | 2026-11-11-deps-hub-symbol-narrow | 枢纽模块回归面按触达导出符号收敛 |
 | 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+| 2026-11-15 | 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称 |
