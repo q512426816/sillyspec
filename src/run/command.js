@@ -1432,7 +1432,18 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 确保 progress 有 currentChange
-  const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot)
+  // ── 无变更归属辅助阶段豁免吸附（2026-11-15-auxiliary-scan-no-stick FR-01）──
+  // scan/explore 是辅助阶段（definition.auxiliary，无变更归属）——原实现无 --change 时
+  // resolveChangeName 兜底吸附仓内活跃变更，随后混跑回退块把「在轻量跑道变更上跑 run <stage>」
+  // 当升厚意图拦进 --upgrade-thick 同意门：任一活跃变更在场即整仓跑不了 scan（变更越忙、
+  // 文档越需要重扫的时刻通道恰好被锁死；且 currentChange 指向谁取决于并行会话推进，行为
+  // 状态敏感不可预测——2026-11-14 端到端在 multi-agent-platform 实证被拦+libuv 崩溃）。
+  // quick/archive 虽在 AUXILIARY_STAGES 但有变更归属语义（quick 会话/archive 收口锚定变更），
+  // 不豁免；status/doctor 走 READONLY_AUXILIARY_STAGES 分流不受影响。
+  const NO_CHANGE_AUXILIARY_STAGES = new Set(['scan', 'explore'])
+  const effectiveChange = NO_CHANGE_AUXILIARY_STAGES.has(stageName)
+    ? null
+    : (changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot))
 
   // ── Q7：quick --done 不带 --change 时 fallback 读 current-quick-run-id 可能命中他者会话 ──
   // 并发两 quick 会话：B 后启动覆盖 A 的 id（last-writer-wins），A 的 --done 不带 --change → 读到 B 的 sessionId

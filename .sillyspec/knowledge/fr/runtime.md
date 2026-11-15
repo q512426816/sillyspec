@@ -2030,3 +2030,54 @@ superseded_by：FR-cli-entry-102
 摘要：依赖面断言
 全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-05
 最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+
+## FR-runtime-125 活跃变更在场时 run scan / run explore 不再被轻量跑道升厚同意门拦截（直接执行辅助阶段）
+变更：2026-11-15-auxiliary-scan-no-stick
+状态：active
+摘要：活跃变更在场跑 scan
+场景正文：
+- 场景：活跃变更在场跑 scan — Given 仓内有活跃轻量变更（flow-state.yaml 在场，progress.currentChange 指向它）；When 运行 `sillyspec run scan`（无 --change）；Then 不输出「⛔ 本变更在轻量跑道上」、不 exit 2——scan 启动段正常执行（输出 Scan Profile/路径判定/步骤推进）
+全文：.sillyspec/changes/archive/2026-11-15-auxiliary-scan-no-stick/requirements.md#FR-01
+最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-auxiliary-scan-no-stick:flow:测试绑定FR-01
+  tests: test/auxiliary-scan-no-stick.test.mjs「scan/explore 豁免吸附：effectiveChange 置空不进升厚门」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-auxiliary-scan-no-stick
+  status: active
+
+## FR-runtime-126 quick/archive 保持原路由（有变更归属语义不豁免）
+变更：2026-11-15-auxiliary-scan-no-stick
+状态：active
+摘要：quick/archive 路由零变化
+场景正文：
+- 场景：quick/archive 路由零变化 — Given 同上活跃变更在场；When 运行 `run quick` / `run archive`；Then 行为与本变更前逐字一致（quick/archive 继续按变更路由）
+全文：.sillyspec/changes/archive/2026-11-15-auxiliary-scan-no-stick/requirements.md#FR-02
+最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-15-auxiliary-scan-no-stick:flow:测试绑定FR-02
+  tests: test/auxiliary-scan-no-stick.test.mjs「quick/archive 不豁免：路由行为零变化（源码断言豁免集不含二者）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-15-auxiliary-scan-no-stick
+  status: active
+
+## FR-runtime-127 multi-agent-platform 真机（活跃变更在场）run scan 可正常输出路径判定
+变更：2026-11-15-auxiliary-scan-no-stick
+状态：active
+摘要：真机集成验证
+场景正文：
+- 场景：真机集成验证 — Given multi-agent-platform 仓（活跃变更在场+codegraph 索引就绪）；When `node sillyspec/bin/sillyspec.js run scan --standard`；Then 输出 Scan Profile 与各项目路径判定行（不再出现 ⛔ 升厚门拦截与 libuv 崩溃退出）
+全文：.sillyspec/changes/archive/2026-11-15-auxiliary-scan-no-stick/requirements.md#FR-03
+最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61

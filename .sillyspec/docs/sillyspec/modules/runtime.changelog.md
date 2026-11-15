@@ -95,3 +95,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall
 - 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物
 - 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称
+- 2026-11-15-auxiliary-scan-no-stick | 辅助阶段 scan/explore 豁免变更吸附路由
