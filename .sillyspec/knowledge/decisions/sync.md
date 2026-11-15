@@ -28,3 +28,12 @@
 文件：src/route-hindsight.js, test/flow-clarity-probe.test.mjs, test/prestage-consent-gate.test.mjs, test/route-hindsight.test.mjs
 最近确认：2850892edcca44a141b08720646a19a96ba714b5
 理由：单点退役判定通路：`src/route-hindsight.js` 的 `HINDSIGHT_THRESHOLDS` 删除 `tasksRewriteRatio` 键、`markHindsight` 删除该路超阈判定与 reasons 拼装；`computeHindsightMetrics` 的 tasks 改写比**计算保留**（观测面，D-003 自校准回路未来重定阈的依据）。flow.js 侧零改动——收口接线（flow.js:2671-2675）与同意门渲染读的都是 markHindsight 产物与标记文件，判定退役后正常变更不再落标记，门自然不再被误拦。 选判定退役而非调阈值/删种子/降 advisory 的理由：现行种子形态（2026-10-07-thin-tasks-v3：成功标准逐条转写，验收句≠实现步骤）下正常改写与需求不清的改写不可区分——阈值无论调到多少都无法分离信号与噪音（0.875/0.8 的两次误报即实证）；种子回退破坏 v3「任务面归你」契约；降 advisory 留误报噪音仍污染提示面。design 改写比（种子=四问钉死模板，真需求不清会大改）/盲维/实测失败三路信号不受影响，保留。
+
+## D-sync-004@v1 2026-11-15-sentinel-evidence-channel——哨兵（detectFakeCheckCompletion，src/sentinel-assertions.js）的 review 证据通道是死代码：listRe
+状态：implemented
+变更：2026-11-15-sentinel-evidence-channel
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-15-sentinel-evidence-channel/design.md
+文件：src/sentinel-assertions.js, test/sentinel-unified-evidence.test.mjs
+最近确认：1058bb4d523b67fdd558ff52fbf33a7ba9c9c7d4
+理由：哨兵（detectFakeCheckCompletion，src/sentinel-assertions.js）的 review 证据通道是死代码：listReviewEvidence（:49-70）扫描 `join(dirname(changeDir), '.runtime', 'execute-runs')` = `.sillyspec/changes/.runtime/execute-runs`——错位一级目录，真实产物在 `.sillyspec/.runtime/execute-runs/`（specBase/.runtime，实测在场），该通道从未命中过（完整流程也一直只靠 commit token 过门——上游 2026-11-14-scan-incremental 的 wt-commit 每笔带 task-NN 正因此）。轻量变更（flow 道）更无 execute-runs，唯一通道=commit token，而 .sillyspec-gitignored 仓的勾选留档不可入库——结构性依赖提交消息带 token，忘带即卡死（2026-11-15-scan-audit-domain 实证三次确认卡超时）。 修复两刀（都在 src/sentinel-assertions.js）：①路径修正 `dirname(dirname(changeDir))`（变更目录的父级 changes 的父级=specBase）——复活 execute 通道（完整流程受益）；②detectFakeCheckCompletion 增第三通道：变更目录下 review.json（轻量道收口评审产物）文本含 task id 即认——轻量道不再单独依赖 commit token。
