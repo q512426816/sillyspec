@@ -13,7 +13,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {  mkdtempSync, mkdirSync } from 'node:fs'
+import {  mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectFakeCheckCompletion } from '../src/sentinel-assertions.js'
@@ -126,4 +126,40 @@ test('⑥ 零提交全勾 → fake（空转变更不许过门）', () => {
   })
   assert.equal(r.status, 'fake')
   assert.deepEqual(r.missing.sort(), ['task-01', 'task-02', 'task-03'])
+})
+
+// ── FR-01/FR-02（2026-11-15-sentinel-evidence-channel）：execute 路径复活+第三通道 ──
+
+test('FR-01 execute-runs 真实路径证据复活（specBase 层级，原错位一级恒扫空）', () => {
+  const specBase = mkdtempSync(join(tmpdir(), 'sentinel-path-'))
+  const changeDir = join(specBase, 'changes', 'x')
+  // 真实产物层级：specBase/.runtime/execute-runs/<run>/<tasks 段>/<task 段>/review.json
+  const evDir = join(specBase, '.runtime', 'execute-runs', 'run-1')
+  mkdirSync(join(evDir, 'tasks', 'task-01'), { recursive: true })
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(evDir, 'tasks', 'task-01', 'review.json'), '{}')
+  const r = detectFakeCheckCompletion({
+    changeDir, tasksMd: allChecked, commits: [], // 零 commit——只能靠 review 通道
+  })
+  assert.equal(r.status, 'fake')
+  assert.deepEqual(r.missing, ['task-02', 'task-03'], 'task-01 被 execute-runs 证据豁免（路径修复生效——原实现 dirname 错位恒扫空）')
+})
+
+test('FR-02 变更目录 review.json 第三通道：文本含 task id 即认+词边界不放大', () => {
+  const changeDir = mkdtempSync(join(tmpdir(), 'sentinel-chrev-'))
+  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
+    checklist: [
+      { item: 'task-01 域过滤修复', result: 'pass' },
+      { item: 'task-02 单项目不变', result: 'pass' },
+      { item: 'task-03 回归全绿', result: 'pass' },
+    ],
+  }))
+  const ok = detectFakeCheckCompletion({ changeDir, tasksMd: allChecked, commits: [] })
+  assert.equal(ok.status, 'complete', '三任务全被变更目录 review.json 文本证据覆盖')
+
+  const dir2 = mkdtempSync(join(tmpdir(), 'sentinel-chrev2-'))
+  writeFileSync(join(dir2, 'review.json'), '{"note": "参见 task-011 的历史"}')
+  const bad = detectFakeCheckCompletion({ changeDir: dir2, tasksMd: allChecked, commits: [] })
+  assert.equal(bad.status, 'fake')
+  assert.ok(bad.missing.includes('task-01'), 'task-011 不证 task-01（词边界）')
 })

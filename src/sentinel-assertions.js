@@ -15,7 +15,7 @@
  * 任意 run 的 tasks 目录下对应任务子目录）。
  */
 import { join, dirname } from 'path';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 
 /** 判集行锚：`- [x] task-01: …`（id 行才是可验证主张；无 id 勾选行不入判——不可验证不拒收）。 */
 const CHECKED_TASK_LINE_RE = /^[-*] \[( |x|X)\] (task-\d+)/;
@@ -46,13 +46,20 @@ export function expandTaskShorthand(messages) {
 /**
  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
  */
+/**
+ * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
+ * 路径修正（2026-11-15-sentinel-evidence-channel FR-01）：变更目录在 specBase/changes/<name>，
+ * execute-runs 实际在 specBase/.runtime/execute-runs——原实现 dirname(changeDir) 错位一级
+ * （changes/.runtime/，目录不存在恒扫空），通道自 2026-10-07-thin-tasks-v3 引入以来从未生效。
+ * 修正为上两级（specBase）。
+ */
 function listReviewEvidence(changeDir, opts) {
   if (typeof opts.listReviewsImpl === 'function') {
     try { return opts.listReviewsImpl(changeDir) || []; } catch { return []; }
   }
   if (!changeDir) return [];
   try {
-    const runsRoot = join(dirname(changeDir), '.runtime', 'execute-runs');
+    const runsRoot = join(dirname(dirname(changeDir)), '.runtime', 'execute-runs');
     const out = [];
     for (const run of readdirSync(runsRoot)) {
       let names = [];
@@ -66,6 +73,21 @@ function listReviewEvidence(changeDir, opts) {
     return out;
   } catch {
     return [];
+  }
+}
+
+/**
+ * 变更目录 review.json 文本证据（第三通道，2026-11-15-sentinel-evidence-channel FR-02）：
+ * 轻量道收口评审产物（flow done review 子步 schema 校验在场性）文本含词边界 task-NN 即认。
+ * 动机：轻量变更无 execute-runs，且 .sillyspec-gitignored 仓的勾选留档不可入库——
+ * commit token 单通道结构性卡死（忘带即被迫制造仪式性提交）。读失败/缺失 → null（通道缺席）。
+ */
+function readChangeReviewText(changeDir) {
+  if (!changeDir) return null;
+  try {
+    return readFileSync(join(changeDir, 'review.json'), 'utf8');
+  } catch {
+    return null;
   }
 }
 
@@ -102,6 +124,8 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
     return { status: 'none', claimTotal, checked, missing: [] };
   }
   const reviews = listReviewEvidence(changeDir, opts);
+  // 第三通道（2026-11-15-sentinel-evidence-channel FR-02）：变更目录 review.json 文本证据
+  const changeReviewText = readChangeReviewText(changeDir);
   // 连写组先展开（坑 flow-done-sentinel-token-split）：task-01/02/03 → 独立 token 再字面判
   const expanded = expandTaskShorthand(messages);
   const missing = entries
@@ -109,7 +133,8 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
       if (!e.checked) return false;
       const re = taskTokenRe(e.id);
       const byCommit = expanded.some((msg) => re.test(msg));
-      const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`));
+      const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`))
+        || (changeReviewText !== null && re.test(changeReviewText));
       return !(byCommit || byReview);
     })
     .map((e) => e.id);
