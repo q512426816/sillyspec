@@ -40,6 +40,8 @@ modules:
       - src/yaml-scalar-unquote.js
       - src/scan-diff.js
       - src/scan-refresh.js
+      - src/scan-incremental.js
+      - src/scan-codegraph.js
 
   cli-entry:
     status: active

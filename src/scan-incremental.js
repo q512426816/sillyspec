@@ -36,9 +36,9 @@ const GIT_TIMEOUT_MS = 10_000
 /**
  * 对账/变化集排除前缀与目录名（D-008 三层隔离之一；源集合与 estimateSourceSize skipDirs
  * 同源 src/run/scan-profile.js:28-37 + '.sillyspec-codegraph/' 索引目录自身）。
- * 单点导出供 task-03（stage.js 启动段变化集过滤）共用。
+ * 模块内私有常量（原曾导出拟供 stage.js 共用，实际未消费，见 22e-b 死码裁决）。
  */
-export const INCREMENTAL_EXCLUDE_DIRS = Object.freeze(new Set([
+const INCREMENTAL_EXCLUDE_DIRS = Object.freeze(new Set([
   'node_modules', '.git', 'dist', 'build', 'out', 'target',
   '__pycache__', '.venv', 'venv',
   '.next', '.nuxt', '.output', '.svelte-kit', '.astro', '.turbo', '.parcel-cache',
