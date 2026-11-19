@@ -2031,3 +2031,78 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-15-scan-audit-domain
   status: active
+
+## FR-docs-108 归档幂等自愈——runArchiveChain 撞已存在归档目录时必须读其 flow-state 判完备性：子步全 done 即自愈收口（注销+清理+残留提示），不完备必须维持硬错并附处置指引；cmdFlowDone 无 flow-state 分支必须补「归档已完成直接提交归档件」恢复指引
+变更：2026-11-19-pitfall-trio-closeout
+状态：active
+摘要：超时中断重入；不完备归档（同名冲突/半写）
+场景正文：
+- 场景：超时中断重入 — Given flow done 在 archive 子步中途被杀（归档目录已写全 flow-state 子步全 done、源目录残留未跟踪件）／When 重跑 flow d
+- 场景：不完备归档（同名冲突/半写） — Given 归档目录存在但 flow-state 子步未全 done（或缺 flow-state）／When runArchiveChain／Then 维持「目标目录已存在
+全文：.sillyspec/changes/archive/2026-11-19-pitfall-trio-closeout/requirements.md#FR-01
+最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-pitfall-trio-closeout:flow:测试绑定FR-01
+  tests: test/archive-idempotent-selfheal.test.mjs「Case4 双臂：归档目录已存在且子步全 done 自愈收口／不完备维持硬错」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-pitfall-trio-closeout
+  status: active
+
+## FR-docs-109 漂移归因口径对齐——detectPatchDrift 与 deliveryFaceAnchoredAfter 的 own 判定必须与 buildCommitAttribution 同口径：具名变更或带 task-NN token 的裸提交均算本变更提交（token 返工提交触发重冻结）；纯裸提交（无名无 token）必须仍不触发
+变更：2026-11-19-pitfall-trio-closeout
+状态：active
+摘要：token 返工提交；纯裸提交
+场景正文：
+- 场景：token 返工提交 — Given patch 已冻结（head 锚定旧 HEAD）且其后出现带 task-NN 无变更名的返工提交触及交付面／When 重跑 flow done 走漂移检测／Th
+- 场景：纯裸提交 — Given 冻结后出现的提交既无变更名也无 task-NN token／When 漂移检测／Then 不算 own，不触发重冻结（共享主仓他侧提交不误吞）。
+全文：.sillyspec/changes/archive/2026-11-19-pitfall-trio-closeout/requirements.md#FR-02
+最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-pitfall-trio-closeout:flow:测试绑定FR-02
+  tests: test/flowdone-disposition-drift.test.mjs「⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍不触发；交付面锚定同口径」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-pitfall-trio-closeout
+  status: active
+
+## FR-docs-110 patch 幂等跳过时点披露——patch 子步 skip 且冻结 head ≠ 当前 HEAD 时必须输出显式警告行（两 sha 差异+人工留档指引）；未触发重冻结的形态（他侧提交/治理面）审计时点必须一目了然
+变更：2026-11-19-pitfall-trio-closeout
+状态：active
+摘要：skip 时点落后
+场景正文：
+- 场景：skip 时点落后 — Given patch 子步幂等跳过且 change-patch.json.head 落后当前 HEAD／When 渲染输出／Then 输出 ⚠️ 行披露两 sha 与「审
+全文：.sillyspec/changes/archive/2026-11-19-pitfall-trio-closeout/requirements.md#FR-03
+最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
+
+## FR-docs-111 docs-check 模板占位形改写——生成源模板的教学引用示例必须改为不可解析形态（`src/foo.js:<行号>`／`foo.js:<行号>`／`src/foo.js::<符号名>` 占位符不是数字/标识符，不触发 REF_RE/SYMBOL_REF_RE）；collectDocRefs 扫描器必须零豁免（foo.js 真名引用语义完整保留——带行号/符号锚的 foo.js 照常提取）
+变更：2026-11-19-pitfall-trio-closeout
+状态：active
+摘要：模板教学注释（改形后）；foo.js 真名引用（语义保留）
+场景正文：
+- 场景：模板教学注释（改形后） — Given 生成模板教学注释写「形如 src/foo.js:<行号>——行号写实际数字」／When collectDocRefs 扫描生成的变更文档／Then 占位文本不入
+- 场景：foo.js 真名引用（语义保留） — Given 文档含真实夹具引用「foo.js:12」或符号锚「src/foo.js::runStage」／When collectDocRefs 扫描／Then 照常提取（
+全文：.sillyspec/changes/archive/2026-11-19-pitfall-trio-closeout/requirements.md#FR-04
+最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-pitfall-trio-closeout:flow:测试绑定FR-04
+  tests: test/docs-check-symbol-anchor.test.mjs | test/docs-check.test.mjs「collectDocRefs 模板占位形零提取（<行号>/<符号> 不可解析）」 | test/docs-fix-capability.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-pitfall-trio-closeout
+  status: active

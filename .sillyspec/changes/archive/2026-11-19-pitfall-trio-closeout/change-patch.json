@@ -1,0 +1,170 @@
+{
+  "change": "2026-11-19-pitfall-trio-closeout",
+  "baseline": "9dc333c9429edac565dfd260a868ecfb6a3c8d9d",
+  "head": "b12b67e5ba9f96bcf2793a443c34f58941f76238",
+  "files": [
+    "docs/sillyspec/platform-interface-map.md",
+    "src/design-facts.js",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/index.js",
+    "src/run/complete-handlers.js",
+    "src/run/quick-audit.js",
+    "src/taskcard.js",
+    "src/verify-probes.js",
+    "test/archive-idempotent-selfheal.test.mjs",
+    "test/docs-check.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 204,
+    "deletions": 18
+  },
+  "savedAt": "2026-11-19T15:54:45.947Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "9dc333c9429edac565dfd260a868ecfb6a3c8d9d",
+    "totals": {
+      "files": 12,
+      "additions": 204,
+      "deletions": 18
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 8,
+        "deletions": 8,
+        "kind": "modified"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-parity.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 34,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/complete-handlers.js",
+        "additions": 27,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/quick-audit.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/taskcard.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/archive-idempotent-selfheal.test.mjs",
+        "additions": 68,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/docs-check.test.mjs",
+        "additions": 24,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flowdone-disposition-drift.test.mjs",
+        "additions": 32,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "66141a3a8319e36bfdd05b44fa007ced46bd3bf5de4a65a00238e283f1d4540c",
+  "patchStatus": "ok"
+}

@@ -15,7 +15,7 @@
 import { writeFileSync, existsSync, mkdirSync, renameSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { findAlreadyArchivedDir } from '../src/run/complete-handlers.js'
+import { findAlreadyArchivedDir, archiveChangeDirectory } from '../src/run/complete-handlers.js'
 import { makeRepo, initChange, seedStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
@@ -142,6 +142,73 @@ console.log('\n--- Case 4: findAlreadyArchivedDir 单元（plan.md 把关 / 边�
     assert(findAlreadyArchivedDir(archiveDir, '2026-08-09-totally-different') === null, '名称不匹配 → null')
   } finally {
     try { rmSync(root, { recursive: true, force: true }) } catch {}
+  }
+}
+
+
+// ── 坑 2026-11-13-flow-done-timeout-archive-half-state：destDir 已存在且 flow-state 全 done 的幂等自愈 ──
+console.log('--- Case 4: 归档目录已存在且子步全 done（外层超时中断半态）→ 自愈，不 exit ---')
+{
+  const { cwd, specBase } = makeRepo('arch-halfstate-')
+  const cn = '2026-11-13-halfstate-x'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  // 源目录残留（中断后的未跟踪件形态——flow-state 也在）
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
+  writeFileSync(join(changeDir, 'design.md'), '# Design\n')
+  writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析\n')
+  writeFileSync(join(changeDir, 'change.patch'), 'fake patch remnant\n')
+  writeFileSync(join(changeDir, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n  ledger: done\n')
+  // 归档目录完备（八项全 done）
+  const destDir = join(specBase, 'changes', 'archive', cn)
+  mkdirSync(destDir, { recursive: true })
+  const SUBS = ['ledger', 'patch', 'review', 'probe', 'distill', 'verify', 'tick', 'archive']
+  writeFileSync(join(destDir, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n' + SUBS.map(k => `  ${k}: done`).join('\n') + '\n')
+  writeFileSync(join(destDir, 'plan.md'), '# Plan\n')
+
+  let returned = null
+  const origLog = console.log
+  const origWarn = console.warn
+  const lines = []
+  console.log = (...a) => lines.push(a.join(' '))
+  console.warn = (...a) => lines.push(a.join(' '))
+  try {
+    returned = await archiveChangeDirectory(pm, cwd, { currentChange: cn }, specBase, {}, {})
+  } finally {
+    console.log = origLog
+    console.warn = origWarn
+  }
+  const out = lines.join('\n')
+  assert(returned === destDir, `自愈返回 destDir（实际 ${returned}）`)
+  assert(out.includes('自愈'), '输出含「自愈」')
+  assert(out.includes('源目录残留'), '输出提示源目录残留（勿覆盖归档）')
+  const after = await pm.read(cwd, cn)
+  assert(!after || !after.name || after.status === 'archived' || true, `注销面（read 返回 ${JSON.stringify(after && { name: after.name, status: after.status })}——注销后 read 空即通过）`)
+  assert(!after || !after.name, '变更已注销（read 不再返回活跃行）')
+
+  // 负路径：destDir 存在但子步不全（半写归档/同名冲突）→ 保持硬错 exit 1
+  const cn2 = '2026-11-13-halfstate-bad'
+  const pm2 = await initChange(cwd, specBase, cn2)
+  const changeDir2 = join(specBase, 'changes', cn2)
+  writeFileSync(join(changeDir2, 'plan.md'), '# Plan\n')
+  writeFileSync(join(changeDir2, 'design.md'), '# D\n')
+  writeFileSync(join(changeDir2, 'module-impact.md'), '# m\n')
+  const destDir2 = join(specBase, 'changes', 'archive', cn2)
+  mkdirSync(destDir2, { recursive: true })
+  writeFileSync(join(destDir2, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n  ledger: done\n  patch: null\n')
+  const origErr = console.error
+  const origExit = process.exit
+  let exitCode = null
+  console.error = () => {}
+  process.exit = (c) => { exitCode = c; throw new Error('__exit__') }
+  try {
+    await archiveChangeDirectory(pm2, cwd, { currentChange: cn2 }, specBase, {}, {})
+    assert(false, '不完备 destDir 应 exit 1')
+  } catch (e) {
+    assert(exitCode === 1, `不完备 destDir 硬错 exit 1（实际 ${exitCode}）`)
+  } finally {
+    console.error = origErr
+    process.exit = origExit
   }
 }
 

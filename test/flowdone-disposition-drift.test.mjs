@@ -354,3 +354,35 @@ test('⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提
   assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: 'deadbeef' }).ok, false, '非祖先锚 fail-safe')
   assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: '' }).ok, false, '空锚 fail-safe')
 })
+
+// ── 坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework：token 裸提交归因对齐 ──
+// 返工提交常态形态=带 task-NN token 无变更名——旧 detectPatchDrift 只认变更名，token 裸提交
+// 不算 own → 漂移不触发 → patch 恒 skip 冻结件停在返工前。归因口径对齐 buildCommitAttribution
+// （2026-11-08-bare-commit-attribution-narrow：具名或 token 裸=own，纯裸=非 own）。
+test('⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍不触发；交付面锚定同口径', () => {
+  const d = fx()
+  const run = gitRepo(d)
+  writeFileSync(join(d, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  const anchor = freezeHead
+  // token 裸提交（返工常态）：无变更名、有 task-NN
+  writeFileSync(join(d, 'rework.js'), 'r\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 评审返工修复 (task-05)'])
+  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
+  assert.equal(r.drifted, true, 'token 裸提交应触发漂移（返工后重冻结）')
+  assert.ok(r.ownCommits.some(s => s.includes('task-05')), 'ownCommits 含 token 裸提交')
+  // 交付面锚定同口径：锚后 token 裸提交触交付文件 → 不 ok（复审未见需重评）
+  const dfa = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
+  assert.equal(dfa.ok, false, '锚后 token 裸交付提交=own → 不 ok')
+  // 纯裸提交（无名无 token）保持非 own：不触发漂移
+  const d2 = fx()
+  const run2 = gitRepo(d2)
+  writeFileSync(join(d2, 'base.txt'), 'base\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
+  const fh2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
+  writeFileSync(join(d2, 'release.txt'), 'v\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'chore(release): v1.0.0'])
+  const r2 = detectPatchDrift({ cwd: d2, change: CHG, freezeHead: fh2 })
+  assert.equal(r2.drifted, false, '纯裸提交（release 形态）仍不触发')
+})

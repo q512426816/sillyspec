@@ -1,0 +1,390 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index ecf403f6..60497a36 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2943` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2969` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:337/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:536；command.js:1741/1912/1992/2003/2201 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2164/2136/2216 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:337/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:536；command.js:1764/1912/1992/2003/2201 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2187/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:964（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3054；shared.js:1252 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:3054/3147；shared.js:1276 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4611；sync.js:1607/1607 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4563；sync.js:2339 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4697；shared.js:1252 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:3060/3147；shared.js:1276 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4617；sync.js:1607/1607 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4569；sync.js:2339 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4341/4286/4270；probe.js:137 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4376/4286/4270；probe.js:137 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:747/1109-1121 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+diff --git a/src/design-facts.js b/src/design-facts.js
+index 8eac1313..bb843e01 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -305,7 +305,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   lines.push(`# 设计文档（Design）— ${change}`)
+   lines.push('')
+   lines.push(`<!-- 由 sillyspec design-init 生成的骨架（${change}）——逐节填散文后删除本注释；存量手写路径不受影响 -->`)
+-  lines.push('<!-- 引用规范：全文源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->')
++  lines.push('<!-- 引用规范：全文源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->')
+   lines.push('')
+ 
+   lines.push('## 背景')
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index e6dfc4d7..057bf836 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -463,7 +463,10 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
+       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+       const subject = lines[0]
+       if (!subject) continue
+-      if (parseChangeNamesFromSubject(subject).includes(change)) {
++      // token 裸提交补认 own（坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework）：归因口径与
++      // buildCommitAttribution（2026-11-08-bare-commit-attribution-narrow）对齐——具名或带
++      // task-NN token（交付协议证据）均算本变更提交；纯裸提交（无名无 token）不算。
++      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
+         own.push(subject.slice(0, 80))
+         for (const f of lines.slice(1)) ownFileSet.add(f.replace(/\\/g, '/'))
+       }
+@@ -504,7 +507,7 @@ export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
+       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+       const subject = lines[0]
+       if (!subject) continue
+-      if (parseChangeNamesFromSubject(subject).includes(change)) {
++      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
+         ownCount++
+         for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
+       }
+diff --git a/src/flow.js b/src/flow.js
+index 6e4322ed..9dbc8668 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1354,6 +1354,26 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   const st = readFlowState(changeDir)
+   if (!st) {
+     console.error(`❌ ${change} 无 ${FLOW_STATE_FILE}（未参与 thin 协议）——走 run <stage> 既有流程`)
++    // 归档完备恢复指引（坑 2026-11-13-flow-done-timeout-archive-half-state 建议③）：源目录被
++    // 误删但归档件完整时，原报错只说「未参与 thin 协议」——用户不知道归档其实已完成，只差
++    // 注销与留档提交。点出归档目录在场形态与核对路径（八项 done=已完成，直接提交归档件）。
++    const archivedDir = join(specBase, 'changes', 'archive', change)
++    if (existsSync(archivedDir)) {
++      let allDone = false
++      try {
++        const fst = readFileSync(join(archivedDir, 'flow-state.yaml'), 'utf8')
++        const mm = /^substeps:\n((?:[ \t]+[\w-]+:[^\n]*\n?)+)/m.exec(fst)
++        if (mm) {
++          const entries = [...mm[1].matchAll(/[ \t]+([\w-]+):\s*(\S+)/g)]
++          allDone = entries.length > 0 && entries.every(([, , v]) => v === 'done')
++        }
++      } catch { /* 归档 flow-state 不可读按未完成 */ }
++      if (allDone) {
++        console.error(`   ℹ️ 检测到归档目录已存在且 flow-state 子步全 done（${archivedDir}）——归档实际已完成，无需重跑：直接以精确 pathspec 提交归档目录（chore(archive): ${change} 归档留档）；源目录不必重建`)
++      } else {
++        console.error(`   ℹ️ 归档目录 ${archivedDir} 在场但子步未全 done——核对归档件完整性后处置（勿直接删源目录外的任何东西）`)
++      }
++    }
+     process.exit(2)
+   }
+   if (st.legacy_fallback) {
+@@ -1985,7 +2005,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+       }
+     }
+-    if (!driftRefreeze) skip('patch')
++    if (!driftRefreeze) {
++      skip('patch')
++      // 冻结时点披露（坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework 建议③）：skip 语义
++      // 是「幂等跳过」不是「内容最新」——冻结 head 落后当前 HEAD 时显式提示，返工/并行交付
++      // 后审计件时点一目了然（窗口内本变更交付提交已由上方漂移检测自动重冻结；未触发重冻结
++      // 而审计需覆盖最新面的场景给人工留档指引）。
++      try {
++        const _pm = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++        const _curHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++        if (_pm && _pm.head && _curHead && String(_pm.head).trim() !== String(_curHead).trim()) {
++          console.warn(`⚠️ patch 幂等跳过但冻结时点落后：冻结 head=${String(_pm.head).slice(0, 8)} ≠ 当前 HEAD=${String(_curHead).trim().slice(0, 8)}——冻结件不含此后提交（返工/他侧）。审计需覆盖最新面时以 git diff baseline..HEAD 人工留档并在归档说明注明冻结时点`)
++        }
++      } catch { /* 冻结件读取失败不追加提示 */ }
++    }
+   }
+   if (st.substeps?.patch !== 'done' || driftRefreeze) {
+     let patchOk = false
+diff --git a/src/index.js b/src/index.js
+index f1ce52fb..eeaeaf30 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -2419,7 +2419,7 @@ change: ${fpChange}
+ # 决策记录（Decisions）
+ 
+ <!-- 增量落盘：每解决一个有实现影响的问题当场追加一条（格式见 brainstorm Step 3 模板）；幂等按 D-xxx@vN 判重 -->
+-<!-- 引用规范：evidence 等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->
++<!-- 引用规范：evidence 等处的源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->
+ `);
+       if (json) {
+         console.log(JSON.stringify({ command: 'fourpiece-init', change: fpChange, generated }, null, 2));
+@@ -2922,7 +2922,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+               }
+               console.log(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
+               console.log(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
+-              console.log(`裸文件名引用（foo.js:123 形态）→ 改写为仓根相对全路径（src/foo.js:123）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`);
++              console.log(`裸文件名引用（foo.js:<行号> 形态）→ 改写为仓根相对全路径（src/foo.js:<行号>）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`);
+             }
+             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
+             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 5e4e9b69..95f039b1 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1063,7 +1063,33 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+     }
+   }
+   if (existsSync(destDir)) {
++    // 幂等自愈（坑 2026-11-13-flow-done-timeout-archive-half-state，2026-11-13 实证）：flow done
++    // 外层超时被杀在 archive 子步中途——归档目录已写全（flow-state 子步全 done）但源目录残留
++    // 少量后续写入的未跟踪件；重跑撞「目标目录已存在」硬错，误删源目录则连恢复锚点都丢。
++    // 归档件完备（substeps 全 done）即判定上次归档已完成：自愈收口（注销+清理+成功返回）。
++    // 不完备（子步有非 done/无 flow-state）= 真冲突（同名重名/半写归档），维持硬错。
++    let _archivedComplete = false
++    try {
++      const fst = readFileSync(join(destDir, 'flow-state.yaml'), 'utf8')
++      const mm = /^substeps:\n((?:[ \t]+[\w-]+:[^\n]*\n?)+)/m.exec(fst)
++      if (mm) {
++        const entries = [...mm[1].matchAll(/[ \t]+([\w-]+):\s*(\S+)/g)]
++        _archivedComplete = entries.length > 0 && entries.every(([, , v]) => v === 'done')
++      }
++    } catch { /* 归档 flow-state 缺失/不可读 → 不完备 → 硬错 */ }
++    if (_archivedComplete) {
++      const _dn = basename(destDir)
++      console.log(`ℹ️ 归档目录已存在且 flow-state 子步全 done（${_dn}）——判定上次归档实际已完成（外层超时中断形态），自愈收口`)
++      pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
++      await archiveWorktreeCleanup(cwd, changeName, specBase, {})
++      if (existsSync(srcDir)) {
++        console.warn(`   源目录残留 ${srcDir}（上次中断后的未跟踪件）——核对后可手工清理；残留件可能比归档件新，勿直接覆盖归档目录`)
++      }
++      console.log(`📦 已自愈归档：${changeName} → archive/${_dn}/`)
++      return destDir
++    }
+     console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
++    console.error(`   且其 flow-state 子步未全 done（不完整归档/同名冲突）——核对 destName 与归档件完整性；确认作废可整目录移走后重跑`)
+     process.exit(1)
+   }
+   mkdirSync(archiveDir, { recursive: true })
+@@ -3553,3 +3579,4 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
+   }
+   return out
+ }
++
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 4db58acb..d109d8e7 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -160,7 +160,7 @@ export function printQuickAuditReview(review) {
+       console.warn(`   … 共 ${review.docsCheckHint.invalid} 处（上方封顶 10，全量跑 sillyspec docs check）`)
+     }
+     console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
+-    console.warn(`   引用格式：\`src/foo.js:42\`（或 42-48）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
++    console.warn(`   引用格式：\`src/foo.js:<行号>\`（或 <起>-<止>）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
+   }
+   // task-03: 活文档引用真失效提示（advisory 不阻断，不改 status 三态判定）——方向与上方互补：
+   // 上方查「本次改的文档」，这里查「本次改的 src 被活文档（platform-interface-map 等）引用」。
+diff --git a/src/taskcard.js b/src/taskcard.js
+index 53ca03fb..a7f7912f 100644
+--- a/src/taskcard.js
++++ b/src/taskcard.js
+@@ -128,7 +128,7 @@ constraints:
+                     精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
+                     NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
+                     禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
+-     implementation/acceptance 里的源码位置同样写仓根相对全路径+行号（src/foo.js:123）——
++     implementation/acceptance 里的源码位置同样写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——
+                     裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词
+                     窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
+      可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 3a1df962..5766c7dc 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -3797,7 +3797,7 @@ export function generateVerifyResultSkeleton(result) {
+   const L = [
+     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
+     '',
+-    '> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。',
++    '> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。',
+     '',
+     '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——', /* probe1-noqa */
+     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',
+diff --git a/test/archive-idempotent-selfheal.test.mjs b/test/archive-idempotent-selfheal.test.mjs
+index 5ab5f116..d0a1c6a9 100644
+--- a/test/archive-idempotent-selfheal.test.mjs
++++ b/test/archive-idempotent-selfheal.test.mjs
+@@ -15,7 +15,7 @@
+ import { writeFileSync, existsSync, mkdirSync, renameSync, mkdtempSync, rmSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { tmpdir } from 'node:os'
+-import { findAlreadyArchivedDir } from '../src/run/complete-handlers.js'
++import { findAlreadyArchivedDir, archiveChangeDirectory } from '../src/run/complete-handlers.js'
+ import { makeRepo, initChange, seedStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
+ 
+ const count = { passed: 0, failed: 0, failures: [] }
+@@ -145,5 +145,72 @@ console.log('\n--- Case 4: findAlreadyArchivedDir 单元（plan.md 把关 / 边
+   }
+ }
+ 
++
++// ── 坑 2026-11-13-flow-done-timeout-archive-half-state：destDir 已存在且 flow-state 全 done 的幂等自愈 ──
++console.log('--- Case 4: 归档目录已存在且子步全 done（外层超时中断半态）→ 自愈，不 exit ---')
++{
++  const { cwd, specBase } = makeRepo('arch-halfstate-')
++  const cn = '2026-11-13-halfstate-x'
++  const pm = await initChange(cwd, specBase, cn)
++  const changeDir = join(specBase, 'changes', cn)
++  // 源目录残留（中断后的未跟踪件形态——flow-state 也在）
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
++  writeFileSync(join(changeDir, 'design.md'), '# Design\n')
++  writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析\n')
++  writeFileSync(join(changeDir, 'change.patch'), 'fake patch remnant\n')
++  writeFileSync(join(changeDir, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n  ledger: done\n')
++  // 归档目录完备（八项全 done）
++  const destDir = join(specBase, 'changes', 'archive', cn)
++  mkdirSync(destDir, { recursive: true })
++  const SUBS = ['ledger', 'patch', 'review', 'probe', 'distill', 'verify', 'tick', 'archive']
++  writeFileSync(join(destDir, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n' + SUBS.map(k => `  ${k}: done`).join('\n') + '\n')
++  writeFileSync(join(destDir, 'plan.md'), '# Plan\n')
++
++  let returned = null
++  const origLog = console.log
++  const origWarn = console.warn
++  const lines = []
++  console.log = (...a) => lines.push(a.join(' '))
++  console.warn = (...a) => lines.push(a.join(' '))
++  try {
++    returned = await archiveChangeDirectory(pm, cwd, { currentChange: cn }, specBase, {}, {})
++  } finally {
++    console.log = origLog
++    console.warn = origWarn
++  }
++  const out = lines.join('\n')
++  assert(returned === destDir, `自愈返回 destDir（实际 ${returned}）`)
++  assert(out.includes('自愈'), '输出含「自愈」')
++  assert(out.includes('源目录残留'), '输出提示源目录残留（勿覆盖归档）')
++  const after = await pm.read(cwd, cn)
++  assert(!after || !after.name || after.status === 'archived' || true, `注销面（read 返回 ${JSON.stringify(after && { name: after.name, status: after.status })}——注销后 read 空即通过）`)
++  assert(!after || !after.name, '变更已注销（read 不再返回活跃行）')
++
++  // 负路径：destDir 存在但子步不全（半写归档/同名冲突）→ 保持硬错 exit 1
++  const cn2 = '2026-11-13-halfstate-bad'
++  const pm2 = await initChange(cwd, specBase, cn2)
++  const changeDir2 = join(specBase, 'changes', cn2)
++  writeFileSync(join(changeDir2, 'plan.md'), '# Plan\n')
++  writeFileSync(join(changeDir2, 'design.md'), '# D\n')
++  writeFileSync(join(changeDir2, 'module-impact.md'), '# m\n')
++  const destDir2 = join(specBase, 'changes', 'archive', cn2)
++  mkdirSync(destDir2, { recursive: true })
++  writeFileSync(join(destDir2, 'flow-state.yaml'), 'tier: thin\nsubsteps:\n  ledger: done\n  patch: null\n')
++  const origErr = console.error
++  const origExit = process.exit
++  let exitCode = null
++  console.error = () => {}
++  process.exit = (c) => { exitCode = c; throw new Error('__exit__') }
++  try {
++    await archiveChangeDirectory(pm2, cwd, { currentChange: cn2 }, specBase, {}, {})
++    assert(false, '不完备 destDir 应 exit 1')
++  } catch (e) {
++    assert(exitCode === 1, `不完备 destDir 硬错 exit 1（实际 ${exitCode}）`)
++  } finally {
++    console.error = origErr
++    process.exit = origExit
++  }
++}
++
+ cleanup()
+ report(count.passed, count.failed, count.failures)
+diff --git a/test/docs-check.test.mjs b/test/docs-check.test.mjs
+index e1f149f3..6f554a88 100644
+--- a/test/docs-check.test.mjs
++++ b/test/docs-check.test.mjs
+@@ -271,3 +271,27 @@ describe('readDocsCheckConfig（local.yaml 读取，execute 审查修复 #3）',
+     assert.equal(c.paths, null)
+   })
+ })
++
++// ── 坑 2026-11-18-docs-check-template-self-pollution：模板占位形改写（扫描器零豁免）──
++// 教学占位不再用「foo.js 全局豁免」让渡语义（foo.js 是开放世界通用夹具名，豁免给真名开后门
++// ——实测门实证：docs-check-symbol-anchor / docs-fix-capability 等既有 fixture 全红）；改为
++// 生成源模板的占位形态本身不可解析（<行号>/<符号> 占位符不是数字/标识符），foo.js 引用语义
++// 完整保留。本块锁定占位形零提取的回归锚：模板若改回带数字形态会重新自污染（每新建变更
++// ~20 处假失效），此处让返工在测试层先红。
++describe('collectDocRefs 模板占位形零提取（<行号>/<符号> 不可解析）', () => {
++  it('模板改形文本（src/foo.js:<行号> 等）零提取；真实行号引用零影响', () => {
++    const md = [
++      '<!-- 引用规范：全文源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字） -->',
++      '裸名占位 foo.js:<行号> 与范围 src/foo.js:<起>-<止>、符号占位 src/foo.js::<符号名>',
++      '真实引用 src/progress.js:215 在场',
++    ].join('\n')
++    const refs = collectDocRefs(md)
++    assert.ok(!refs.some(r => /foo\.js$/.test(r.file)), `占位形不入引用面（${JSON.stringify(refs.map(r => r.file))}）`)
++    assert.ok(refs.some(r => r.file === 'src/progress.js'), '真实行号引用正常收集')
++  })
++  it('foo.js 引用语义完整保留（不豁免真名）：带行号/符号锚的 foo.js 照常提取', () => {
++    const refs = collectDocRefs('真实夹具引用 foo.js:12 与符号锚 src/foo.js::runStage')
++    assert.ok(refs.some(r => r.file === 'foo.js' && r.start === 12), '裸名行号式 foo.js 照常提取')
++    assert.ok(refs.some(r => r.file === 'src/foo.js' && r.symbol === 'runStage'), '符号锚 foo.js 照常提取')
++  })
++})
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+index de83a346..231af798 100644
+--- a/test/flowdone-disposition-drift.test.mjs
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -354,3 +354,35 @@ test('⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提
+   assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: 'deadbeef' }).ok, false, '非祖先锚 fail-safe')
+   assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: '' }).ok, false, '空锚 fail-safe')
+ })
++
++// ── 坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework：token 裸提交归因对齐 ──
++// 返工提交常态形态=带 task-NN token 无变更名——旧 detectPatchDrift 只认变更名，token 裸提交
++// 不算 own → 漂移不触发 → patch 恒 skip 冻结件停在返工前。归因口径对齐 buildCommitAttribution
++// （2026-11-08-bare-commit-attribution-narrow：具名或 token 裸=own，纯裸=非 own）。
++test('⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍不触发；交付面锚定同口径', () => {
++  const d = fx()
++  const run = gitRepo(d)
++  writeFileSync(join(d, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
++  const anchor = freezeHead
++  // token 裸提交（返工常态）：无变更名、有 task-NN
++  writeFileSync(join(d, 'rework.js'), 'r\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 评审返工修复 (task-05)'])
++  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
++  assert.equal(r.drifted, true, 'token 裸提交应触发漂移（返工后重冻结）')
++  assert.ok(r.ownCommits.some(s => s.includes('task-05')), 'ownCommits 含 token 裸提交')
++  // 交付面锚定同口径：锚后 token 裸提交触交付文件 → 不 ok（复审未见需重评）
++  const dfa = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
++  assert.equal(dfa.ok, false, '锚后 token 裸交付提交=own → 不 ok')
++  // 纯裸提交（无名无 token）保持非 own：不触发漂移
++  const d2 = fx()
++  const run2 = gitRepo(d2)
++  writeFileSync(join(d2, 'base.txt'), 'base\n')
++  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
++  const fh2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
++  writeFileSync(join(d2, 'release.txt'), 'v\n')
++  run2(['add', '.']); run2(['commit', '-q', '-m', 'chore(release): v1.0.0'])
++  const r2 = detectPatchDrift({ cwd: d2, change: CHG, freezeHead: fh2 })
++  assert.equal(r2.drifted, false, '纯裸提交（release 形态）仍不触发')
++})

@@ -271,3 +271,27 @@ describe('readDocsCheckConfig（local.yaml 读取，execute 审查修复 #3）',
     assert.equal(c.paths, null)
   })
 })
+
+// ── 坑 2026-11-18-docs-check-template-self-pollution：模板占位形改写（扫描器零豁免）──
+// 教学占位不再用「foo.js 全局豁免」让渡语义（foo.js 是开放世界通用夹具名，豁免给真名开后门
+// ——实测门实证：docs-check-symbol-anchor / docs-fix-capability 等既有 fixture 全红）；改为
+// 生成源模板的占位形态本身不可解析（<行号>/<符号> 占位符不是数字/标识符），foo.js 引用语义
+// 完整保留。本块锁定占位形零提取的回归锚：模板若改回带数字形态会重新自污染（每新建变更
+// ~20 处假失效），此处让返工在测试层先红。
+describe('collectDocRefs 模板占位形零提取（<行号>/<符号> 不可解析）', () => {
+  it('模板改形文本（src/foo.js:<行号> 等）零提取；真实行号引用零影响', () => {
+    const md = [
+      '<!-- 引用规范：全文源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字） -->',
+      '裸名占位 foo.js:<行号> 与范围 src/foo.js:<起>-<止>、符号占位 src/foo.js::<符号名>',
+      '真实引用 src/progress.js:215 在场',
+    ].join('\n')
+    const refs = collectDocRefs(md)
+    assert.ok(!refs.some(r => /foo\.js$/.test(r.file)), `占位形不入引用面（${JSON.stringify(refs.map(r => r.file))}）`)
+    assert.ok(refs.some(r => r.file === 'src/progress.js'), '真实行号引用正常收集')
+  })
+  it('foo.js 引用语义完整保留（不豁免真名）：带行号/符号锚的 foo.js 照常提取', () => {
+    const refs = collectDocRefs('真实夹具引用 foo.js:12 与符号锚 src/foo.js::runStage')
+    assert.ok(refs.some(r => r.file === 'foo.js' && r.start === 12), '裸名行号式 foo.js 照常提取')
+    assert.ok(refs.some(r => r.file === 'src/foo.js' && r.symbol === 'runStage'), '符号锚 foo.js 照常提取')
+  })
+})

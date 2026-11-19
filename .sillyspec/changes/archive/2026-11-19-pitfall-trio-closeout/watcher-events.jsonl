@@ -1,0 +1,18 @@
+{"ts":1795100292994,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795100307963,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795100330894,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795101534608,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1795102717337,"kind":"commit","stage":null,"detail":"0763762c","provisional":true}
+{"ts":1795102789193,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795102789193,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1795102814926,"kind":"commit","stage":null,"detail":"62aee00f","provisional":true}
+{"ts":1795102988321,"kind":"gate-run","stage":"verify","detail":"门实测 failed（124.6s） · 20261119154308","provisional":true}
+{"ts":1795103225502,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795103229478,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795103229478,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795103245419,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795103245419,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795103288901,"kind":"commit","stage":null,"detail":"b12b67e5","provisional":true}
+{"ts":1795103428557,"kind":"gate-run","stage":"verify","detail":"门实测 failed（75.8s） · 20261119155026","provisional":true}
+{"ts":1795103525927,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1795103642511,"kind":"gate-run","stage":"verify","detail":"门实测 passed（71.0s） · 20261119155401","provisional":true}

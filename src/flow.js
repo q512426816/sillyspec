@@ -1354,6 +1354,26 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   const st = readFlowState(changeDir)
   if (!st) {
     console.error(`❌ ${change} 无 ${FLOW_STATE_FILE}（未参与 thin 协议）——走 run <stage> 既有流程`)
+    // 归档完备恢复指引（坑 2026-11-13-flow-done-timeout-archive-half-state 建议③）：源目录被
+    // 误删但归档件完整时，原报错只说「未参与 thin 协议」——用户不知道归档其实已完成，只差
+    // 注销与留档提交。点出归档目录在场形态与核对路径（八项 done=已完成，直接提交归档件）。
+    const archivedDir = join(specBase, 'changes', 'archive', change)
+    if (existsSync(archivedDir)) {
+      let allDone = false
+      try {
+        const fst = readFileSync(join(archivedDir, 'flow-state.yaml'), 'utf8')
+        const mm = /^substeps:\n((?:[ \t]+[\w-]+:[^\n]*\n?)+)/m.exec(fst)
+        if (mm) {
+          const entries = [...mm[1].matchAll(/[ \t]+([\w-]+):\s*(\S+)/g)]
+          allDone = entries.length > 0 && entries.every(([, , v]) => v === 'done')
+        }
+      } catch { /* 归档 flow-state 不可读按未完成 */ }
+      if (allDone) {
+        console.error(`   ℹ️ 检测到归档目录已存在且 flow-state 子步全 done（${archivedDir}）——归档实际已完成，无需重跑：直接以精确 pathspec 提交归档目录（chore(archive): ${change} 归档留档）；源目录不必重建`)
+      } else {
+        console.error(`   ℹ️ 归档目录 ${archivedDir} 在场但子步未全 done——核对归档件完整性后处置（勿直接删源目录外的任何东西）`)
+      }
+    }
     process.exit(2)
   }
   if (st.legacy_fallback) {
@@ -1985,7 +2005,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     }
-    if (!driftRefreeze) skip('patch')
+    if (!driftRefreeze) {
+      skip('patch')
+      // 冻结时点披露（坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework 建议③）：skip 语义
+      // 是「幂等跳过」不是「内容最新」——冻结 head 落后当前 HEAD 时显式提示，返工/并行交付
+      // 后审计件时点一目了然（窗口内本变更交付提交已由上方漂移检测自动重冻结；未触发重冻结
+      // 而审计需覆盖最新面的场景给人工留档指引）。
+      try {
+        const _pm = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+        const _curHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+        if (_pm && _pm.head && _curHead && String(_pm.head).trim() !== String(_curHead).trim()) {
+          console.warn(`⚠️ patch 幂等跳过但冻结时点落后：冻结 head=${String(_pm.head).slice(0, 8)} ≠ 当前 HEAD=${String(_curHead).trim().slice(0, 8)}——冻结件不含此后提交（返工/他侧）。审计需覆盖最新面时以 git diff baseline..HEAD 人工留档并在归档说明注明冻结时点`)
+        }
+      } catch { /* 冻结件读取失败不追加提示 */ }
+    }
   }
   if (st.substeps?.patch !== 'done' || driftRefreeze) {
     let patchOk = false

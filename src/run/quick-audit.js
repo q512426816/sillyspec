@@ -160,7 +160,7 @@ export function printQuickAuditReview(review) {
       console.warn(`   … 共 ${review.docsCheckHint.invalid} 处（上方封顶 10，全量跑 sillyspec docs check）`)
     }
     console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
-    console.warn(`   引用格式：\`src/foo.js:42\`（或 42-48）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
+    console.warn(`   引用格式：\`src/foo.js:<行号>\`（或 <起>-<止>）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
   }
   // task-03: 活文档引用真失效提示（advisory 不阻断，不改 status 三态判定）——方向与上方互补：
   // 上方查「本次改的文档」，这里查「本次改的 src 被活文档（platform-interface-map 等）引用」。

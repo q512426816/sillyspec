@@ -125,3 +125,4 @@
 | 2026-11-11 | 2026-11-12-verify-probes-md-facts-refresh | verify-probes 落盘时刷新 md 派生段 |
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
 | 2026-11-12 | 2026-11-13-probe7-existing-tests-cap | 探针7既有用例候选行加展示帽并去重 |
+| 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |

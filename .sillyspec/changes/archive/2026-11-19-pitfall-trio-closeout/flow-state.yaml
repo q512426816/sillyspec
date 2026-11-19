@@ -1,0 +1,56 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  flow done 三坑修复倒推收编：归档自愈与冻结披露
+
+
+  动机：2026-11-19 会话已修复三个收口链路坑，代码与测试落盘且全绿，因平台自动提交包装层干扰提交链断裂，变更未立项未提交，本变更按倒推 B 模式如实登记收口。已做改动：
+
+  - 坑 2026-11-13-flow-done-timeout-archive-half-state（已移 finished）：runArchiveChain 撞已存在归档目录时读其 flow-state，子步全 done
+  即自愈收口（注销+清理+残留提示），cmdFlowDone 无 flow-state 分支补「归档已完成直接提交归档件」恢复指引；不完备维持硬错附处置指引
+
+  - 坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework 方向①③（②仍活跃）：detectPatchDrift/deliveryFaceAnchoredAfter 归因口径对齐
+  buildCommitAttribution——token 裸提交（task-NN 无变更名）算 own 触发漂移重冻结，纯裸提交仍不触发；patch skip 时冻结 head 落后当前 HEAD 显式披露两 sha
+  差异与人工留档指引
+
+  - 坑 2026-11-18-docs-check-template-self-pollution（已移 finished）：collectDocRefs 尾置占位名豁免——命中 (^|/)foo.js$ 的教学占位引用不计失效面
+
+
+  成功标准：
+
+  - 归档目录已存在且 flow-state 子步全 done 的重入自愈收口；不完备仍硬错（archive-idempotent-selfheal 全绿）
+
+  - token 裸提交触发漂移重冻结、纯裸不触发、交付面锚定同口径（flowdone-disposition-drift 全绿）
+
+  - patch skip 时点披露冻结 head 与当前 HEAD 两 sha 差异行
+
+  - foo.js 占位引用不再计入 docs-check 失效面（docs-check 全绿）
+
+  - 三套件合计 43/43 绿（本会话已实证，收口实测门复核）
+autopilot: false
+prestage_ack: false
+baseline_commit: 9dc333c9429edac565dfd260a868ecfb6a3c8d9d
+updatedAt: '2026-11-19T15:54:47.764Z'
+baseline_sha256: 178d407303e388f74c4d8f7893e58432ae24770c4844c34a95fdbbaadd49ba22
+spec_approved: true
+spec_approved_at: '2026-11-19T15:37:13.127Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: unattested
+spec_attested_by: null
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（71.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261119155401\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 13 个
+

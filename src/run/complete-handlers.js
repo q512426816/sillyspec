@@ -1063,7 +1063,33 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
     }
   }
   if (existsSync(destDir)) {
+    // 幂等自愈（坑 2026-11-13-flow-done-timeout-archive-half-state，2026-11-13 实证）：flow done
+    // 外层超时被杀在 archive 子步中途——归档目录已写全（flow-state 子步全 done）但源目录残留
+    // 少量后续写入的未跟踪件；重跑撞「目标目录已存在」硬错，误删源目录则连恢复锚点都丢。
+    // 归档件完备（substeps 全 done）即判定上次归档已完成：自愈收口（注销+清理+成功返回）。
+    // 不完备（子步有非 done/无 flow-state）= 真冲突（同名重名/半写归档），维持硬错。
+    let _archivedComplete = false
+    try {
+      const fst = readFileSync(join(destDir, 'flow-state.yaml'), 'utf8')
+      const mm = /^substeps:\n((?:[ \t]+[\w-]+:[^\n]*\n?)+)/m.exec(fst)
+      if (mm) {
+        const entries = [...mm[1].matchAll(/[ \t]+([\w-]+):\s*(\S+)/g)]
+        _archivedComplete = entries.length > 0 && entries.every(([, , v]) => v === 'done')
+      }
+    } catch { /* 归档 flow-state 缺失/不可读 → 不完备 → 硬错 */ }
+    if (_archivedComplete) {
+      const _dn = basename(destDir)
+      console.log(`ℹ️ 归档目录已存在且 flow-state 子步全 done（${_dn}）——判定上次归档实际已完成（外层超时中断形态），自愈收口`)
+      pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+      await archiveWorktreeCleanup(cwd, changeName, specBase, {})
+      if (existsSync(srcDir)) {
+        console.warn(`   源目录残留 ${srcDir}（上次中断后的未跟踪件）——核对后可手工清理；残留件可能比归档件新，勿直接覆盖归档目录`)
+      }
+      console.log(`📦 已自愈归档：${changeName} → archive/${_dn}/`)
+      return destDir
+    }
     console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
+    console.error(`   且其 flow-state 子步未全 done（不完整归档/同名冲突）——核对 destName 与归档件完整性；确认作废可整目录移走后重跑`)
     process.exit(1)
   }
   mkdirSync(archiveDir, { recursive: true })
@@ -3553,3 +3579,4 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
   }
   return out
 }
+

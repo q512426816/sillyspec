@@ -2419,7 +2419,7 @@ change: ${fpChange}
 # 决策记录（Decisions）
 
 <!-- 增量落盘：每解决一个有实现影响的问题当场追加一条（格式见 brainstorm Step 3 模板）；幂等按 D-xxx@vN 判重 -->
-<!-- 引用规范：evidence 等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->
+<!-- 引用规范：evidence 等处的源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->
 `);
       if (json) {
         console.log(JSON.stringify({ command: 'fourpiece-init', change: fpChange, generated }, null, 2));
@@ -2922,7 +2922,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
               }
               console.log(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.log(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
-              console.log(`裸文件名引用（foo.js:123 形态）→ 改写为仓根相对全路径（src/foo.js:123）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`);
+              console.log(`裸文件名引用（foo.js:<行号> 形态）→ 改写为仓根相对全路径（src/foo.js:<行号>）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`);
             }
             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款

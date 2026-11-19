@@ -273,3 +273,12 @@ supersedes：D-010@v1
 文件：src/change-identity.js, src/flow.js, src/run/command.js, test/change-identity-line.test.mjs
 最近确认：9650a6a09e4afde9712e9a48b883c55049c54141
 理由：用户痛点：头脑风暴与轻量变更创建变更后 agent 直接干活，用户不知道创建的变更 key 与名称。CLI 输出里 key/标题虽已存在（flow start 横幅 `🏃`/`🏷️` 行、prompt 渲染头 `change:` 行），但零「必须转述给用户」指令——agent 无转述义务感。 方案：新增单一来源纯函数 `renderChangeIdentityLine(change, title)`（`src/change-identity.js`），把「完整 key + 名称 + 必须原样转述指令」渲染为一行可照抄的指令文案；在四个变更创建/收编时点接线输出：① `src/flow.js` flow start 新建路径横幅（`🏃` 行后）；② `src/flow.js` adopt 收编路径（`🏷️ 变更标题` 行后，best-effort 同 try 块）；③ `src/run/command.js` `run <stage> --change` 净新建 initChange 后（brainstorm 显式入口主受益面）；④ `src/run/command.js` brainstorm 零活跃自动创建（`🔄 自动创建变更` 行后）。选 console 输出层而非改阶段 prompt：agent 对 CLI stdout 与 prompt 同样可见，console 层零「提示词文档同步」负担（改 `src/stages/*.js` 须重跑 `docs/prompt/_extract.mjs` 并同步 md 镜像），改动面最小。
+
+## D-cli-entry-016@v1 2026-11-19-pitfall-trio-closeout——倒推 B 模式收编：三个收口链路坑的修复已在 2026-11-19 会话落盘（代码+测试全绿），因平台自动提交包装层干扰提交链断裂，本变更如实登记收口。
+状态：implemented
+变更：2026-11-19-pitfall-trio-closeout
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-19-pitfall-trio-closeout/design.md
+文件：docs/sillyspec/platform-interface-map.md, src/design-facts.js, src/flow-parity.js, src/flow.js, src/index.js, src/run/complete-handlers.js, src/run/quick-audit.js, src/taskcard.js, src/verify-probes.js, test/archive-idempotent-selfheal.test.mjs, test/docs-check.test.mjs, test/flowdone-disposition-drift.test.mjs
+最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
+理由：倒推 B 模式收编：三个收口链路坑的修复已在 2026-11-19 会话落盘（代码+测试全绿），因平台自动提交包装层干扰提交链断裂，本变更如实登记收口。三处修复： 1. **归档幂等自愈**（src/run/complete-handlers.js + src/flow.js）：runArchiveChain 在 destDir 已存在时读归档件 flow-state 的 substeps，全 done 即判定上次归档实际完成（外层超时中断形态）→ 自愈收口（unregisterChange+worktree 清理+返回），源目录残留提示手工清理；cmdFlowDone 的「源目录被误删」报错分支检测归档完备性并附「直接提交归档件」指引。 2. **漂移归因对齐**（src/flow-parity.js）：detectPatchDrift 与 deliveryFaceAnchoredAfter 的 own 判定从「提交消息含变更名」放宽为「具名或 /task-\d+/i」——与 buildCommitAttribution（2026-11-08-bare-commit-attribution-narrow）同口径，token 返工提交触发自动重冻结。 3. **模板占位形改写**（design-facts.js / index.js×2 / taskcard.js / verify-probes.js / quick-audit.js 六生成点 + docs-check.js 回滚）：教学引用示例从带数字形态（src/foo.js:123）改为占位形态（src/foo.js:<行号>）——占位符不是数字/标识符，REF_RE（要求 `:\d+`）与 SYMBOL_REF_RE（要求 `::标识符`）天然不匹配。首轮落盘的「collectDocRefs 全局豁免 foo.js」方案被收口实测门否决（foo.js 是开放世界通用夹具名——docs-check-symbol-anchor/docs-fix-capability 等既有 fixture 用 foo.js 做真实测试数据，全局豁免全打红），回滚为扫描器零豁免+模板改形，foo.js 真名引用语义完整保留。

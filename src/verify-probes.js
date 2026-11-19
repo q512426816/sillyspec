@@ -3797,7 +3797,7 @@ export function generateVerifyResultSkeleton(result) {
   const L = [
     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
     '',
-    '> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。',
+    '> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（形如 src/foo.js:<行号>——行号写实际数字）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。',
     '',
     '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——', /* probe1-noqa */
     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',

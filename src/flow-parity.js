@@ -463,7 +463,10 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
       const subject = lines[0]
       if (!subject) continue
-      if (parseChangeNamesFromSubject(subject).includes(change)) {
+      // token 裸提交补认 own（坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework）：归因口径与
+      // buildCommitAttribution（2026-11-08-bare-commit-attribution-narrow）对齐——具名或带
+      // task-NN token（交付协议证据）均算本变更提交；纯裸提交（无名无 token）不算。
+      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
         own.push(subject.slice(0, 80))
         for (const f of lines.slice(1)) ownFileSet.add(f.replace(/\\/g, '/'))
       }
@@ -504,7 +507,7 @@ export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
       const subject = lines[0]
       if (!subject) continue
-      if (parseChangeNamesFromSubject(subject).includes(change)) {
+      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
         ownCount++
         for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
       }
