@@ -26,10 +26,13 @@ import { gitQuiet } from './git-helper.js'
 
 /**
  * 收集收口预检阻断条件（纯计算零打印）。
- * @returns {{ findings: Array<{id:'dirty-gap',count:number,files:string[]} | {id:'orphan-face',commits:string[],count:number,files:string[]}> }}
+ * @returns {{ findings: Array<{id:'dirty-gap',count:number,files:string[]} | {id:'orphan-face',commits:string[],count:number,files:string[]}>, dirtyCount: number|null }}
+ *   dirtyCount：预检时点 dirty 缺口原始计数（2026-11-19-closeout-noise-fix 负面③——未经签收
+ *   过滤的原始值，供权威门对比输出时点快照解释行；null=预检未算（patchDone 守卫跳过/异常））
  */
 export async function collectCloseoutPreflight({ cwd, specBase, change, st, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, turbo = false }) {
   const findings = []
+  let dirtyCount = null
   const patchDone = st?.substeps?.patch === 'done'
   // ── dirty-gap / orphan-face 预判（镜像 patch 子步判定链）──
   if (!patchDone && st?.baseline_commit) {
@@ -48,8 +51,15 @@ export async function collectCloseoutPreflight({ cwd, specBase, change, st, free
       const ownPrefix = `.sillyspec/changes/${change}/`
       const committed = filterCommittedFace(committedRaw, ownPrefix)
       const freeze = collectFreezeFiles({ cwd, specBase, change, committed, exclusive })
-      if (freeze.dirtyWarned.length > 0 && !freezeDirty && !acceptDirtyGap && !turbo) {
-        findings.push({ id: 'dirty-gap', count: freeze.dirtyWarned.length, files: freeze.dirtyWarned })
+      dirtyCount = freeze.dirtyWarned.length
+      // 已签收面剔除镜像（2026-11-19-closeout-noise-fix 负面③）：--accept-dirty-gap 持久化签收
+      // 清单（flow-state accept_dirty_gap.files）在预检同款生效——已签收面不预拦，增量面照拦
+      // （与 patch 子步权威门同判定链，防两路口径漂移）。
+      const _accepted = Array.isArray(st?.accept_dirty_gap?.files) ? st.accept_dirty_gap.files : null
+      const _gaps = _accepted ? freeze.dirtyWarned.filter((f) => !_accepted.includes(f)) : freeze.dirtyWarned
+      if (_gaps.length > 0 && !freezeDirty && !acceptDirtyGap && !turbo) {
+        // acceptedCount：签收免拦计数（渲染层增量语义标注用——预检文案与权威门同语义）
+        findings.push({ id: 'dirty-gap', count: _gaps.length, files: _gaps, acceptedCount: freeze.dirtyWarned.length - _gaps.length })
       }
       if (exclusiveFrom === 'worktree' && !acceptOrphanFace) {
         try {
@@ -61,7 +71,7 @@ export async function collectCloseoutPreflight({ cwd, specBase, change, st, free
       }
     } catch { /* 预检 fail-safe：异常静默放行（权威门仍在 patch 子步原序原判定） */ }
   }
-  return { findings }
+  return { findings, dirtyCount }
 }
 
 export default { collectCloseoutPreflight }

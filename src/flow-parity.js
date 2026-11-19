@@ -539,6 +539,42 @@ export function readDirtyGateIgnore(specBase) {
   } catch { return [] }
 }
 
+/**
+ * 本变更删除面采集（2026-11-19-closeout-noise-fix，负面②）：design 声明清单存在性核验用——
+ * 删除类交付（baseline..HEAD 已提交删除 ∪ 工作树未提交删除）主仓不在盘是删除语义而非跨仓
+ * 嫌疑。两源并集：① diff --diff-filter=D（已提交删除，committed 冻结面同款窗口）；② status
+ * porcelain 状态码含 D 的行（未 stage / 已 stage 未提交删除，rename 箭头取新侧）。fail-safe：
+ * git 失败返回空集（删除面缺席 → 调用方回到现状点名，不新造阻断）。
+ * @param {string} cwd 仓库根
+ * @param {string} [baseline] flow start 基线提交（不可解析 → 只采工作树删除源）
+ * @returns {Set<string>} posix 路径集
+ */
+export function collectDeletedFace(cwd, baseline) {
+  const deleted = new Set()
+  const okBaseline = baseline && /^[0-9a-f]{4,40}$/i.test(baseline)
+  try {
+    if (okBaseline) {
+      const out = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', `${baseline}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+      for (const l of String(out).split('\n')) {
+        const p = l.trim().replace(/^"|"$/g, '').replace(/\\/g, '/')
+        if (p) deleted.add(p)
+      }
+    }
+  } catch { /* 已提交删除源失败 → 只靠工作树源 */ }
+  try {
+    const out = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    for (const line of String(out).split('\n')) {
+      if (!line || line.length < 4) continue
+      if (!/D/.test(line.slice(0, 2))) continue // XY 任一为 D（未 stage 删除「 D」/已 stage「D 」/删+增「AD」）
+      const p = line.slice(3).trim().replace(/^"|"$/g, '')
+      const arrow = p.indexOf(' -> ')
+      const path = (arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/')
+      if (path) deleted.add(path)
+    }
+  } catch { /* 工作树删除源失败 → 只靠已提交源 */ }
+  return deleted
+}
+
 export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
     && !isToolGovernancePath(f)

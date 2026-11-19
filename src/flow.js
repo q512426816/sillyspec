@@ -1352,6 +1352,10 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], 
 export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, allowBatchTick = false, acceptUnmapped = false, acceptEmptyFace = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
+  // 预检时点 dirty 缺口数（2026-11-19-closeout-noise-fix 负面③）：函数体级作用域——收口预检块
+  // 与 patch 子步权威门分处不同子步骤块，解释行（两时点数字对比）须经函数级变量传递；
+  // null=预检未算（patchDone 守卫跳过/异常 fail-safe）。
+  let _preflightDirtyCount = null
   if (!st) {
     console.error(`❌ ${change} 无 ${FLOW_STATE_FILE}（未参与 thin 协议）——走 run <stage> 既有流程`)
     // 归档完备恢复指引（坑 2026-11-13-flow-done-timeout-archive-half-state 建议③）：源目录被
@@ -1728,12 +1732,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     {
       const { collectCloseoutPreflight } = await import('./flow-preflight.js')
       const pre = await collectCloseoutPreflight({ cwd, specBase, change, st, freezeDirty, acceptDirtyGap, acceptOrphanFace, turbo })
+      // 预检时点缺口数（2026-11-19-closeout-noise-fix 负面③）：null=预检未算（patchDone 守卫
+      // 跳过/异常 fail-safe）；数值供 patch 子步权威门对比——数字增大时输出时点快照解释行。
+      _preflightDirtyCount = (pre && typeof pre.dirtyCount === 'number') ? pre.dirtyCount : null
       if (pre.findings.length > 0) {
         console.error(`⛔ 收口预检未过——${pre.findings.length} 项阻断条件（fail-together 一次报全；实测未启动，处置后重跑同一条命令从断点续）：`)
         for (const f of pre.findings) {
           if (f.id === 'dirty-gap') {
-            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）
-            console.error(`   ▸ ${f.count} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）；增量后缀同语义
+            console.error(`   ▸ ${f.count} 个未提交交付文件未入冻结面${f.acceptedCount > 0 ? `（增量——另有 ${f.acceptedCount} 个已按签收免拦）` : ''}（共享主仓无法归属）——三选一：`)
             console.error(`⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}）），重跑本命令——冻结面自动并入`)
             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
@@ -2117,9 +2124,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           console.log(`ℹ️ ${freeze.dirtyIgnored.length} 个 dirty 文件按 local.yaml dirty_gate_ignore 剔除（已知残渣面，不入冻结缺口）：${freeze.dirtyIgnored.slice(0, 3).join('、')}${freeze.dirtyIgnored.length > 3 ? ' 等' : ''}`)
         }
         if (freeze.dirtyWarned.length > 0) {
-          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+          // 签收面剔除（2026-11-19-closeout-noise-fix，负面③）：--accept-dirty-gap 持久化对齐
+          // --accept-empty-face 语义——签收文件清单入 flow-state，断点续跑已签收面免拦（此前每轮
+          // 都要重新带 flag 且缺口数字随时点漂移，「2 跳 31」的误判形态）；增量面（不在签收清单）
+          // 仍拦——签收不随时间扩散。
+          const _accepted = st && Array.isArray(st.accept_dirty_gap && st.accept_dirty_gap.files) ? st.accept_dirty_gap.files : null
+          const _gaps = _accepted ? freeze.dirtyWarned.filter((f) => !_accepted.includes(f)) : freeze.dirtyWarned
+          if (_gaps.length === 0) {
+            console.log(`ℹ️ ${freeze.dirtyWarned.length} 个 dirty 缺口全部在此前 --accept-dirty-gap 签收清单内（增量 0）——按签收免拦，重跑不再要求重新处置（签收清单留痕 flow-state accept_dirty_gap）`)
+          } else {
+          console.warn(`⚠️ ${_gaps.length} 个未提交交付文件未入冻结面${_accepted ? `（增量——另有 ${freeze.dirtyWarned.length - _gaps.length} 个已按签收免拦）` : ''}（共享主仓无法归属）——三选一：`)
           console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交归档后用 sillyspec push 压扁并推送（见收口指引）`)
-          console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+          console.warn(`   ${_gaps.slice(0, 3).join('、')}${_gaps.length > 3 ? ' 等' : ''}`)
+          // 时点快照解释行（2026-11-19-closeout-noise-fix，负面③）：预检（实测门前）与权威门
+          // （实测门后）数字都是时点快照，中间隔完整实测+处置窗口——数字变大不是口径漂移。
+          if (_preflightDirtyCount !== null && _preflightDirtyCount < freeze.dirtyWarned.length) {
+            console.warn(`   ℹ️ 缺口数字是时点快照：收口预检（实测前）${_preflightDirtyCount} 个 → 权威门（实测后）${freeze.dirtyWarned.length} 个——实测窗口内 dirty 面新增（测试产物/并行会话/处置期改动都可能），非口径漂移`)
+          }
           // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
           // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
           // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
@@ -2143,7 +2164,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           if (acceptDirtyGap) {
             // 双 flag 同给时 --freeze-dirty 优先（exclusive 路径 dirtyWarned 恒空，本分支不进
             // ——设计接口契约已披露；无告警代码即无死代码，二轮评审 P3 清偿）
-            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
+            try {
+              writeFlowState(changeDir, { accept_dirty_gap: { at: new Date().toISOString(), files: freeze.dirtyWarned, by: process.env.SILLYSPEC_SESSION_ID || null } })
+              st.accept_dirty_gap = st.accept_dirty_gap || {}
+              st.accept_dirty_gap.files = freeze.dirtyWarned
+            } catch { /* 签收留痕 best-effort：写失败不阻断收口（本轮 flag 仍生效） */ }
+            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（签收清单持久化 flow-state accept_dirty_gap——重跑已签收面免拦；缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
+          }
           }
         }
         // 收口留痕四名全排除（2026-10-09-close-trace-single-set 后只写 change.patch/
@@ -2225,8 +2252,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           }
         } catch { /* 注册表读取失败 → 别名标注缺席，存在性判定不受影响 */ }
         const _suspects = []
+        // 删除面跳过（2026-11-19-closeout-noise-fix，负面②）：删除类交付（已提交删除 ∪ 工作树
+        // 未提交删除）主仓不在盘是删除语义而非跨仓嫌疑——existsSync 必 miss 的误点名噪音根除。
+        // fail-safe：采集失败回空集 → 行为与现状一致（最多回到点名）。
+        let _deletedFace = new Set()
+        try {
+          const { collectDeletedFace } = await import('./flow-parity.js')
+          _deletedFace = collectDeletedFace(cwd, st.baseline_commit)
+        } catch { /* 删除面缺席 → 现状点名 */ }
+        const _deletedDeclared = _declared.filter((d) => _deletedFace.has(d.path))
+        if (_deletedDeclared.length > 0) {
+          console.log(`ℹ️ ${_deletedDeclared.length} 条声明为删除交付（主仓不在盘=删除语义），不按跨仓嫌疑点名：${_deletedDeclared.slice(0, 3).map((x) => x.path).join('、')}${_deletedDeclared.length > 3 ? ' 等' : ''}`)
+        }
         for (const d of _declared) {
           if (existsSync(join(cwd, d.path))) continue
+          if (_deletedFace.has(d.path)) continue
           _suspects.push({ path: d.path, key: (_repoAliases && _repoAliases.get(d.path.split('/')[0])) || null })
         }
         if (_suspects.length > 0) {

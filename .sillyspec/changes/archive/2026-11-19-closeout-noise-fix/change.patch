@@ -1,0 +1,378 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 057bf836..f3e61716 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -539,6 +539,42 @@ export function readDirtyGateIgnore(specBase) {
+   } catch { return [] }
+ }
+ 
++/**
++ * 本变更删除面采集（2026-11-19-closeout-noise-fix，负面②）：design 声明清单存在性核验用——
++ * 删除类交付（baseline..HEAD 已提交删除 ∪ 工作树未提交删除）主仓不在盘是删除语义而非跨仓
++ * 嫌疑。两源并集：① diff --diff-filter=D（已提交删除，committed 冻结面同款窗口）；② status
++ * porcelain 状态码含 D 的行（未 stage / 已 stage 未提交删除，rename 箭头取新侧）。fail-safe：
++ * git 失败返回空集（删除面缺席 → 调用方回到现状点名，不新造阻断）。
++ * @param {string} cwd 仓库根
++ * @param {string} [baseline] flow start 基线提交（不可解析 → 只采工作树删除源）
++ * @returns {Set<string>} posix 路径集
++ */
++export function collectDeletedFace(cwd, baseline) {
++  const deleted = new Set()
++  const okBaseline = baseline && /^[0-9a-f]{4,40}$/i.test(baseline)
++  try {
++    if (okBaseline) {
++      const out = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', `${baseline}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++      for (const l of String(out).split('\n')) {
++        const p = l.trim().replace(/^"|"$/g, '').replace(/\\/g, '/')
++        if (p) deleted.add(p)
++      }
++    }
++  } catch { /* 已提交删除源失败 → 只靠工作树源 */ }
++  try {
++    const out = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++    for (const line of String(out).split('\n')) {
++      if (!line || line.length < 4) continue
++      if (!/D/.test(line.slice(0, 2))) continue // XY 任一为 D（未 stage 删除「 D」/已 stage「D 」/删+增「AD」）
++      const p = line.slice(3).trim().replace(/^"|"$/g, '')
++      const arrow = p.indexOf(' -> ')
++      const path = (arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/')
++      if (path) deleted.add(path)
++    }
++  } catch { /* 工作树删除源失败 → 只靠已提交源 */ }
++  return deleted
++}
++
+ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
+   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+     && !isToolGovernancePath(f)
+diff --git a/src/flow-preflight.js b/src/flow-preflight.js
+index 08c565e2..da9d4dfe 100644
+--- a/src/flow-preflight.js
++++ b/src/flow-preflight.js
+@@ -26,10 +26,13 @@ import { gitQuiet } from './git-helper.js'
+ 
+ /**
+  * 收集收口预检阻断条件（纯计算零打印）。
+- * @returns {{ findings: Array<{id:'dirty-gap',count:number,files:string[]} | {id:'orphan-face',commits:string[],count:number,files:string[]}> }}
++ * @returns {{ findings: Array<{id:'dirty-gap',count:number,files:string[]} | {id:'orphan-face',commits:string[],count:number,files:string[]}>, dirtyCount: number|null }}
++ *   dirtyCount：预检时点 dirty 缺口原始计数（2026-11-19-closeout-noise-fix 负面③——未经签收
++ *   过滤的原始值，供权威门对比输出时点快照解释行；null=预检未算（patchDone 守卫跳过/异常））
+  */
+ export async function collectCloseoutPreflight({ cwd, specBase, change, st, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, turbo = false }) {
+   const findings = []
++  let dirtyCount = null
+   const patchDone = st?.substeps?.patch === 'done'
+   // ── dirty-gap / orphan-face 预判（镜像 patch 子步判定链）──
+   if (!patchDone && st?.baseline_commit) {
+@@ -48,8 +51,15 @@ export async function collectCloseoutPreflight({ cwd, specBase, change, st, free
+       const ownPrefix = `.sillyspec/changes/${change}/`
+       const committed = filterCommittedFace(committedRaw, ownPrefix)
+       const freeze = collectFreezeFiles({ cwd, specBase, change, committed, exclusive })
+-      if (freeze.dirtyWarned.length > 0 && !freezeDirty && !acceptDirtyGap && !turbo) {
+-        findings.push({ id: 'dirty-gap', count: freeze.dirtyWarned.length, files: freeze.dirtyWarned })
++      dirtyCount = freeze.dirtyWarned.length
++      // 已签收面剔除镜像（2026-11-19-closeout-noise-fix 负面③）：--accept-dirty-gap 持久化签收
++      // 清单（flow-state accept_dirty_gap.files）在预检同款生效——已签收面不预拦，增量面照拦
++      // （与 patch 子步权威门同判定链，防两路口径漂移）。
++      const _accepted = Array.isArray(st?.accept_dirty_gap?.files) ? st.accept_dirty_gap.files : null
++      const _gaps = _accepted ? freeze.dirtyWarned.filter((f) => !_accepted.includes(f)) : freeze.dirtyWarned
++      if (_gaps.length > 0 && !freezeDirty && !acceptDirtyGap && !turbo) {
++        // acceptedCount：签收免拦计数（渲染层增量语义标注用——预检文案与权威门同语义）
++        findings.push({ id: 'dirty-gap', count: _gaps.length, files: _gaps, acceptedCount: freeze.dirtyWarned.length - _gaps.length })
+       }
+       if (exclusiveFrom === 'worktree' && !acceptOrphanFace) {
+         try {
+@@ -61,7 +71,7 @@ export async function collectCloseoutPreflight({ cwd, specBase, change, st, free
+       }
+     } catch { /* 预检 fail-safe：异常静默放行（权威门仍在 patch 子步原序原判定） */ }
+   }
+-  return { findings }
++  return { findings, dirtyCount }
+ }
+ 
+ export default { collectCloseoutPreflight }
+diff --git a/src/flow.js b/src/flow.js
+index 9dbc8668..cef07ebb 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1352,6 +1352,10 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [],
+ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, allowBatchTick = false, acceptUnmapped = false, acceptEmptyFace = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
++  // 预检时点 dirty 缺口数（2026-11-19-closeout-noise-fix 负面③）：函数体级作用域——收口预检块
++  // 与 patch 子步权威门分处不同子步骤块，解释行（两时点数字对比）须经函数级变量传递；
++  // null=预检未算（patchDone 守卫跳过/异常 fail-safe）。
++  let _preflightDirtyCount = null
+   if (!st) {
+     console.error(`❌ ${change} 无 ${FLOW_STATE_FILE}（未参与 thin 协议）——走 run <stage> 既有流程`)
+     // 归档完备恢复指引（坑 2026-11-13-flow-done-timeout-archive-half-state 建议③）：源目录被
+@@ -1728,12 +1732,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     {
+       const { collectCloseoutPreflight } = await import('./flow-preflight.js')
+       const pre = await collectCloseoutPreflight({ cwd, specBase, change, st, freezeDirty, acceptDirtyGap, acceptOrphanFace, turbo })
++      // 预检时点缺口数（2026-11-19-closeout-noise-fix 负面③）：null=预检未算（patchDone 守卫
++      // 跳过/异常 fail-safe）；数值供 patch 子步权威门对比——数字增大时输出时点快照解释行。
++      _preflightDirtyCount = (pre && typeof pre.dirtyCount === 'number') ? pre.dirtyCount : null
+       if (pre.findings.length > 0) {
+         console.error(`⛔ 收口预检未过——${pre.findings.length} 项阻断条件（fail-together 一次报全；实测未启动，处置后重跑同一条命令从断点续）：`)
+         for (const f of pre.findings) {
+           if (f.id === 'dirty-gap') {
+-            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）
+-            console.error(`   ▸ ${f.count} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
++            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）；增量后缀同语义
++            console.error(`   ▸ ${f.count} 个未提交交付文件未入冻结面${f.acceptedCount > 0 ? `（增量——另有 ${f.acceptedCount} 个已按签收免拦）` : ''}（共享主仓无法归属）——三选一：`)
+             console.error(`⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
+             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}）），重跑本命令——冻结面自动并入`)
+             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
+@@ -2117,9 +2124,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           console.log(`ℹ️ ${freeze.dirtyIgnored.length} 个 dirty 文件按 local.yaml dirty_gate_ignore 剔除（已知残渣面，不入冻结缺口）：${freeze.dirtyIgnored.slice(0, 3).join('、')}${freeze.dirtyIgnored.length > 3 ? ' 等' : ''}`)
+         }
+         if (freeze.dirtyWarned.length > 0) {
+-          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
++          // 签收面剔除（2026-11-19-closeout-noise-fix，负面③）：--accept-dirty-gap 持久化对齐
++          // --accept-empty-face 语义——签收文件清单入 flow-state，断点续跑已签收面免拦（此前每轮
++          // 都要重新带 flag 且缺口数字随时点漂移，「2 跳 31」的误判形态）；增量面（不在签收清单）
++          // 仍拦——签收不随时间扩散。
++          const _accepted = st && Array.isArray(st.accept_dirty_gap && st.accept_dirty_gap.files) ? st.accept_dirty_gap.files : null
++          const _gaps = _accepted ? freeze.dirtyWarned.filter((f) => !_accepted.includes(f)) : freeze.dirtyWarned
++          if (_gaps.length === 0) {
++            console.log(`ℹ️ ${freeze.dirtyWarned.length} 个 dirty 缺口全部在此前 --accept-dirty-gap 签收清单内（增量 0）——按签收免拦，重跑不再要求重新处置（签收清单留痕 flow-state accept_dirty_gap）`)
++          } else {
++          console.warn(`⚠️ ${_gaps.length} 个未提交交付文件未入冻结面${_accepted ? `（增量——另有 ${freeze.dirtyWarned.length - _gaps.length} 个已按签收免拦）` : ''}（共享主仓无法归属）——三选一：`)
+           console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交归档后用 sillyspec push 压扁并推送（见收口指引）`)
+-          console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
++          console.warn(`   ${_gaps.slice(0, 3).join('、')}${_gaps.length > 3 ? ' 等' : ''}`)
++          // 时点快照解释行（2026-11-19-closeout-noise-fix，负面③）：预检（实测门前）与权威门
++          // （实测门后）数字都是时点快照，中间隔完整实测+处置窗口——数字变大不是口径漂移。
++          if (_preflightDirtyCount !== null && _preflightDirtyCount < freeze.dirtyWarned.length) {
++            console.warn(`   ℹ️ 缺口数字是时点快照：收口预检（实测前）${_preflightDirtyCount} 个 → 权威门（实测后）${freeze.dirtyWarned.length} 个——实测窗口内 dirty 面新增（测试产物/并行会话/处置期改动都可能），非口径漂移`)
++          }
+           // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
+           // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
+           // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
+@@ -2143,7 +2164,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           if (acceptDirtyGap) {
+             // 双 flag 同给时 --freeze-dirty 优先（exclusive 路径 dirtyWarned 恒空，本分支不进
+             // ——设计接口契约已披露；无告警代码即无死代码，二轮评审 P3 清偿）
+-            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
++            try {
++              writeFlowState(changeDir, { accept_dirty_gap: { at: new Date().toISOString(), files: freeze.dirtyWarned, by: process.env.SILLYSPEC_SESSION_ID || null } })
++              st.accept_dirty_gap = st.accept_dirty_gap || {}
++              st.accept_dirty_gap.files = freeze.dirtyWarned
++            } catch { /* 签收留痕 best-effort：写失败不阻断收口（本轮 flag 仍生效） */ }
++            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（签收清单持久化 flow-state accept_dirty_gap——重跑已签收面免拦；缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
++          }
+           }
+         }
+         // 收口留痕四名全排除（2026-10-09-close-trace-single-set 后只写 change.patch/
+@@ -2225,8 +2252,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           }
+         } catch { /* 注册表读取失败 → 别名标注缺席，存在性判定不受影响 */ }
+         const _suspects = []
++        // 删除面跳过（2026-11-19-closeout-noise-fix，负面②）：删除类交付（已提交删除 ∪ 工作树
++        // 未提交删除）主仓不在盘是删除语义而非跨仓嫌疑——existsSync 必 miss 的误点名噪音根除。
++        // fail-safe：采集失败回空集 → 行为与现状一致（最多回到点名）。
++        let _deletedFace = new Set()
++        try {
++          const { collectDeletedFace } = await import('./flow-parity.js')
++          _deletedFace = collectDeletedFace(cwd, st.baseline_commit)
++        } catch { /* 删除面缺席 → 现状点名 */ }
++        const _deletedDeclared = _declared.filter((d) => _deletedFace.has(d.path))
++        if (_deletedDeclared.length > 0) {
++          console.log(`ℹ️ ${_deletedDeclared.length} 条声明为删除交付（主仓不在盘=删除语义），不按跨仓嫌疑点名：${_deletedDeclared.slice(0, 3).map((x) => x.path).join('、')}${_deletedDeclared.length > 3 ? ' 等' : ''}`)
++        }
+         for (const d of _declared) {
+           if (existsSync(join(cwd, d.path))) continue
++          if (_deletedFace.has(d.path)) continue
+           _suspects.push({ path: d.path, key: (_repoAliases && _repoAliases.get(d.path.split('/')[0])) || null })
+         }
+         if (_suspects.length > 0) {
+diff --git a/test/closeout-noise-fix.test.mjs b/test/closeout-noise-fix.test.mjs
+new file mode 100644
+index 00000000..32bbc3f4
+--- /dev/null
++++ b/test/closeout-noise-fix.test.mjs
+@@ -0,0 +1,183 @@
++/**
++ * closeout-noise-fix.test.mjs — 收口对账降噪三面（2026-11-19-closeout-noise-fix）
++ *
++ * ② collectDeletedFace（flow-parity.js）：已提交删除 ∪ 工作树未提交删除（rm 未 stage /
++ *    git rm 已 stage）并集；非删除不进集；坏 baseline 只采工作树源（fail-safe）。
++ * ② e2e：design 声明删除交付（已提交删除）→ flow done 不再「疑似跨仓声明」点名、
++ *    ℹ️ 删除交付行在场；真跨仓形态（盘上不存在且非删除面）照常点名不误放（负例）。
++ * ③a e2e：--accept-dirty-gap 签收持久化 flow-state（含签收文件清单，归档件可查）；
++ *    预置签收清单断点续跑已签收面免拦；缺口面新增（不在清单）仍拦并报「增量」。
++ * ③b e2e：实测命令在实测窗口内落脏文件 → 预检 0 缺口、权威门 N>0 → 「时点快照」
++ *    解释行在场（数字是时点快照非口径漂移）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { collectDeletedFace } from '../src/flow-parity.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function gitRepo(dir) {
++  const run = (args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
++  run(['init', '-q', '-b', 'main']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
++  return run
++}
++
++/** thin 夹具（dirty-gate-ignore 同款骨架）：交付已提交 + 可选残渣面；opts.testCmd 覆盖实测命令。 */
++function setupThinChange(cwd, cn, { extraYaml = '', testCmd = 'node exit0.js', baseExtra = [] } = {}) {
++  const run = gitRepo(cwd)
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `project:\n  type: generic\ncommands:\n  test: "${testCmd}"\nflow:\n  mode: thin\n` + extraYaml)
++  writeFileSync(join(cwd, 'exit0.js'), 'process.exit(0)\n')
++  for (const [rel, content] of baseExtra) {
++    const p = join(cwd, ...rel.split('/'))
++    mkdirSync(dirname(p), { recursive: true })
++    writeFileSync(p, content)
++  }
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', '收口对账降噪协议测试夹具\n\n成功标准：\n- 降噪行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  const base = join(cwd, '.sillyspec', 'changes', cn)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规')
++    + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 新增 | src/work.js | 交付 |\n')
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面')
++  )
++  writeFileSync(join(base, 'tasks.md'), '---\nauthor: fixture\n---\n\n# 任务注册表（Tasks）\n\n- [x] task-01: 交付 src/work.js（e2e 夹具）\n')
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
++  writeFileSync(join(cwd, 'ev.txt'), 'tick evidence\n')
++  run(['add', 'ev.txt', 'src/work.js'])
++  run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
++  return { run, env, base }
++}
++
++const doneCmd = (cwd, cn, env, extra = []) =>
++  spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn, ...extra], { cwd, encoding: 'utf8', timeout: 300_000, env })
++/** 合并输出面断言用：dirty 门/对账警告走 stderr（console.warn/error），收口进度走 stdout。 */
++const outOf = (d) => `${d.stdout || ''}\n${d.stderr || ''}`
++
++// ── ② unit：collectDeletedFace 三源并集与 fail-safe ──────────────────────────
++test('collectDeletedFace：已提交/未stage/已stage 删除并集，非删除不进，坏 baseline 只采工作树源', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'del-face-'))
++  try {
++    const run = gitRepo(dir)
++    for (const f of ['a.js', 'b.js', 'c.js', 'd.js']) writeFileSync(join(dir, f), 'x\n')
++    run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++    const base = run(['rev-parse', 'HEAD'])
++    run(['rm', '-q', 'a.js']); run(['commit', '-q', '-m', 'del a']) // 已提交删除
++    rmSync(join(dir, 'b.js')) // 工作树删除（未 stage）
++    run(['rm', '-q', 'c.js']) // 已 stage 未提交删除（文件已删+index 已删）
++    const face = collectDeletedFace(dir, base)
++    assert.ok(face.has('a.js'), `已提交删除入集（实得 ${[...face].join(',')}）`)
++    assert.ok(face.has('b.js'), '工作树删除入集')
++    assert.ok(face.has('c.js'), '已 stage 删除入集')
++    assert.ok(!face.has('d.js'), '在场非删除不入集')
++    const face2 = collectDeletedFace(dir, 'deadbeef') // 坏 baseline：diff 源失败只采工作树源
++    assert.ok(face2.has('b.js') && face2.has('c.js'), '坏 baseline 工作树源照采（fail-safe）')
++    assert.ok(!face2.has('a.js'), '坏 baseline 已提交删除源缺席（diff 起不来）')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++// ── ② e2e：删除交付不再误报「疑似跨仓」；真跨仓形态照常点名 ──────────────────
++test('e2e：design 声明删除交付（已提交删除）→ 无「疑似跨仓」点名、ℹ️ 删除交付行在场、收口完成', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'noise-del-'))
++  const cn = '2026-01-01-del-face'
++  try {
++    const { run, env, base } = setupThinChange(cwd, cn, { baseExtra: [['src/gone.js', 'export const g = 1\n']] })
++    // base 提交含 src/gone.js（setupThinChange 已随 base 提交）；本变更提交删除
++    run(['rm', '-q', 'src/gone.js'])
++    run(['commit', '-q', '-m', `cleanup (${cn}) (task-01)`])
++    // design 清单声明删除交付（路径主仓不在盘——删除语义）
++    writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++      .replace('| 新增 | src/work.js | 交付 |', '| 新增 | src/work.js | 交付 |\n| 删除 | src/gone.js | 清理旧实现 |'))
++    const d = doneCmd(cwd, cn, env)
++    assert.equal(d.status, 0, `flow done 失败:\n${outOf(d)}\n${d.stderr}`)
++    assert.ok(outOf(d).includes('不按跨仓嫌疑点名'), `删除交付 ℹ️ 行在场（尾部：${d.stdout.split('\n').slice(-8).join(' | ')}）`)
++    assert.ok(!outOf(d).includes('疑似跨仓声明'), '删除交付不再误报疑似跨仓')
++    assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', 'archive', cn)), '归档完成')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('e2e 负例：声明路径盘上不存在且非删除面 → 「疑似跨仓」点名照常（不误放）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'noise-cross-'))
++  const cn = '2026-01-01-cross-face'
++  try {
++    const { env, base } = setupThinChange(cwd, cn)
++    writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++      .replace('| 新增 | src/work.js | 交付 |', '| 新增 | src/work.js | 交付 |\n| 新增 | src/never-in-repo.js | 真跨仓形态 |'))
++    const d = doneCmd(cwd, cn, env)
++    assert.equal(d.status, 0, `flow done 失败:\n${outOf(d)}\n${d.stderr}`)
++    assert.ok(outOf(d).includes('疑似跨仓声明'), '非删除面的缺路径照常点名（warn 不阻断）')
++    assert.ok(outOf(d).includes('src/never-in-repo.js'), '点名含具体路径')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++// ── ③a e2e：--accept-dirty-gap 签收持久化 + 断点续跑免拦/增量拦截 ────────────
++test('e2e：--accept-dirty-gap 签收清单持久化 flow-state（归档件可查）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'noise-acc-'))
++  const cn = '2026-01-01-acc-sign'
++  try {
++    const { env } = setupThinChange(cwd, cn)
++    mkdirSync(join(cwd, 'residue'), { recursive: true })
++    writeFileSync(join(cwd, 'residue', 'tmp-x.js'), 'residue\n')
++    const d = doneCmd(cwd, cn, env, ['--accept-dirty-gap'])
++    assert.equal(d.status, 0, `签收收口失败:\n${outOf(d)}\n${d.stderr}`)
++    const fs2 = readFileSync(join(cwd, '.sillyspec', 'changes', 'archive', cn, 'flow-state.yaml'), 'utf8')
++    assert.ok(fs2.includes('accept_dirty_gap'), `签收段入 flow-state（实得片段：${fs2.slice(0, 400)}`)
++    assert.ok(/files:[\s\S]*residue\/tmp-x\.js/.test(fs2), '签收文件清单入 flow-state')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('e2e：预置签收清单 → 已签收面免拦收口完成；新增缺口（不在清单）仍拦并报增量', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'noise-inc-'))
++  const cn = '2026-01-01-acc-inc'
++  try {
++    const { env, base } = setupThinChange(cwd, cn)
++    // 预置签收清单（模拟上一轮 --accept-dirty-gap 后断点续跑形态）
++    writeFileSync(join(base, 'flow-state.yaml'), readFileSync(join(base, 'flow-state.yaml'), 'utf8')
++      + "\naccept_dirty_gap:\n  at: '2026-01-01T00:00:00.000Z'\n  by: fixture\n  files:\n    - residue/signed.js\n")
++    mkdirSync(join(cwd, 'residue'), { recursive: true })
++    writeFileSync(join(cwd, 'residue', 'signed.js'), 'signed\n')
++    writeFileSync(join(cwd, 'residue', 'new-gap.js'), 'new\n')
++    const d1 = doneCmd(cwd, cn, env) // 无 flag：signed 免拦、new-gap 是增量 → 拦
++    assert.notEqual(d1.status, 0, '增量缺口应拦')
++    assert.ok(outOf(d1).includes('增量'), `增量提示在场（尾部：${d1.stdout.split('\n').slice(-10).join(' | ')}）`)
++    assert.ok(outOf(d1).includes('已按签收免拦'), '签收免拦计数在场')
++    // 清掉增量 → 重跑免拦收口完成
++    rmSync(join(cwd, 'residue', 'new-gap.js'))
++    const d2 = doneCmd(cwd, cn, env)
++    assert.equal(d2.status, 0, `免拦收口失败:\n${d2.stdout}\n${d2.stderr}`)
++    assert.ok(outOf(d2).includes('按签收免拦'), '签收免拦留痕行在场')
++    assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', 'archive', cn)), '归档完成')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++// ── ③b e2e：实测窗口内 dirty 面新增 → 「时点快照」解释行 ────────────────────
++test('e2e：实测命令落脏文件 → 预检 0/权威门 N → 「时点快照」解释行在场（数字非口径漂移）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'noise-snap-'))
++  const cn = '2026-01-01-snapshot'
++  try {
++    // smoke 测试（base 提交，import 变更交付 src/work.js——动态子集非空实测才真跑）在实测窗口
++    // 写主仓绝对路径脏文件——实测在 gate-snapshot 隔离目录里跑，相对路径写在快照内主仓不可见；
++    // 绝对路径模拟「实测窗口内主仓 dirty 面新增」的真实形态（并行会话/工具写盘）。
++    const smoke = `import { test } from 'node:test'\nimport { mkdirSync, writeFileSync } from 'node:fs'\nimport '../src/work.js'\ntest('smoke', () => {\n  mkdirSync(${JSON.stringify(join(cwd, 'residue'))}, { recursive: true })\n  writeFileSync(${JSON.stringify(join(cwd, 'residue', 'during-test.js'))}, 'x\\n')\n})\n`
++    const { env } = setupThinChange(cwd, cn, {
++      baseExtra: [['test/smoke.test.mjs', smoke]],
++    })
++    const d = doneCmd(cwd, cn, env) // 预检时 residue/ 不存在（0 缺口）→ 实测写脏 → 权威门 1 个
++    assert.notEqual(d.status, 0, '权威门缺口应拦')
++    assert.ok(outOf(d).includes('时点快照'), `解释行在场（尾部：${outOf(d).split('\n').slice(-12).join(' | ')}）`)
++    assert.ok(outOf(d).includes('实测前）0 个') && outOf(d).includes('实测后）1 个'), '预检/权威门两时点数字披露')
++    assert.ok(outOf(d).includes('非口径漂移'), '口径语义说明在场')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})

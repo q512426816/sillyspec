@@ -1,0 +1,48 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  收口对账降噪：删除面误报与dirty缺口口径
+
+
+  动机：用户实证两条收口噪音——②删除类变更的冻结面对账把已删除文件误报「主仓不存在/疑似跨仓声明」（flow done 的 _suspects 点名对 design 声明路径做 existsSync 核验，删除交付必
+  miss）；③dirty 门两次运行缺口数从 2 跳到 31——预检（实测门前）与权威门（实测门后）两道门数字是时点快照，中间隔完整实测+处置窗口必漂移，且 --accept-dirty-gap 不持久化（对比
+  --accept-empty-face 持久化），断点续跑需重签且数字已变，易误判为口径漂移。
+
+
+  成功标准：
+
+  - design 声明的删除交付（baseline..HEAD 已提交删除 ∪ 工作树未提交删除）不再落「疑似跨仓声明」点名噪音
+
+  - foo.js 等真跨仓声明（非删除面）照常点名不误放
+
+  - --accept-dirty-gap 签收持久化到 flow-state（含签收文件清单）：断点续跑已签收面免拦；缺口面有新增（不在签收清单）仍拦并提示增量数
+
+  - 预检 0 缺口放行后同轮权威门出现缺口时，输出解释行说明数字是实测窗口时点快照非口径漂移
+
+  - 相关既有测试全绿
+autopilot: false
+prestage_ack: true
+baseline_commit: 0c8db9258beb776bf6f139abb0a1afc65e371f03
+updatedAt: '2026-11-19T16:17:50.314Z'
+baseline_sha256: c56cc28208133bc6aa8faa492e43a9a09e74603c96423c564fe0588a8394d961
+spec_approved: true
+spec_approved_at: '2026-11-19T16:15:20.214Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: unattested
+spec_attested_by: null
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js23)（79.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261119161732\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+

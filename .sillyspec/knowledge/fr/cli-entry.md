@@ -12410,3 +12410,69 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-15-change-key-visibility
   status: active
+
+## FR-cli-entry-656 删除面不误报跨仓——冻结面对账的疑似跨仓点名必须跳过本变更删除面（baseline..HEAD 已提交删除 ∪ 工作树未提交删除）：design 声明的删除交付主仓不在盘是删除语义而非跨仓嫌疑，跳过时必须输出 ℹ️ 留痕行（几条、哪些路径）；非删除面的缺路径声明（foo.js 等真跨仓形态）必须照常点名不误放
+变更：2026-11-19-closeout-noise-fix
+状态：active
+摘要：删除交付收口；真跨仓形态（负例不误放）
+场景正文：
+- 场景：删除交付收口 — Given design 清单声明 src/gone.js（已随本变更提交删除）／When flow done 冻结对账／Then 无「疑似跨仓声明」点名、输出「N 条声明
+- 场景：真跨仓形态（负例不误放） — Given design 清单声明 src/never-in-repo.js（盘上不存在且不在删除面）／When 冻结对账／Then 照常输出「疑似跨仓声明」点名（warn
+全文：.sillyspec/changes/archive/2026-11-19-closeout-noise-fix/requirements.md#FR-01
+最近确认：5657348e47b108040bbf945a658cbf320c23eac9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-closeout-noise-fix:flow:测试绑定FR-01
+  tests: test/closeout-noise-fix.test.mjs「collectDeletedFace：已提交/未stage/已stage 删除并集，非删除不进，坏 baseline 只采工作树源」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-closeout-noise-fix
+  status: active
+
+## FR-cli-entry-657 dirty 缺口签收持久化——--accept-dirty-gap 签收必须持久化到 flow-state（含签收文件清单）：断点续跑时已签收面免拦（不再要求重新处置），缺口面新增（不在签收清单内）必须仍拦并显式提示增量数与已签收免拦数；预检（收口预检）与权威门（patch 子步）两路口径必须同判定
+变更：2026-11-19-closeout-noise-fix
+状态：active
+摘要：签收留痕；断点续跑已签收面免拦；缺口面新增仍拦
+场景正文：
+- 场景：签收留痕 — Given 工作树有 residue/x.js 未提交缺口／When flow done --accept-dirty-gap／Then 收口完成且归档件 flow-sta
+- 场景：断点续跑已签收面免拦 — 
+- 场景：缺口面新增仍拦 — Given 签收清单 [residue/signed.js] 在场、工作树又新增 residue/new-gap.js／When 重跑 flow done（无 flag）／
+全文：.sillyspec/changes/archive/2026-11-19-closeout-noise-fix/requirements.md#FR-02
+最近确认：5657348e47b108040bbf945a658cbf320c23eac9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-closeout-noise-fix:flow:测试绑定FR-02
+  tests: test/closeout-noise-fix.test.mjs「e2e：--accept-dirty-gap 签收清单持久化 flow-state（归档件可查）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-closeout-noise-fix
+  status: active
+
+## FR-cli-entry-658 缺口数字时点快照解释——同轮收口内预检时点缺口数小于权威门时点缺口数时，必须输出解释行（预检 N → 权威门 M、实测窗口内 dirty 面新增、非口径漂移）
+变更：2026-11-19-closeout-noise-fix
+状态：active
+摘要：实测窗口主仓新增脏面
+场景正文：
+- 场景：实测窗口主仓新增脏面 — Given 预检时主仓 0 缺口放行、实测执行期间主仓新增 residue/during-test.js（并行会话/工具写盘形态）／When 权威门发现 1 个缺口／The
+全文：.sillyspec/changes/archive/2026-11-19-closeout-noise-fix/requirements.md#FR-03
+最近确认：5657348e47b108040bbf945a658cbf320c23eac9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-19-closeout-noise-fix:flow:测试绑定FR-03
+  tests: test/closeout-noise-fix.test.mjs「e2e：实测命令落脏文件 → 预检 0/权威门 N → 「时点快照」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-19-closeout-noise-fix
+  status: active

@@ -119,3 +119,4 @@
 | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
 | 2026-11-15 | 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称 |
 | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
+| 2026-11-19 | 2026-11-19-closeout-noise-fix | 收口对账降噪：删除面误报与dirty缺口口径 |

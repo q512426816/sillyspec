@@ -282,3 +282,12 @@ supersedes：D-010@v1
 文件：docs/sillyspec/platform-interface-map.md, src/design-facts.js, src/flow-parity.js, src/flow.js, src/index.js, src/run/complete-handlers.js, src/run/quick-audit.js, src/taskcard.js, src/verify-probes.js, test/archive-idempotent-selfheal.test.mjs, test/docs-check.test.mjs, test/flowdone-disposition-drift.test.mjs
 最近确认：b12b67e5ba9f96bcf2793a443c34f58941f76238
 理由：倒推 B 模式收编：三个收口链路坑的修复已在 2026-11-19 会话落盘（代码+测试全绿），因平台自动提交包装层干扰提交链断裂，本变更如实登记收口。三处修复： 1. **归档幂等自愈**（src/run/complete-handlers.js + src/flow.js）：runArchiveChain 在 destDir 已存在时读归档件 flow-state 的 substeps，全 done 即判定上次归档实际完成（外层超时中断形态）→ 自愈收口（unregisterChange+worktree 清理+返回），源目录残留提示手工清理；cmdFlowDone 的「源目录被误删」报错分支检测归档完备性并附「直接提交归档件」指引。 2. **漂移归因对齐**（src/flow-parity.js）：detectPatchDrift 与 deliveryFaceAnchoredAfter 的 own 判定从「提交消息含变更名」放宽为「具名或 /task-\d+/i」——与 buildCommitAttribution（2026-11-08-bare-commit-attribution-narrow）同口径，token 返工提交触发自动重冻结。 3. **模板占位形改写**（design-facts.js / index.js×2 / taskcard.js / verify-probes.js / quick-audit.js 六生成点 + docs-check.js 回滚）：教学引用示例从带数字形态（src/foo.js:123）改为占位形态（src/foo.js:<行号>）——占位符不是数字/标识符，REF_RE（要求 `:\d+`）与 SYMBOL_REF_RE（要求 `::标识符`）天然不匹配。首轮落盘的「collectDocRefs 全局豁免 foo.js」方案被收口实测门否决（foo.js 是开放世界通用夹具名——docs-check-symbol-anchor/docs-fix-capability 等既有 fixture 用 foo.js 做真实测试数据，全局豁免全打红），回滚为扫描器零豁免+模板改形，foo.js 真名引用语义完整保留。
+
+## D-cli-entry-017@v1 2026-11-19-closeout-noise-fix——负面②：flow.js 冻结对账的 _suspects 判定新增删除面跳过——`collectDeletedFace`（flow-parity.js 新纯函数）
+状态：implemented
+变更：2026-11-19-closeout-noise-fix
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-19-closeout-noise-fix/design.md
+文件：src/flow-parity.js, src/flow-preflight.js, src/flow.js, test/closeout-noise-fix.test.mjs
+最近确认：5657348e47b108040bbf945a658cbf320c23eac9
+理由：负面②：flow.js 冻结对账的 _suspects 判定新增删除面跳过——`collectDeletedFace`（flow-parity.js 新纯函数）采集本变更删除面（baseline..HEAD `--diff-filter=D` 已提交删除 ∪ `git status` XY 含 D 的工作树未提交删除），声明路径命中删除面即不落跨仓嫌疑并输出 ℹ️ 留痕行；existsSync 核验仍是第一道（在盘即非嫌疑），删除面是第二道（不在盘但被删=删除语义），余下才点名。负面③：flow.js dirty 权威门与 flow-preflight.js 预检同判定链加签收面剔除（flow-state `accept_dirty_gap.files`，--accept-dirty-gap 签收时持久化写入，对齐 --accept-empty-face 先例）——已签收面免拦、增量面照拦并报增量数；另在权威门加时点快照解释行（函数级变量 `_preflightDirtyCount` 传预检时点数，权威门数字更大即输出「实测窗口内新增、非口径漂移」）。选此方案是因为两处噪音都是「判定面缺一档语义」（删除 vs 跨仓、签收 vs 新增）而非架构问题，最小面补档即可，不动 collectFreezeFiles 的采集口径（残渣剔除 dirty_gate_ignore 既有通道不变）。

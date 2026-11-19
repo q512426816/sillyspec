@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-19-closeout-noise-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-19-closeout-noise-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/closeout-noise-fix.test.mjs「collectDeletedFace：已提交/未stage/已stage 删除并集，非删除不进，坏 baseline 只采工作树源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-19-closeout-noise-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-19-closeout-noise-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/closeout-noise-fix.test.mjs「e2e：--accept-dirty-gap 签收清单持久化 flow-state（归档件可查）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-19-closeout-noise-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-19-closeout-noise-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/closeout-noise-fix.test.mjs「e2e：实测命令落脏文件 → 预检 0/权威门 N → 「时点快照」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-19-closeout-noise-fix"
+    }
+  ]
+}
