@@ -1,0 +1,57 @@
+{
+  "change": "2026-11-20-decisions-lifecycle-stale-assertion",
+  "baseline": "b9ce459963b0a057dd160573d40839746fecbad9",
+  "head": "172fdd866ee3cbf844456cddb5d8e0f4760fd4b7",
+  "files": [
+    "test/decisions-lifecycle.test.mjs"
+  ],
+  "totals": {
+    "files": 1,
+    "additions": 48,
+    "deletions": 9
+  },
+  "savedAt": "2026-11-20T00:17:02.956Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "b9ce459963b0a057dd160573d40839746fecbad9",
+    "totals": {
+      "files": 1,
+      "additions": 48,
+      "deletions": 9
+    },
+    "rows": [
+      {
+        "path": "test/decisions-lifecycle.test.mjs",
+        "additions": 48,
+        "deletions": 9,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9ec9315b9c7cb151712246b50fb53c92fe1c9381ae8cd6fb56263c159fa2f892",
+  "patchStatus": "ok"
+}

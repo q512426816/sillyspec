@@ -1,0 +1,7 @@
+{"ts":1795133629963,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795133644163,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795133764051,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1795133788064,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795133788064,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1795133808936,"kind":"commit","stage":null,"detail":"172fdd86","provisional":true}
+{"ts":1795133822884,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.4s） · 20261120001700","provisional":true}

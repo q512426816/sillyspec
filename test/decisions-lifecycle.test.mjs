@@ -184,10 +184,14 @@ describe('FR-03 提炼幂等与版本前进', () => {
     assert.equal(content.match(/^## D-core-001/gm).length, 1, '同段全局只留一个段')
   })
 
-  it('@v2 跨域迁移 → 旧域文件旧版段同步移除（written 记 supersede）', () => {
+  it('@v2 声明新模块域 → 域稳定优先：存量域就地升级不迁移（2026-11-12 R-03 语义）', () => {
+    // 设计依据（d15c2e23 / 2026-11-12-freeze-decision-recall R-03 实证）：蒸馏侧不做域迁移——
+    // 回填/重跑会把经 redomain 治理的条目（D-unmapped-435/436 实证）拉回原域；域迁移归
+    // `sillyspec tests --redomain --decisions --from <源> --to <目标>` 显式职责。
+    // 本用例 2026-10-14 epoch 时代断言「跨域迁移」旧语义，自 d15c2e23 起恒红（本变更修复）。
     const knowledgeRoot = join(root, 'knowledge')
     distillIntoKnowledge(makeChange(v1Md), knowledgeRoot, HEAD) // 落 decisions/core.md
-    const v2Md = dEntry('D-007@v2', '迁移到 util 域', [
+    const v2Md = dEntry('D-007@v2', '声明新业务域', [
       'type: architecture',
       'status: confirmed',
       'answer: 域修正',
@@ -196,15 +200,50 @@ describe('FR-03 提炼幂等与版本前进', () => {
       'supersedes: D-007@v1',
     ])
     const r2 = distillIntoKnowledge(makeChange(v2Md), knowledgeRoot, HEAD)
-    const actions = r2.written.map(w => `${w.file}:${w.id}:${w.action}`).sort()
-    assert.deepEqual(actions, [
-      'decisions/core.md:D-core-001@v1:supersede', // 旧域文件旧段移除
-      'decisions/util.md:D-core-001@v2:append',    // 新域文件新段（迁域不换号——号内域为历史痕迹）
+    assert.deepEqual(r2.written, [
+      { file: 'decisions/core.md', id: 'D-core-001@v2', action: 'supersede' }, // 存量域就地升级
     ], JSON.stringify(r2.written))
+    assert.ok(!existsSync(join(knowledgeRoot, 'decisions', 'util.md')), '目标新域文件不创建（蒸馏不迁移）')
     const core = readFileSync(join(knowledgeRoot, 'decisions', 'core.md'), 'utf8')
-    const util = readFileSync(join(knowledgeRoot, 'decisions', 'util.md'), 'utf8')
-    assert.ok(!core.includes('## D-core-001'), 'core 域旧段已清')
-    assert.ok(util.includes('## D-core-001@v2') && util.includes('supersedes：D-007@v1'), 'util 域新段 + 显式注记（局部号原文保留）')
+    assert.ok(!core.includes('## D-core-001@v1'), 'v1 段被就地整段替换（不残留旧头）')
+    assert.ok(core.includes('## D-core-001@v2'), 'v2 段留在存量域')
+    assert.ok(core.includes('supersedes：D-007@v1'), '显式 supersedes 注记保留（局部号原文）')
+  })
+
+  it('存量段经 redomain 治理迁域后，重蒸馏仍留治理后域（不被模块域字段拉回）', () => {
+    // R-03 实证形态：条目原在 unmapped，经 redomain 迁到业务域（号内域是历史痕迹、不变号）；
+    // 之后重跑蒸馏时按 decisions.md 的「模块域」重新判定域，曾把条目拉回 unmapped。
+    // 域稳定修复后：存量段所在文件优先，治理成果保持。
+    const knowledgeRoot = join(root, 'knowledge')
+    const decisionsDir = join(knowledgeRoot, 'decisions')
+    mkdirSync(decisionsDir, { recursive: true })
+    // 手写治理后的存量形态（redomain 只搬文件不改号：D-unmapped-001 落在 docs-consistency.md）
+    writeFileSync(join(decisionsDir, 'docs-consistency.md'), [
+      '# 决策知识 — docs-consistency', '',
+      '## D-unmapped-001@v1 存量未映射条目', '',
+      '变更：demo-change',
+      '原编号：D-007@v1',
+      '状态：implemented',
+      '锚点：src/x.js:1',
+      '最近确认：a1b2c3d',
+      '理由：旧理由', '',
+    ].join('\n'))
+    // v2 声明的模块域是 core——若按字段重新判定，条目会被拉去 core.md
+    const v2Md = dEntry('D-007@v2', '升级条目', [
+      'type: architecture',
+      'status: confirmed',
+      'answer: 升级后的理由',
+      '锚点：src/x.js:2',
+      '模块域：core',
+    ])
+    const r2 = distillIntoKnowledge(makeChange(v2Md), knowledgeRoot, HEAD)
+    assert.deepEqual(r2.written, [
+      { file: 'decisions/docs-consistency.md', id: 'D-unmapped-001@v2', action: 'supersede' },
+    ], JSON.stringify(r2.written))
+    assert.ok(!existsSync(join(decisionsDir, 'core.md')), '声明域 core 不创建（不拉回/不迁移）')
+    assert.ok(!existsSync(join(decisionsDir, 'unmapped.md')), 'unmapped 也不创建（不拉回原域）')
+    const kept = readFileSync(join(decisionsDir, 'docs-consistency.md'), 'utf8')
+    assert.ok(kept.includes('## D-unmapped-001@v2'), '升级段留在治理后域，号内域为历史痕迹')
   })
 })
 

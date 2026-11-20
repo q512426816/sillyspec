@@ -304,3 +304,54 @@ created_at: 2026-10-20T01:19:37.412Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-10-ci-platform-test-fixes/requirements.md#FR-02
 最近确认：df1e4108c26ce320b9764736b43125d1cda37c27
+
+## FR-auto-sillyspec-050 跨域迁移用例按域稳定语义重写——「@v2 声明新模块域」用例必须断言存量域优先（v2 仍在存量域就地升级：written 恰为 [{core.md, D-core-001@v2, supersede}]、目标新域文件不创建、core.md 无 v1 段且含 supersedes 注记），禁止再断言 2026-11-12 前的「蒸馏时跨域迁移」旧语义
+变更：2026-11-20-decisions-lifecycle-stale-assertion
+状态：active
+摘要：v2 声明新模块域
+场景正文：
+- 场景：v2 声明新模块域 — 
+全文：.sillyspec/changes/archive/2026-11-20-decisions-lifecycle-stale-assertion/requirements.md#FR-01
+最近确认：172fdd866ee3cbf844456cddb5d8e0f4760fd4b7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-20-decisions-lifecycle-stale-assertion:flow:测试绑定FR-01
+  tests: test/decisions-lifecycle.test.mjs「@v2 声明新模块域 → 域稳定优先：存量域就地升级不迁移（2026-11-12 R-03 语义）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-20-decisions-lifecycle-stale-assertion
+  status: active
+
+## FR-auto-sillyspec-051 存量域优先语义显式锁定——必须新增断言覆盖 redomain 治理场景形态（存量段在 unmapped 域、v2 声明业务域，蒸馏后仍落 unmapped 域），防止未来把域稳定语义反向改动而无人察觉
+变更：2026-11-20-decisions-lifecycle-stale-assertion
+状态：active
+摘要：redomain 治理成果不被拉回
+场景正文：
+- 场景：redomain 治理成果不被拉回 — Given D-007@v1 存量段位于 decisions/unmapped.md（模拟已 redomain 治理的条目）、v2 声明「模块域：core」／When di
+全文：.sillyspec/changes/archive/2026-11-20-decisions-lifecycle-stale-assertion/requirements.md#FR-02
+最近确认：172fdd866ee3cbf844456cddb5d8e0f4760fd4b7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-20-decisions-lifecycle-stale-assertion:flow:测试绑定FR-02
+  tests: test/decisions-lifecycle.test.mjs「存量段在 unmapped 域 + v2 声明业务域 → 仍落 unmapped（redomain 治理成果不被拉回）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-20-decisions-lifecycle-stale-assertion
+  status: active
+
+## FR-auto-sillyspec-052 回归面全绿与豁免清偿——test/decisions-lifecycle.test.mjs 必须 30 用例全绿；.sillyspec/local.yaml known_failures 中该用例的临时豁免行必须移除（豁免失配即暴露残留红）
+变更：2026-11-20-decisions-lifecycle-stale-assertion
+状态：active
+摘要：全绿与豁免清理
+场景正文：
+- 场景：全绿与豁免清理 — Given 用例断言已对齐域稳定语义／When node --test test/decisions-lifecycle.test.mjs 与 收口实测门／Then 30/
+全文：.sillyspec/changes/archive/2026-11-20-decisions-lifecycle-stale-assertion/requirements.md#FR-03
+最近确认：172fdd866ee3cbf844456cddb5d8e0f4760fd4b7

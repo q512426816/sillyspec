@@ -1,0 +1,47 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  决策蒸馏跨域迁移用例过时断言修复
+
+
+  动机：test/decisions-lifecycle.test.mjs「@v2 跨域迁移 → 旧域文件旧版段同步移除」自 d15c2e23（2026-11-12-freeze-decision-recall
+  R-03）起恒红。诊断结论为断言过时而非实现漂移：该提交有意引入「存量条目所在域优先于次判定」（域稳定），设计论证为回填/重跑会把经 redomain 治理的条目（D-unmapped-435/436 实证）拉回
+  unmapped，域迁移归 knowledge redomain 显式职责而非蒸馏副作用；测试断言停留在 2026-10-14 epoch 时代的迁移语义，且有测试全量红近 8 天无人察觉（known_failures
+  曾临时豁免）。修复面=测试断言对齐新语义并补锁域稳定（防未来反向改动无人察觉），实现零改动。
+
+
+  成功标准：
+
+  - 原「@v2 跨域迁移」用例按域稳定语义重写并通过（v2 声明新模块域时仍在存量域就地升级，written 记 core.md@v2:supersede，目标新域文件不创建）
+
+  - 新增断言显式锁定存量域优先语义（含 redomain 治理场景形态：存量在 unmapped 域、v2 声明业务域仍落 unmapped）
+
+  - test/decisions-lifecycle.test.mjs 30 用例全绿
+
+  - .sillyspec/local.yaml known_failures 中该用例豁免行移除
+autopilot: false
+prestage_ack: true
+baseline_commit: b9ce459963b0a057dd160573d40839746fecbad9
+updatedAt: '2026-11-20T00:17:03.681Z'
+baseline_sha256: ad72f6a5db399b7b80f54c91257268e5c06caea1c1ae0f3c3b925b5a8af52f39
+spec_approved: true
+spec_approved_at: '2026-11-20T00:14:27.664Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（5.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261120001700\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 2 个
+

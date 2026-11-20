@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-20-decisions-lifecycle-stale-assertion",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-20-decisions-lifecycle-stale-assertion:flow:测试绑定FR-01",
+      "tests": [
+        "test/decisions-lifecycle.test.mjs「@v2 声明新模块域 → 域稳定优先：存量域就地升级不迁移（2026-11-12 R-03 语义）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-20-decisions-lifecycle-stale-assertion"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-20-decisions-lifecycle-stale-assertion:flow:测试绑定FR-02",
+      "tests": [
+        "test/decisions-lifecycle.test.mjs「存量段在 unmapped 域 + v2 声明业务域 → 仍落 unmapped（redomain 治理成果不被拉回）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-20-decisions-lifecycle-stale-assertion"
+    }
+  ]
+}
