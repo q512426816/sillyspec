@@ -1,0 +1,28 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+adopted_from: brainstorm
+review_force: false
+baseline_commit: cc71c39424c8fa53b7c02c11f9d44acd8f2a37ba
+updatedAt: '2026-11-21T16:08:00.503Z'
+baseline_sha256: 664feed181efe2ecf16459be699c5cd8b67f7c099fbd1eb46c558e4dec2ee018
+spec_approved: true
+spec_approved_at: '2026-11-21T15:32:12.265Z'
+spec_approved_by: main@verify-gate-brainstorm
+spec_approved_channel: unattested
+spec_attested_by: null
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js2)（21.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261121160536\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+
