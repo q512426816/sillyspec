@@ -672,11 +672,15 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行）: ${(e && e.message) || e}`) }
     // 纯超时降档（R4 门禁价值考古：36/106 失败是 600s 帽杀纯超时假拦——超时=未完成非测试挂）。
     // 所有失败单元 reason 均含超时 → advisory 不计入 failed；任一单元真实挂测 → 维持硬拦。
+    // 护栏两态（2026-11-21-verify-gate-scope-speed FR-04/D-002）：timeout_policy degrade
+    // （缺省）=本段现状降档+ledger degradedTimeout 留痕（runVerifyTestCheck 侧已落）；block
+    // =超时计失败硬拦（fail-closed 旧行为显式恢复——要求超时也拦的仓用）。
     if (test.status === 'failed') {
-      const { isTimeoutOnlyTestFailure } = await import('../verify-postcheck.js')
-      if (isTimeoutOnlyTestFailure(test)) {
-        console.warn(`\n⚠️ quick test 实测纯超时（无任何挂掉的测试）——不拦完成：${test.reason || ''}`)
-        console.warn('   处置：定向复跑触碰模块自证；常发超时建议 local.yaml 配 modules: 块启用模块子集实测。')
+      const { isTimeoutOnlyTestFailure, readTimeoutPolicyConfig } = await import('../verify-postcheck.js')
+      const timeoutPolicy = readTimeoutPolicyConfig(gateSpecBase || specBase)
+      if (isTimeoutOnlyTestFailure(test) && timeoutPolicy !== 'block') {
+        console.warn(`\n⚠️ quick test 实测纯超时（无任何挂掉的测试）——护栏降档留痕不拦完成（timeout_policy: degrade）：${test.reason || ''}`)
+        console.warn('   未完成部分归 pre-push/CI 门；定向复跑触碰模块自证；要求超时也硬拦配 local.yaml timeout_policy: block。')
       } else {
         failed.push('test')
       }

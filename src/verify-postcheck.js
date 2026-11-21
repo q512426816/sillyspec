@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Verify Postcheck — CLI 客观测试执行与自报告对账
  *
  * verify 阶段历史上完全依赖 agent 自报告（跑没跑测试、结果如何全写在
@@ -1178,20 +1178,38 @@ function stripCommentsForDepMatch(content, isPy = false) {
   return out
 }
 
-export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [], touchedExportSymbols = null, hubMinDependents = DEPS_SYMBOL_NARROW_HUB_MIN }) {
-  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
+export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [], touchedExportSymbols = null, hubMinDependents = DEPS_SYMBOL_NARROW_HUB_MIN, withAttribution = false }) {
+  // withAttribution（2026-11-21-verify-gate-scope-speed FR-06）：归因出参 opt-in——命中匹配
+  // 逐字不动，只新增「哪个测试文件命中了哪些变更源」的归因收集（分层门枢纽切线的输入面）。
+  // 缺省（不带参）返回 string[]（逐字现状——三个既有消费点零回归）；带参返回
+  // { files, attribution, hitCountBySrc }，files 与缺省形态逐字一致。
+  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return withAttribution ? { files: [], attribution: {}, hitCountBySrc: {} } : []
   const norm = (p) => String(p).replace(/\\/g, '/')
   const changedAll = [...new Set(changedFiles.map(norm))]
   // 代码面：非测试文件本身（JS/TS + Python 源——deps-auto 泛化，不再限定 src/ 前缀与自家目录形态）
   const changedSrc = changedAll.filter(p => !isTestFilePath(p) && /\.(js|mjs|cjs|ts|tsx|py)$/.test(p))
   const changedTests = changedAll.filter(p => isTestFilePath(p))
-  if (changedSrc.length === 0 && changedTests.length === 0) return []
+  if (changedSrc.length === 0 && changedTests.length === 0) return withAttribution ? { files: [], attribution: {}, hitCountBySrc: {} } : []
   const covered = coveredCommands.filter(Boolean).join(' ')
   const found = new Set()
+  // 归因收集（语言无关）：attribution=测试文件→命中变更源列表；hitCountBySrc=变更源→命中测试数。
+  const depAttribution = new Map()
+  const depCountBySrc = new Map()
+  const noteHit = (tf, srcList) => {
+    const prior = depAttribution.get(tf) || new Set()
+    for (const s of srcList) prior.add(s)
+    depAttribution.set(tf, prior)
+    for (const s of srcList) depCountBySrc.set(s, (depCountBySrc.get(s) || 0) + 1)
+  }
 
-  const pyCandidates = new Set()
+  // py 候选带来源映射（原 Set 无来源——归因需按源计数，全语言同口径枢纽判定）：
+  // candidate → 命中该 candidate 时归因到的变更源文件集合（多文件派生同 candidate 时合并）。
+  const pyCandidates = new Map()
   for (const src of changedSrc.filter(p => p.endsWith('.py'))) {
-    for (const d of pythonImportCandidates(src)) pyCandidates.add(d)
+    for (const d of pythonImportCandidates(src)) {
+      if (!pyCandidates.has(d)) pyCandidates.set(d, new Set())
+      pyCandidates.get(d).add(src)
+    }
   }
   const jsSrc = changedSrc.filter(p => /\.(js|mjs|cjs|ts|tsx)$/.test(p))
 
@@ -1204,7 +1222,6 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
     : null
   if (symMap) {
     const hitsByTest = new Map()
-    const countBySrc = new Map()
     for (const tf of collectTestFiles(cwd)) {
       const fname = tf.split('/').pop()
       if (covered.includes(fname) || covered.includes(tf)) continue
@@ -1212,17 +1229,20 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
       try { content = readFileSync(join(cwd, tf), 'utf8') } catch { continue }
       const contentCode = stripCommentsForDepMatch(content, tf.endsWith('.py'))
       const hitSrcs = jsSrc.filter(src => contentCode.includes(src))
-      const pyHit = [...pyCandidates].some(d => contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`))
-      if (hitSrcs.length === 0 && !pyHit) continue
-      hitsByTest.set(tf, { hitSrcs, pyHit, contentCode })
-      for (const src of hitSrcs) countBySrc.set(src, (countBySrc.get(src) || 0) + 1)
+      const pyHitSrcs = new Set()
+      for (const [d, srcs] of pyCandidates) {
+        if (contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`)) for (const s of srcs) pyHitSrcs.add(s)
+      }
+      if (hitSrcs.length === 0 && pyHitSrcs.size === 0) continue
+      hitsByTest.set(tf, { hitSrcs, pyHitSrcs, contentCode })
+      noteHit(tf, [...hitSrcs, ...pyHitSrcs])
     }
-    for (const [tf, { hitSrcs, pyHit, contentCode }] of hitsByTest) {
-      let include = pyHit
+    for (const [tf, { hitSrcs, pyHitSrcs, contentCode }] of hitsByTest) {
+      let include = pyHitSrcs.size > 0
       if (!include) {
         include = hitSrcs.some((src) => {
           const syms = symMap.get(src)
-          if (!syms || (countBySrc.get(src) || 0) <= hubMinDependents) return true // 非枢纽/无符号 → 模块级保留
+          if (!syms || (depCountBySrc.get(src) || 0) <= hubMinDependents) return true // 非枢纽/无符号 → 模块级保留
           return namedImportEvidence(contentCode, src, syms) !== 'miss'
         })
       }
@@ -1233,7 +1253,7 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
       if (covered.includes(fname)) continue
       if (existsSync(join(cwd, t))) found.add(t)
     }
-    return [...found].sort()
+    return finishDepAttribution([...found], withAttribution, depAttribution, depCountBySrc)
   }
 
   for (const tf of collectTestFiles(cwd)) {
@@ -1245,10 +1265,17 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
     // 改在剥注释后的内容上做——注释里的路径/导入串字面引用不再算依赖边（字符串感知剥离，
     // 代码内 import/require/dynamic import/vi.mock 引用照常命中）。
     const contentCode = stripCommentsForDepMatch(content, tf.endsWith('.py'))
-    let hit = jsSrc.some(src => contentCode.includes(src))
+    const hitSrcs = jsSrc.filter(src => contentCode.includes(src))
+    let hit = hitSrcs.length > 0
     if (!hit) {
-      hit = [...pyCandidates].some(d => contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`))
+      for (const [d, srcs] of pyCandidates) {
+        if (contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`)) {
+          hit = true
+          noteHit(tf, [...srcs])
+        }
+      }
     }
+    if (hitSrcs.length > 0) noteHit(tf, hitSrcs)
     if (hit) found.add(tf)
   }
   for (const t of changedTests) {
@@ -1256,7 +1283,40 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
     if (covered.includes(fname)) continue
     if (existsSync(join(cwd, t))) found.add(t)
   }
-  return [...found].sort()
+  return finishDepAttribution([...found], withAttribution, depAttribution, depCountBySrc)
+}
+
+/** 归因出参收口（withAttribution 消费形态；缺省=逐字现状数组）。归因 Map 由调用方传入（函数局部量，无模块级状态）。 */
+function finishDepAttribution(files, withAttribution, depAttribution, depCountBySrc) {
+  if (!withAttribution) return files.sort()
+  const attribution = {}
+  for (const [tf, srcs] of depAttribution) attribution[tf] = [...srcs].sort()
+  const hitCountBySrc = {}
+  for (const [src, count] of depCountBySrc) hitCountBySrc[src] = count
+  return { files: files.sort(), attribution, hitCountBySrc }
+}
+
+/**
+ * 枢纽切线（2026-11-21-verify-gate-scope-speed FR-01，D-007 方案 A）：分层门依赖面拆分——
+ * 命中数 > hubMinDependents 的变更源=枢纽源（引用方众多的底层文件，单点改动命中面失控的
+ * 根因面），其命中的测试=间接回归面（收口不阻断，披露归 pre-push）；仅命中非枢纽源的测试
+ * +变更自身测试=阻断面。语言无关（纯命中计数，不做符号级分流——Python 仓同样生效）。
+ * attribution 归因缺失的测试（防御面：理论上 deps 内每文件都有归因，缺失视为直接——
+ * fail-open 多跑侧不变量，「只可能多跑不漏」契约在阻断面内保持）。
+ */
+export function splitDepsByHub({ deps, attribution, hitCountBySrc, hubMinDependents = DEPS_SYMBOL_NARROW_HUB_MIN }) {
+  const hubSrcs = Object.entries(hitCountBySrc || {})
+    .filter(([, count]) => count > hubMinDependents)
+    .map(([src]) => src)
+  const hubSet = new Set(hubSrcs)
+  const blocking = []
+  const indirect = []
+  for (const tf of deps || []) {
+    const srcs = (attribution || {})[tf]
+    if (!Array.isArray(srcs) || srcs.length === 0 || !srcs.some(s => hubSet.has(s))) blocking.push(tf)
+    else indirect.push(tf)
+  }
+  return { blocking, indirect, hubSrcs }
 }
 
 /**
@@ -1794,6 +1854,47 @@ function readTestRerunConfig(specBase) {
   return 'incremental'
 }
 
+/** 分层门档位读取（2026-11-21-verify-gate-scope-speed FR-05/D-006）：env SILLYSPEC_GATE_SCOPE 优先，次 local.yaml gate_scope（宽松匹配行，坏值 fail-soft）。缺省 lean=收窄（阻断面=自身∪非枢纽命中）；legacy=三源全阻断面（逐字对齐旧行为）。 */
+export function readGateScopeConfig(specBase) {
+  const env = String(process.env.SILLYSPEC_GATE_SCOPE || '').trim().toLowerCase()
+  if (env === 'lean' || env === 'legacy') return env
+  try {
+    const p = join(specBase, 'local.yaml')
+    if (!existsSync(p)) return 'lean'
+    const m = readFileSync(p, 'utf8').match(/^\s*gate_scope:\s*(lean|legacy)\s*$/m)
+    return m ? m[1] : 'lean'
+  } catch { /* 读失败 → 缺省 */ }
+  return 'lean'
+}
+
+/** 实测护栏档位读取（FR-04/D-002/D-003）：env SILLYSPEC_TIMEOUT_POLICY 优先，次 local.yaml timeout_policy。缺省 degrade=纯超时降档留痕不阻断（R4 先例语义+ledger 留痕）；block=超时计失败硬拦（fail-closed 旧行为显式恢复）。预算沿用 TEST_TIMEOUT_MS 不新增平行配置键。 */
+export function readTimeoutPolicyConfig(specBase) {
+  const env = String(process.env.SILLYSPEC_TIMEOUT_POLICY || '').trim().toLowerCase()
+  if (env === 'degrade' || env === 'block') return env
+  try {
+    const p = join(specBase, 'local.yaml')
+    if (!existsSync(p)) return 'degrade'
+    const m = readFileSync(p, 'utf8').match(/^\s*timeout_policy:\s*(degrade|block)\s*$/m)
+    return m ? m[1] : 'degrade'
+  } catch { /* 读失败 → 缺省 */ }
+  return 'degrade'
+}
+
+/**
+ * 实测护栏判定（FR-04，纯函数可测）：纯超时（isTimeoutOnlyTestFailure——所有失败单元
+ * reason 均含超时、无真实挂测）× timeout_policy 两态。
+ * - degrade（缺省）：降级留痕不阻断——status 不改（上游 quick-audit 纯超时降档消费链
+ *   零变化），degraded=true 供 ledger 留痕与 loud 披露。
+ * - block：超时=失败硬拦（degraded=false，消费面按 failed 处理）。
+ * 真实挂测/通过结果两态均不降级（护栏只对「未完成」放行，不对失败放行——不假绿）。
+ */
+export function applyTimeoutGuard({ testResult, policy = 'degrade' }) {
+  if (!testResult || testResult.status !== 'failed') return { degraded: false, result: testResult }
+  const timeoutOnly = isTimeoutOnlyTestFailure(testResult)
+  if (timeoutOnly && policy === 'degrade') return { degraded: true, result: testResult }
+  return { degraded: false, result: testResult }
+}
+
 function testRerunLedgerPath(specBase, changeName) {
   return runtimeStatePath(join(specBase, '.runtime'), `test-rerun-${changeName || 'change'}.json`)
 }
@@ -1807,15 +1908,18 @@ export function readTestRerunLedger({ specBase, changeName }) {
   } catch { return null }
 }
 
-/** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。 */
-export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, scopeFiles = [], mode, status }) {
+/** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。indirectFace/degradedTimeout 为分层门与护栏留痕字段（缺省不写——旧形态逐字保持）。 */
+export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, scopeFiles = [], mode, status, indirectFace = null, degradedTimeout = false }) {
   try {
     const dir = join(specBase, '.runtime')
     mkdirSync(dir, { recursive: true })
     writeFileSync(testRerunLedgerPath(specBase, changeName), JSON.stringify({
       change: changeName || null, head: head || null,
       inputFiles: inputFiles || [], failedFiles: failedFiles || [], scopeFiles: scopeFiles || [],
-      mode: mode || null, status: status || null, ranAt: new Date().toISOString(),
+      mode: mode || null, status: status || null,
+      ...(Array.isArray(indirectFace) ? { indirectFace } : {}),
+      ...(degradedTimeout ? { degradedTimeout: true } : {}),
+      ranAt: new Date().toISOString(),
     }, null, 2) + '\n')
   } catch { /* ledger 写失败不阻断实测门（下轮退化全子集） */ }
 }
@@ -2527,12 +2631,25 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   let depsAutoFiles = []
   let frPre = null
   let frCapApplied = null
+  // 分层门档位（2026-11-21-verify-gate-scope-speed FR-05/D-006）：decision 与执行组面共用一读。
+  const gateScope = readGateScopeConfig(specBase)
   if (strategy === 'dynamic' && !gitUnavailable) {
     try {
       // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：收集失败 → null → 回落现状模块级
       let depsSymbols = null
       try { depsSymbols = collectTouchedExportSymbols({ cwd, changeName, specBase, changedFiles: lastChangedFiles }) } catch { depsSymbols = null }
-      depsAutoFiles = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [], touchedExportSymbols: depsSymbols })
+      // 分层门决策口径（FR-01/D-006/D-007）：lean（缺省）预计算即按枢纽切线拆分——
+      // scopeCount 决策与执行组面同口径（阻断面=自身∪非枢纽命中）；legacy 取全量 deps。
+      const depsFull = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [], touchedExportSymbols: depsSymbols, withAttribution: gateScope !== 'legacy' })
+      if (gateScope !== 'legacy' && !Array.isArray(depsFull)) {
+        const split = splitDepsByHub({ deps: depsFull.files, attribution: depsFull.attribution, hitCountBySrc: depsFull.hitCountBySrc })
+        depsAutoFiles = split.blocking
+        if (split.indirect.length > 0) {
+          console.log(`ℹ️ 分层门（gate_scope: lean）：依赖面 ${split.indirect.length}/${depsFull.files.length} 个为枢纽命中（枢纽源：${split.hubSrcs.slice(0, 3).join('、')}${split.hubSrcs.length > 3 ? ' 等' : ''}）——移出阻断面归 pre-push/CI 门`)
+        }
+      } else {
+        depsAutoFiles = Array.isArray(depsFull) ? depsFull : depsFull.files
+      }
     } catch { depsAutoFiles = [] }
     try {
       frPre = collectFrLinkedTests({ specBase, changeName, changedFiles: lastChangedFiles, projectRoot: cwd })
@@ -2548,8 +2665,11 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         frCapApplied = capped.capApplied
       }
     } catch { /* 键读取 fail-soft=缺省 off */ }
+    // lean 态 FR 层不进阻断面（D-001/D-004 决策口径一致——fr_regress_cap 即使显式开启也
+    // 不扩大收口阻断，面清单由 runModuleSubset 持有披露进 indirectFace）。
+    if (gateScope !== 'legacy' && frPre) frPre = null
   }
-  const scopeFiles = frPre ? [...new Set([...depsAutoFiles, ...frPre.files])] : [...new Set(depsAutoFiles)]
+  const scopeFiles = (frPre && gateScope === 'legacy') ? [...new Set([...depsAutoFiles, ...frPre.files])] : [...new Set(depsAutoFiles)]
   const action = decideVerifyTestAction({ strategy, scopeCount: scopeFiles.length, gitUnavailable })
   let mainResult
   if (action === 'skip') {
@@ -2621,7 +2741,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       subsetInput = incremental.files
       console.log(`⚡ ${incremental.note}`)
       console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ import 依赖；FR 关联回归层按 fr_regress_cap——缺省不跑归 pre-push/CI 门，2026-10-23-fr-regress-default-off），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
-      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null })
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null, gateScope })
       if (mainResult && typeof mainResult === 'object') {
         mainResult.mode = 'incremental-rerun'
         mainResult.reason = mainResult.reason
@@ -2630,7 +2750,11 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       }
     } else {
       console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ import 依赖${frCount ? ' ∪ FR 关联回归' : '（FR 关联回归层缺省不跑归 pre-push/CI 门——fr_regress_cap: N|all 可开启）'} = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
-      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre, frCapApplied, observability })
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre, frCapApplied, observability, gateScope })
+    }
+    // 构成披露（FR-03）：lean 态阻断面构成+间接面去向一行可见（ledger indirectFace 同源）
+    if (gateScope !== 'legacy' && mainResult && Array.isArray(mainResult.indirectFace)) {
+      console.log(`ℹ️ 阻断面构成（gate_scope: lean）：自身+依赖直接进实测阻断；间接面 ${mainResult.indirectFace.length} 个收口不跑（归 pre-push/CI 门，清单落 ledger）`)
     }
     // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
     // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
@@ -2643,6 +2767,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         scopeFiles: (mainResult && Array.isArray(mainResult.scopeFiles)) ? mainResult.scopeFiles : [],
         mode: incremental ? 'incremental-rerun' : 'dynamic-subset',
         status: mainResult && mainResult.status,
+        indirectFace: (mainResult && Array.isArray(mainResult.indirectFace)) ? mainResult.indirectFace : null,
+        degradedTimeout: applyTimeoutGuard({ testResult: mainResult, policy: timeoutPolicy }).degraded,
       })
     } catch { /* 记账失败不阻断（下轮退化全子集） */ }
   } else {
@@ -2681,6 +2807,22 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   // runCrossRepoTestUnderMainSkip 逐仓三态）。
   // ── trace residual 并入（读侧）：悬空 fail-fast / 空残差直通 / 保守差集 / 残差段加法 ──
   // 可证覆盖集=动态子集实际跑的三源并集（scopeFiles）；命令型动作（full/skip）照旧全补。
+  // 实测护栏（2026-11-21-verify-gate-scope-speed FR-04/D-002/D-003）：degrade（缺省）纯超时
+  // → loud 披露+ledger 留痕，不阻断（上游 quick-audit 纯超时降档消费链照常生效——R4 先例
+  // 语义「超时=未完成非测试挂」）；block=超时计失败硬拦（fail-closed 旧行为显式恢复）。
+  // 真实挂测两态均硬拦（护栏只对「未完成」放行，不对失败放行——不假绿）。
+  const timeoutPolicy = readTimeoutPolicyConfig(specBase)
+  const guard = applyTimeoutGuard({ testResult: mainResult, policy: timeoutPolicy })
+  mainResult = guard.result
+  if (guard.degraded) {
+    console.log(`⏳ 实测护栏（timeout_policy: degrade）：阻断面超预算未跑完（纯超时，无真实挂测）——留痕放行不阻断，未完成部分归 pre-push/CI 门（timeout_policy: block 恢复硬拦）`)
+    if (action !== 'dynamic-subset') {
+      // full 等非子集路径无分支内 ledger 记账——护栏命中时独立留痕（degradedTimeout 可查证）
+      try {
+        writeTestRerunLedger({ specBase, changeName, head: currentGitHead(cwd), inputFiles: lastChangedFiles, failedFiles: (mainResult && Array.isArray(mainResult.failedFiles)) ? mainResult.failedFiles : [], scopeFiles: [], mode: 'timeout-guard', status: mainResult && mainResult.status, degradedTimeout: true })
+      } catch { /* 留痕失败不阻断护栏语义 */ }
+    }
+  }
   mainResult = applyTraceResidual({ mainResult, action, cwd, specBase, changeName, depsAutoFiles: scopeFiles, hits: [], knownFailures })
   return mergeCrossRepoResults(mainResult, ctx)
 }
@@ -3847,7 +3989,7 @@ export function applyFrRegressCap(fr, cap) {
   return { fr: { ...fr, files: fr.files.slice(0, cap) }, capApplied: { kept: cap, total: fr.files.length } }
 }
 
-export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, frCapApplied = null, observability = null }) {
+export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, frCapApplied = null, observability = null, gateScope = null }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
@@ -3856,7 +3998,26 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
   // 枢纽符号收敛（2026-11-11-deps-hub-symbol-narrow）：收集失败 → null → 回落现状模块级
   let subsetSymbols = null
   try { subsetSymbols = collectTouchedExportSymbols({ cwd, changeName, specBase, changedFiles }) } catch { subsetSymbols = null }
-  let deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test), touchedExportSymbols: subsetSymbols })
+  // 分层门（2026-11-21-verify-gate-scope-speed，D-006/D-007）：lean（缺省）依赖面按枢纽切线
+  // 拆分——枢纽源命中测试=间接面（不进阻断面，indirectFace 披露+归 pre-push）；legacy=三源
+  // 全阻断面逐字旧行为。归因出参 opt-in（命中匹配零改动），legacy 不取归因（返回形态不变）。
+  const scope = gateScope || readGateScopeConfig(specBase)
+  let depsResult = discoverModuleDependentTests({
+    cwd, changedFiles, coveredCommands: hits.map(h => h.test), touchedExportSymbols: subsetSymbols,
+    withAttribution: scope !== 'legacy',
+  })
+  let deps = Array.isArray(depsResult) ? depsResult : depsResult.files
+  let indirectDeps = []
+  let hubSrcs = []
+  if (scope !== 'legacy' && !Array.isArray(depsResult)) {
+    const split = splitDepsByHub({ deps: depsResult.files, attribution: depsResult.attribution, hitCountBySrc: depsResult.hitCountBySrc })
+    deps = split.blocking
+    indirectDeps = split.indirect
+    hubSrcs = split.hubSrcs
+    if (indirectDeps.length > 0) {
+      console.log(`ℹ️ 分层门（gate_scope: lean）：枢纽源命中测试 ${indirectDeps.length} 个移出阻断面（枢纽源：${hubSrcs.slice(0, 3).join('、')}${hubSrcs.length > 3 ? ' 等' : ''}）——收口不阻断，归 pre-push/CI 门（gate_scope: legacy 恢复全阻断面）`)
+    }
+  }
   // deps_regress_cap（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
   // own（变更触碰文件集∩依赖面）优先整跑，其余按 N 截断/off 全弃（归 pre-push/CI 门）。
   // 缺省 null=全跑（现状零回归）。own 判定与语言/框架无关（纯路径集合运算）。
@@ -3919,6 +4080,14 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
   if (frCapApplied) {
     console.log(`ℹ️ fr_regress_cap：FR 关联回归面 ${frCapApplied.kept}/${frCapApplied.total} 进实测面，其余 ${frCapApplied.total - frCapApplied.kept} 个归 pre-push/CI 门（可开启：local.yaml fr_regress_cap: <N|all>——N=前 N 个 / all=全跑旧行为；缺省不跑）`)
   }
+  // 分层门（lean）：FR 关联回归层不进阻断面（D-001/D-004——fr_regress_cap 即使开启也只
+  // 披露不阻断，归 pre-push/CI 门）；legacy=frLinked 照常进面（旧行为逐字对齐）。
+  const leanFrHeld = scope !== 'legacy' ? frLinked : []
+  if (leanFrHeld.length > 0) {
+    console.log(`ℹ️ 分层门（gate_scope: lean）：FR 关联回归 ${leanFrHeld.length} 个绑定不进阻断面（间接面归 pre-push/CI 门——fr_regress_cap 不再扩大收口阻断）`)
+    frLinked = []
+    frReport = null
+  }
   const depsAll = [...new Set([...deps, ...frLinked])].sort()
   let depsBatches = []
   if (depsAll.length > 0) {
@@ -3973,6 +4142,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
     resultPath: null,
     mode: 'dynamic-subset',
     fallbackReason: null,
+    // 分层门间接面（2026-11-21-verify-gate-scope-speed FR-03）：lean 态枢纽命中测试∪FR 持有
+    // 面清单——收口不执行，披露+ledger 留痕（归 pre-push/CI 门）；legacy 无此字段（逐字现状）。
+    ...(scope !== 'legacy' ? { indirectFace: [...new Set([...indirectDeps, ...leanFrHeld])].sort() } : {}),
     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
     // 失败批测试文件集聚合（2026-10-07-test-incremental-rerun）：增量重跑面的组成之一——
     // 前轮失败批的文件下轮必入面（无论修复是否触碰它们）。归因粒度：node --test TAP 顶层

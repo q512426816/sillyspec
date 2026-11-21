@@ -1,4 +1,4 @@
-/**
+﻿/**
  * config-schema.js — local.yaml 配置键的单一数据源。
  *
  * 定位：`.sillyspec/local.yaml` 是 gitignored 的机器+人混写配置，键散落在 ~10 个 reader
@@ -162,6 +162,8 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
       keys: [
         { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
+        { path: 'verify.gate_scope', type: 'enum', values: ['lean', 'legacy'], optional: true, status: 'live', readers: ['readGateScopeConfig (src/verify-postcheck.js — 动态子集预计算与 runModuleSubset 组装段)'], desc: '【2026-11-21-verify-gate-scope-speed 分层门】收口实测阻断面档：lean（缺省）= 阻断面收窄到「本变更测试 ∪ 非枢纽依赖命中」，枢纽源命中测试（命中数>8）与 FR 回归层为间接面——收口不执行、披露行+ledger 留痕、归 pre-push/CI 门（防枢纽模块单点改动拖全量面、收口跑半天）；legacy = 三源全阻断面（2026-11-21 前旧行为逐字恢复，逃生阀）。env SILLYSPEC_GATE_SCOPE 优先。', example: 'gate_scope: legacy' },
+        { path: 'verify.timeout_policy', type: 'enum', values: ['degrade', 'block'], optional: true, status: 'live', readers: ['readTimeoutPolicyConfig (src/verify-postcheck.js — runVerifyTestCheck 护栏段)、纯超时降档消费 (src/run/quick-audit.js)'], desc: '【2026-11-21-verify-gate-scope-speed 实测护栏】纯超时（无真实挂测）处置档：degrade（缺省）= 降档留痕不阻断（R4 先例语义+ledger degradedTimeout 留痕+loud 披露，未完成部分归 pre-push/CI 门）；block = 超时计失败硬拦（fail-closed 旧行为显式恢复）。真实挂测两态均硬拦（护栏只对「未完成」放行，不对失败放行）。预算沿用测试超时（TEST_TIMEOUT_MS，缺省 600s）不新增平行配置键。env SILLYSPEC_TIMEOUT_POLICY 优先。', example: 'timeout_policy: block' },
         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
         { path: 'runner_flags', type: 'object', optional: true, status: 'live', readers: ['readRunnerFlags (src/verify-postcheck.js)'], desc: '【2026-10-23-runner-flags-generic，语言中立】推断批尾随 flags 映射：批类别（CLI 自有 runner 分类 py|js|jsx|…，未知类别前向兼容）→ flags 串。flags 置于文件参数前（node/go 类参数解析在首个位置参数处截断）；hits 路径自带 flags 不注入。缺省不写=现状。', example: 'py: "-q --no-cov -n auto" / jsx: "--pool=forks"' },
         { path: 'py_runner_flags', type: 'string', optional: true, status: 'deprecated', readers: ['readRunnerFlags 兼容别名 (src/verify-postcheck.js)'], desc: '【已泛化】runner_flags.py 的单键旧别名（2026-10-23-py-runner-flags 遗留）；新配置写 runner_flags 映射。', example: '-q --no-cov -n auto' },
@@ -542,6 +544,8 @@ dispatch:
 # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
 # verify:
 #   test_rerun: incremental   # 实测门失败后重跑档：incremental（缺省，下轮只跑失败批∪修复面）| full（恒全子集重跑，保守项目用）
+#   gate_scope: lean          # 【分层门】收口阻断面：lean（缺省，自身∪非枢纽依赖命中；枢纽命中+FR 回归=间接面归 pre-push）| legacy（三源全阻断面旧行为逃生阀）
+#   timeout_policy: degrade   # 【实测护栏】纯超时处置：degrade（缺省，降档留痕不阻断）| block（超时计失败硬拦，fail-closed 旧行为）
 
 # ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
 # ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
