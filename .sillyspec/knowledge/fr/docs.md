@@ -2047,10 +2047,10 @@ created_at: 2026-10-15T09:21:13.934Z
 - row: 2026-11-19-pitfall-trio-closeout:flow:测试绑定FR-01
   tests: test/archive-idempotent-selfheal.test.mjs「Case4 双臂：归档目录已存在且子步全 done 自愈收口／不完备维持硬错」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: bd17aa57ee6d815871101246ac5a87f4742d6ffc
   source_change: 2026-11-19-pitfall-trio-closeout
   status: active
 
@@ -2069,10 +2069,10 @@ created_at: 2026-10-15T09:21:13.934Z
 - row: 2026-11-19-pitfall-trio-closeout:flow:测试绑定FR-02
   tests: test/flowdone-disposition-drift.test.mjs「⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍不触发；交付面锚定同口径」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: bd17aa57ee6d815871101246ac5a87f4742d6ffc
   source_change: 2026-11-19-pitfall-trio-closeout
   status: active
 
