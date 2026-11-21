@@ -3852,7 +3852,7 @@ export function generateVerifyResultSkeleton(result) {
     '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->', /* probe1-noqa */
     '',
     '## 变更风险等级 [层：人工判断]',
-    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->', /* probe1-noqa */
+    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）；回退门：<单向门（难回滚）/双向门（易回滚）>；爆炸半径：<一词概括最大影响面>-->', /* probe1-noqa */
     '',
     '## Runtime Evidence [层：人工判断]',
     '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->', /* probe1-noqa */

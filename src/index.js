@@ -116,7 +116,7 @@ SillySpec CLI — 规范驱动开发工具包
                                       [--notes ...] [--evidence ...] [--changed-files a,b] [--force]
                                       单 task review.json 命令式写入：verdict/notes 你给，base/head/changedFiles/diffPaths CLI 代算
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
-  sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
+  sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十四章节骨架（决策追踪表预填；已存在不覆盖）
   sillyspec prefill-refresh --change <name> [--json]  重放三槽预填（design 文件清单/决策追踪表 + task 卡 ids；已确认槽不覆盖，幂等）
   sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
@@ -2430,7 +2430,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       break;
     }
     case 'design-init': {
-      // design.md 十三章节骨架生成（change: 2026-09-07-ir-stage-p3c，task-02，FR-03）：agent 此前
+      // design.md 十四章节骨架生成（change: 2026-09-07-ir-stage-p3c，task-02，FR-03）：agent 此前
       // 从零手写整份设计文档，章节漏项到 stage-contract/plan 门禁才暴露。本命令从 decisions.md
       // 当前版本 D 条目预填决策追踪表，章节标题逐字取自 brainstorm Step 6 模板（R-03，渲染本体在
       // design-facts.js generateDesignSkeleton——本 case 只负责读盘/幂等保护/落盘）。已存在不覆盖
@@ -2440,7 +2440,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] && !String(args[diChangeIdx + 1]).startsWith("--") ? args[diChangeIdx + 1] : null;
       const diForce = args.includes('--force');
       if (!diChange) {
-        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按 D 条目预填、行带来源注；已存在不覆盖，--force 覆盖）');
+        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十四章节骨架（决策追踪表按 D 条目预填、行带来源注；已存在不覆盖，--force 覆盖）');
         process.exit(2);
       }
       assertSafeChangeName(diChange, '--change 变更名');
@@ -2468,7 +2468,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // prefillDecisionTable 预填行（状态列带来源注——D-003 预填≠结论，agent 逐行核对后删注=确认）。
       // 推导单点在 prefill.js（与 prefill-refresh 重放同源，两处不各自重写防漂移）。decisions.md
       // 无 canonical「## D-xxx@vN」条目时返回 [] → 骨架原样落盘（design-facts 自带「未解析出条目」
-      // 注释行，现状不变）。段定位对齐 prefill.js DECISION_SECTION_RE 同义词集；骨架十三章节形态
+      // 注释行，现状不变）。段定位对齐 prefill.js DECISION_SECTION_RE 同义词集；骨架十四章节形态
       // 固定（表头|分隔行|内容行），定位失败 fail-soft 回退原骨架——预填是 advisory 能力不阻断。
       const { prefillDecisionTable } = await import('./prefill.js');
       const diDecisionRows = prefillDecisionTable({ changeDir: diChangeDir });

@@ -497,6 +497,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   **审查范围（Task Review 层已退役 2026-09-26——task 粒度不再有前置 review.json 可分层）**：QA 子代理对照 design×实际 diff 逐 task 核验实现一致性（含改动文件与 allowed_paths 对照），以下三项始终必查（task 粒度无前置评审兜底，全靠本层）：
 ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
   **反例测试核对**（R5 接线，2026-09-26 起随 Task Review 退役自 task 级评审铁律移驻本层）：本次变更新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死。
+  **变异造红自证**（mattpocock diagnosing-bugs Phase 5 同款纪律）：通过临时改代码/fixture 强制造红验证测试灵敏度时，必须 diff 干净副本确认变异真实生效后再信该红——变异未落盘/未生效时红来自别处，属假灵敏度，一轮骗过。
 
   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
   **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
@@ -535,6 +536,7 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 - **写完不回读**——写出的代码/文档落盘即可，verify 门禁机械校验，回读是纯上下文税
 - 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
 - **长输出跑批纪律（token 减负，R9 实证 verify 段 13.8M 输入中 4-6M 是裸输出摄取）**：全量/多文件测试与 lint 的输出重定向落文件（如 \`> .runtime/test-out.log 2>&1\`），上下文只回看尾部摘要与失败段（\`tail -50\` / \`grep -E "FAIL|✗|Error"\`）——长输出全文进上下文是单会话 token 累积大头；CLI 门禁自跑的测试已是摘要输出，不受本条约束
+- **临时调试日志唯一前缀**：插桩排查的临调日志必须带 \`[DEBUG-<id>]\` 前缀（如 \`[DEBUG-a4f2]\`，一次排查一个 id）——收尾按前缀 grep 清零再交付；未带前缀的临调日志无人能系统性清除（带标的日志能死，无标的必残留）
 
 ### 输出
 测试结果摘要：通过/失败/跳过数量 + 失败项分析`,
@@ -552,11 +554,14 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 ### 操作
 1. 检查 git diff 查看所有变更
 2. 审查要点：
-   - 代码风格是否符合 CONVENTIONS.md
    - 是否有明显的 bug 或安全漏洞
    - 是否有未处理的 TODO/FIXME
    - 错误处理是否完善
    - 是否有冗余代码或可简化的逻辑
+   风格/规范类发现按三层优先级定级：
+   - **第一层：仓内文档化规范优先**（CONVENTIONS.md / ARCHITECTURE.md）——仓规背书的写法即使踩中通用 smell 也不报（仓规覆盖基线）
+   - **第二层：通用 smell 基线**（仓规未覆盖处适用：重复代码/魔法值/死代码/过长函数等）——只作 judgement call 标注（「疑似 X」），不作硬违反
+   - **第三层：工具已拦不人工报**——lint/formatter/pre-commit/CI 已机械拦截的项（格式、命名规范类）不再进人工报告
 3. 对照 ARCHITECTURE.md 检查架构合规性
 
 ### 输出

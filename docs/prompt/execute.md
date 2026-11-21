@@ -488,11 +488,14 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 ### 操作
 1. 检查 git diff 查看所有变更
 2. 审查要点：
-   - 代码风格是否符合 CONVENTIONS.md
    - 是否有明显的 bug 或安全漏洞
    - 是否有未处理的 TODO/FIXME
    - 错误处理是否完善
    - 是否有冗余代码或可简化的逻辑
+   风格/规范类发现按三层优先级定级：
+   - **第一层：仓内文档化规范优先**（CONVENTIONS.md / ARCHITECTURE.md）——仓规背书的写法即使踩中通用 smell 也不报（仓规覆盖基线）
+   - **第二层：通用 smell 基线**（仓规未覆盖处适用：重复代码/魔法值/死代码/过长函数等）——只作 judgement call 标注（「疑似 X」），不作硬违反
+   - **第三层：工具已拦不人工报**——lint/formatter/pre-commit/CI 已机械拦截的项（格式、命名规范类）不再进人工报告
 3. 对照 ARCHITECTURE.md 检查架构合规性
 
 ### 输出

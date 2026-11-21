@@ -15,7 +15,7 @@
  *   1. 双源一致：parseDecisionDomains（文本入口，task-01 声明的 parseDecisions 行循环
  *      逐字镜像）× parseDecisions（decision-distill 权威导出，读盘）在同一 fixture 上
  *      投影 deep-equal——镜像漂移即红。
- *   2. 骨架契约：十三章节标题字面 + 真实 validateDesignForPlan（六章 readiness）+
+ *   2. 骨架契约：十四章节标题字面 + 真实 validateDesignForPlan（六章 readiness）+
  *      stage-contract-spec brainstorm design 三条 literal-any 规则全部命中——
  *      骨架落盘即可过门禁，不产「生成了骨架却过不了契约」的坑。
  *   3. 文件清单示例行为注释形态 → parseFileChangeListDetailed 解析为空（不产幻影文件，
@@ -336,21 +336,21 @@ console.log('--- skipped：无 changeDir / 无 decisions.md / 无 module-map →
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. generateDesignSkeleton：十三章节契约 + 决策追踪预填 + 无幻影文件
+// 4. generateDesignSkeleton：十四章节契约 + 决策追踪预填 + 无幻影文件
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n=== 4. generateDesignSkeleton（design.md 骨架渲染）===\n')
 
-const THIRTEEN_SECTIONS = [
+const FOURTEEN_SECTIONS = [
   '背景', '设计目标', '非目标', '拆分判断', '总体方案', '文件变更清单', '接口定义',
-  '生命周期契约表', '数据模型', '兼容策略（brownfield 必填）', '风险登记', '决策追踪', '自审',
+  '生命周期契约表', '数据模型', '测试 seam 约定', '兼容策略（brownfield 必填）', '风险登记', '决策追踪', '自审',
 ]
 
-console.log('--- 十三章节标题契约（字面、有序、无多无漏）---')
+console.log('--- 十四章节标题契约（字面、有序、无多无漏）---')
 {
   const s = generateDesignSkeleton({ changeName: 'demo-change' })
   const h2 = s.split('\n').filter(l => l.startsWith('## ')).map(l => l.slice(3))
-  assert(deepEq(h2, THIRTEEN_SECTIONS),
-    `## 二级标题恰为十三章节且顺序一致（got ${h2.length} 章: ${h2.join('/')}）`)
+  assert(deepEq(h2, FOURTEEN_SECTIONS),
+    `## 二级标题恰为十四章节且顺序一致（got ${h2.length} 章: ${h2.join('/')}）`)
   assert(s.endsWith('\n') && !s.endsWith('\n\n'), 'LF 行尾 + 单一尾换行')
 }
 

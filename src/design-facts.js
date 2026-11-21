@@ -8,7 +8,7 @@
  *   2. loadModuleMap(specRoot, project)：_module-map.yaml → { ids, prefixPairs } | null。
  *   3. validateDecisionModuleRefs({ changeDir, specRoot, project })：模块域分级核验
  *      （ERROR=幻觉模块/书写错误，WARNING=声明域×实改面差异，skipped=无索引/无决策）。
- *   4. generateDesignSkeleton({ changeName, decisionsText, author, now })：design.md 十三章节
+ *   4. generateDesignSkeleton({ changeName, decisionsText, author, now })：design.md 十四章节
  *      骨架字符串（章节标题逐字取自 brainstorm Step 6 模板，R-03——禁止自创措辞）。
  *
  * 依赖方向（R-01 单向防环）：design-facts → decision-distill / change-list / modules，
@@ -273,10 +273,10 @@ export function validateDecisionModuleRefs({ changeDir, specRoot, project } = {}
 // ---------------------------------------------------------------------------
 
 /**
- * 生成 design.md 十三章节骨架字符串（纯函数不落盘，写盘/幂等保护由 design-init CLI 负责）。
+ * 生成 design.md 十四章节骨架字符串（纯函数不落盘，写盘/幂等保护由 design-init CLI 负责）。
  * 章节标题与 brainstorm.js「design.md 必须包含的章节」模板逐字对齐（1 背景/2 设计目标/
  * 3 非目标/4 拆分判断/5 总体方案/6 文件变更清单/7 接口定义/7.5 生命周期契约表/8 数据模型/
- * 9 兼容策略/10 风险登记/11 决策追踪/12 自审），满足 stage-contract-spec 的字面命中检查
+ * 8.5 测试 seam 约定/9 兼容策略/10 风险登记/11 决策追踪/12 自审），满足 stage-contract-spec 的字面命中检查
  * （文件变更清单/风险登记/自审/生命周期豁免）与 plan.design-readiness 六章就绪检查。
  * 决策追踪表从 decisionsText 当前版本 D 条目逐行预填；文件变更清单给表头+示例注释行
  * （注释形态不会被 plan-postcheck 清单解析计入）。
@@ -355,6 +355,11 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   lines.push('## 数据模型')
   lines.push('')
   lines.push('<!-- TODO（如涉及）：表结构/字段变更；不涉及可整节删除或写明无 schema 变更 -->')
+  lines.push('')
+
+  lines.push('## 测试 seam 约定')
+  lines.push('')
+  lines.push('<!-- TODO（触及代码/测试面必填）：每个 seam 一行——`<seam 名>`：能查出 <该层能暴露的问题> / 查不出 <该层观察不到的问题>（seam＝观察行为的公共接口，测试写在接口层不测内部实现；纯 doc/配置变更写「不涉及测试 seam」豁免） -->')
   lines.push('')
 
   lines.push('## 兼容策略（brownfield 必填）')

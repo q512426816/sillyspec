@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  阶段提示词吸收微设计技巧包
+
+  mattpocock/skills 调研（docs/ROADMAP.md「mattpocock/skills 吸收路线」批 1）提示词微设计视角结论：五条一行级技巧可直接吸收进阶段提示词，提升测试落点质量、审查判别力与提问效率；另建
+  out-of-scope 被拒概念沉淀位。改动均为提示词内容级，不改步骤结构与文件生命周期。
+
+  成功标准：
+
+  - brainstorm.js 的 design.md 模板新增「测试 seam 约定」节：列出本变更测试落点，每个 seam 附一行「能查出什么/查不出什么」
+
+  - brainstorm.js 提问纪律补「问题措辞让『是』即接受推荐答案」
+
+  - execute.js 代码审查步骤补三层优先级：CONVENTIONS 覆盖 smell 基线、基线仅 judgement call、工具已拦不人工报
+
+  - execute.js 测试纪律补 [DEBUG-<id>] 前缀约定与「变异造红后 diff 干净副本自证」
+
+  - verify.js 的 verify-result 风险节补「单向门/双向门+一词爆炸半径」字段
+
+  - 新建 docs/sillyspec/out-of-scope/（README 说明用途+首个被拒概念文件）
+
+  - 改动后运行 node docs/prompt/_extract.mjs 同步 docs/prompt/ 镜像
+
+  - 相关既有测试零回归
+autopilot: true
+prestage_ack: false
+baseline_commit: 0fd5fbacd3912716ff825bcbef01ec90d6d5b23c
+updatedAt: '2026-11-21T15:34:15.347Z'
+baseline_sha256: fa06e924bf480be5c07c565d9fd9d20ee7ff85ec01525b965f047b6afe24563a
+spec_approved: true
+spec_approved_at: '2026-11-21T15:34:15.346Z'
+spec_approved_by: mattpocock-absorb
+spec_approved_channel: user-confirmed
+spec_attested_by: mattpocock-absorb
+
