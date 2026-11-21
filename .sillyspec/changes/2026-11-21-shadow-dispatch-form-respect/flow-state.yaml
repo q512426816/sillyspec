@@ -1,0 +1,33 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  免评审形态收口不再自动派影子审查
+
+
+  动机：主会话按 --no-review 形态如实报告「不派平台评审」，CLI 影子旁路却在 brainstorm 收口时自动向平台派发独立审查会话且主会话不可见（2026-11-21
+  实证：2026-11-21-verify-gate-scope-speed 收口时 pi 影子会话 23:29:21 被派、12 秒
+  failed、主会话输出无披露行）——形态选择被旁路穿透+派发披露缺口。用户裁决：形态压过旁路、影子机制保留但派发必须可见。
+
+
+  成功标准：
+
+  - 声明 --no-review 或 --turbo 形态的变更，其 brainstorm/plan/execute 收口不再派发影子审查，对照账 skips 留痕理由含形态表述
+
+  - 未声明免评审形态的轻档变更影子照派，且「影子审查已后台派发」披露行在收口命令退出前同步打出（不再 fire-and-forget 丢输出）
+
+  - 档位判定、ceremony.shadow 开关、幂等闸、probe 前置等既有影子链路逻辑零改动，缺省行为对非免评审形态变更不变
+autopilot: false
+prestage_ack: false
+baseline_commit: 0fd5fbacd3912716ff825bcbef01ec90d6d5b23c
+updatedAt: '2026-11-21T16:01:23.452Z'
+baseline_sha256: f17efe0117f8787769c05529c51cc75df22c6f67de32d864df3b969adb567178
+spec_approved: true
+spec_approved_at: '2026-11-21T16:01:23.452Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+
