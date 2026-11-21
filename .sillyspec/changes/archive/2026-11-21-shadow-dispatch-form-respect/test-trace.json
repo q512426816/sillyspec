@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-21-shadow-dispatch-form-respect",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-21-shadow-dispatch-form-respect:flow:测试绑定FR-01",
+      "tests": [
+        "test/shadow-dispatch-form.test.mjs「形态免评审 skip：review_force=false / turbo=true 各 skip+ledger 留痕，flow-state 缺失放行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-shadow-dispatch-form-respect"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-21-shadow-dispatch-form-respect:flow:测试绑定FR-02",
+      "tests": [
+        "test/shadow-dispatch-form.test.mjs「gates 影子挂点同步化：源码结构断言 await 语义（孤儿 .catch fire-and-forget 形态不存在）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-shadow-dispatch-form-respect"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-21-shadow-dispatch-form-respect:flow:测试绑定FR-03",
+      "tests": [
+        "test/shadow-dispatch-form.test.mjs「既有链零改动：非免评审形态走既有链 + tier-not-light 既有文案逐字 + review_force=true 不豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-shadow-dispatch-form-respect"
+    }
+  ]
+}

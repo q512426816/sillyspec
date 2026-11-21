@@ -167,6 +167,7 @@
 - skills-docs → [decisions/skills-docs.md](decisions/skills-docs.md)
 - release → [decisions/release.md](decisions/release.md)
 - eval → [decisions/eval.md](decisions/eval.md)
+- dispatch → [decisions/dispatch.md](decisions/dispatch.md)
 
 ## FR 需求索引
 - host-fs-handler → [fr/host-fs-handler.md](fr/host-fs-handler.md)
@@ -233,3 +234,4 @@
 - ppm → [fr/ppm.md](fr/ppm.md)
 - knowledge → [fr/knowledge.md](fr/knowledge.md)
 - app-sessions-pages → [fr/app-sessions-pages.md](fr/app-sessions-pages.md)
+- dispatch → [fr/dispatch.md](fr/dispatch.md)

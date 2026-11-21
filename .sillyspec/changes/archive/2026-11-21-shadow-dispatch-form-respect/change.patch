@@ -1,0 +1,285 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 6bb925db..a4d68fc0 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -46,3 +46,5 @@
+ | 2026-11-14 | 2026-11-15-scan-audit-domain | 修复增量 scan 对账的多项目跨域污染 |
+ | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
+ | 2026-11-21 | 2026-11-21-mattpocock-absorb-roadmap | 登记 mattpocock skills 吸收路线图 |
++| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
++| 2026-11-21 | 2026-11-22-prompt-primitive-survey | 盘点阶段提示词可抽取纪律原语 |
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 093a8020..3d6af503 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -120,3 +120,4 @@
+ | 2026-11-15 | 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称 |
+ | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
+ | 2026-11-19 | 2026-11-19-closeout-noise-fix | 收口对账降噪：删除面误报与dirty缺口口径 |
++| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index ddcdf3c0..126caba6 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -126,3 +126,5 @@
+ | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+ | 2026-11-12 | 2026-11-13-probe7-existing-tests-cap | 探针7既有用例候选行加展示帽并去重 |
+ | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
++| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
++| 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index bd20db14..074ad4e7 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -40,3 +40,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+ | 2026-11-14 | 2026-11-14-scan-incremental | 新 src/scan-codegraph.js（探测三态/cmd-shim/形状映射）与 src/scan-incremental.js（增量计划：基线锚/归属/篇章映射/对账/软门）归本域；scan-staleness 基线语义兼容（增量收口统一 bump 后判 fresh） |
+ | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
++| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 09df737c..62482e5d 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -97,3 +97,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称
+ - 2026-11-15-auxiliary-scan-no-stick | 辅助阶段 scan/explore 豁免变更吸附路由
+ - 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露
++- 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index 611ed27e..b684fdae 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -43,3 +43,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-28 | 2026-10-29-metrics-routes | 指标门路由形态：路径集合多语言路由 |
+ | 2026-11-04 | 2026-11-04-question-typing-subagent-guard | 提问分型与子代理豁免两处提示词修正 |
+ | 2026-11-08 | 2026-11-08-flow-askuser-confirm | 轻量变更确认环节改用工具问询 |
++| 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index b45152f1..5b070172 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -85,3 +85,4 @@
+ | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
+ | 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |
+ | 2026-11-14 | 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物 |
++| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+diff --git a/src/review-dispatch.js b/src/review-dispatch.js
+index 24b5d30f..588b2ca4 100644
+--- a/src/review-dispatch.js
++++ b/src/review-dispatch.js
+@@ -25,6 +25,7 @@ import { writeAtomicSync } from './fs-atomic.js'
+ import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
+ import { assembleProbeLinesForScope } from './review-probes.js'
+ import { CEREMONY_TIERS } from './ceremony-tier.js'
++import { readFlowState } from './flow-state.js'
+ import { withFileLock } from './quicklog.js'
+ import {
+   renderReviewJsonContract,
+@@ -923,6 +924,16 @@ export async function dispatchShadowReview(opts = {}) {
+         await appendShadowLedgerSkip(runtimeRoot, { change: changeName, stage, tier: tierDoc ? tierDoc.tier : null, reason })
+         return { ok: true, shadow: true, skipped: true, reason }
+       }
++      // 前置⓪：形态免评审门（2026-11-21-shadow-dispatch-form-respect，用户裁决「形态压过旁路+保留」）：
++      // 声明 --no-review（review_force=false）/ --turbo（turbo=true）的 thin 变更，收口影子不再派发——
++      // 用户对评审形态的显式选择压过旁路对照数据采集（主会话如实报告「不派平台评审」时，任何通道
++      // 含数据采集旁路都不派）。留痕归因 form-review-exempt；flow-state 缺失（run 跑道）/损坏 →
++      // readFlowState fail-soft 返 null 不命中，既有链零改动；review_force=true 强制档不豁免。
++      const formState = readFlowState(join(specBase, 'changes', changeName))
++      if (formState && (formState.review_force === false || formState.turbo === true)) {
++        const formDesc = formState.turbo === true ? '--turbo（turbo: true）' : '--no-review（review_force: false）'
++        return skip(`form-review-exempt（变更声明免评审形态 ${formDesc}——形态压过旁路，不派影子对照）`)
++      }
+       // 前置①：档位 ∈ S0/S1（task-03 档位文件契约；无档位文件 = 未定价变更，不开影子）
+       if (!tierDoc) return skip('tier-file-missing（.runtime/ceremony-tier-<change>.json 不存在——影子派发只对已定价的轻档变更开跑）')
+       if (!SHADOW_LIGHT_TIERS.includes(tierDoc.tier)) return skip(`tier-not-light（当前档 ${tierDoc.tier}——影子派发只覆盖 S0/S1 轻档，S2/S3 本就是重仪式）`)
+diff --git a/src/run/gates.js b/src/run/gates.js
+index f9aa62de..0867d00c 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -10,8 +10,9 @@
+  *     friction-ledger 累计账 → escalateByFriction → .runtime/ceremony-tier-<change>.json
+  *     迁移留痕，只升不降、fail-soft 不阻断完成）；verify 检查族末位接 ceremony 双跑收口第一
+  *     出口（runCeremonyDualRunCheck：声明档 vs 实际 diff 事实档，mismatch=errors 硬 flag 阻断，
+- *     task-04 接线 / execute 评审 FAIL 修复）；升档检查块后 fire-and-forget 影子审查派发
+- *     （dispatchShadowReview，task-06 接线 / execute 评审 GAP 修复，只记账不阻断）
++ *     task-04 接线 / execute 评审 FAIL 修复）；升档检查块后同步派发影子审查
++ *     （dispatchShadowReview，task-06 接线 / execute 评审 GAP 修复 / 2026-11-21-shadow-dispatch-form-respect
++ *     FR-02 改 await——披露行退出前恒打出，只记账不阻断）
+  *   - enforceDepsGate：execute depsStatus 不达标且非 wave 级 opt-out 时阻断 --done（exit 1）
+  *   - rollbackCompletionAndReturn / rollbackStageCompletion：统一回滚 stage/step 状态 + 落盘 + sync
+  *   - isCurrentWaveAllNoDepsVerify：enforceDepsGate 的私有 helper（wave 级 no_deps_verify opt-out 判定）
+@@ -1729,22 +1730,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     }
+   }
+ 
+-  // ── 影子期后台静默派发触发点（2026-09-18-ceremony-risk-pricing task-06 / Phase 3；
+-  //    execute 评审 GAP 项补接线）：升档检查块后 fire-and-forget（dispatchShadowReview JSDoc
+-  //    建议挂点），S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重
+-  //    对照——只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
+-  //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（档位∈S0/S1、ceremony.shadow
+-  //    开关、幂等闸、平台 client 可用性）全在函数内部，不满足 → skip 留痕对照账（零噪音）。
++  // ── 影子期静默派发触发点（2026-09-18-ceremony-risk-pricing task-06 / Phase 3；
++  //    execute 评审 GAP 项补接线）：升档检查块后同步派发（2026-11-21-shadow-dispatch-form-respect
++  //    FR-02：原 fire-and-forget 孤儿 Promise 在收口命令退出后才打出 ℹ️ 行——主会话读不到披露，
++  //    实证 pi 影子会话无声起会话、披露行丢失；改 await，dispatchShadowReview 自身 catch-all
++  //    永不抛 + 网络面有界（client 缺省 10s 超时），await 不引入无界等待，ℹ️ 行保证退出前打出）。
++  //    S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重对照——
++  //    只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
++  //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（形态免评审门
++  //    form-review-exempt、档位∈S0/S1、ceremony.shadow 开关、幂等闸、平台 client 可用性）全在
++  //    函数内部，不满足 → skip 留痕对照账（零噪音）。
+   //    client 供给面（P3-1 收口，ql-20260918-006）：复用 review-dispatch 命令先例（index.js:1273）
+   //    懒加载 SillyHubMcpClient 注入——构造只读 local.yaml 配置不联网；未配平台的仓在函数内
+   //    probe no-config 仍走 skip 留痕（合理：影子只在配了平台的仓积累对照数据）。specBase 平台
+   //    接管优先（与上方 Stage Review Gate effectiveSpecBase 同口径）。异常双保险：函数自身
+-  //    catch-all 永不抛 + 外层 try-catch/promise.catch 吞掉（影子是旁路数据面，任何异常绝不影响
+-  //    门判定与完成）。──
++  //    catch-all 永不抛 + 外层 try-catch 吞掉（影子是旁路数据面，任何异常绝不影响门判定与完成）。──
+   if (['brainstorm', 'plan', 'execute'].includes(stageName) && changeName) {
+     try {
+       const shadowSpecBase = platformOpts?.specRoot || specBase
+-      Promise.all([
++      const shadowResult = await Promise.all([
+         import('../review-dispatch.js'),
+         import('../sillyhub-mcp/client.js'),
+       ])
+@@ -1761,13 +1765,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             client: shadowClient,
+           });
+         })
+-        .then((r) => {
+-          if (r && r.ok && !r.skipped && r.missionId) {
+-            console.log(`\nℹ️ 影子审查已后台派发（mission ${r.missionId}，fire-and-forget 只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)
+-          }
+-        })
+-        .catch(() => { /* fire-and-forget：影子链路异常吞掉，绝不向主线传播 */ })
+-    } catch { /* 动态 import 触发失败静默（影子是旁路数据面） */ }
++      if (shadowResult && shadowResult.ok && !shadowResult.skipped && shadowResult.missionId) {
++        console.log(`\nℹ️ 影子审查已派发（mission ${shadowResult.missionId}，只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)
++      }
++    } catch { /* 影子链路异常吞掉（旁路数据面），绝不向主线传播 */ }
+   }
+   return null
+ }
+diff --git a/test/shadow-dispatch-form.test.mjs b/test/shadow-dispatch-form.test.mjs
+new file mode 100644
+index 00000000..0aa2ae37
+--- /dev/null
++++ b/test/shadow-dispatch-form.test.mjs
+@@ -0,0 +1,116 @@
++/**
++ * 影子派发形态门测试（2026-11-21-shadow-dispatch-form-respect）
++ *
++ * 用户裁决「形态压过旁路+保留」：声明 --no-review（review_force=false）/ --turbo（turbo=true）
++ * 形态的变更，收口影子审查不再派发（ledger skips 留痕 form-review-exempt）；非免评审形态
++ * 走既有链零改动；gates 影子挂点 fire-and-forget 改 await 同步（披露行退出前恒打出）。
++ *
++ * 覆盖：
++ *   1. FR-01 形态门：review_force=false / turbo=true → skipped + form-review-exempt 留痕
++ *      （change/stage/tier 入账）；flow-state 缺失 / review_force=true 放行（走到既有
++ *      platform-client-missing 检查——证明形态门未拦）
++ *   2. FR-03 既有链零改动：tier-not-light 既有文案逐字（S2+无形态声明）；tier-file-missing
++ *      既有文案逐字（形态检查不挤掉既有第一道）
++ *   3. FR-02 gates 挂点同步化：源码结构断言 await Promise.all 语义（孤儿 fire-and-forget 不存在）
++ *
++ * 风格：自研 assert 计数报告 + mkdtempSync 临时目录（对齐 test/ceremony-tier.test.mjs），
++ * 不引入测试框架；不 mock dispatchShadowReview 真实逻辑——真函数直调，skip 场景无需网络
++ * （形态检查内聚在前置链、client 检查之前，client 传 undefined 即可测全部形态分支）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++
++import { dispatchShadowReview, readShadowLedger } from '../src/review-dispatch.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++let pass = 0
++let fail = 0
++function ok(cond, label) {
++  if (cond) { pass++; console.log(`  ✓ ${label}`) } else { fail++; console.log(`  ✗ ${label}`) }
++}
++function section(title) { console.log(`\n=== ${title} ===`) }
++
++/** 造影子派发 fixture：specBase(.sillyspec 形态根)/changes/<change>/flow-state.yaml + .runtime/档位文件 */
++function makeFixture({ change, flowStateYaml, tier }) {
++  const base = mkdtempSync(join(tmpdir(), 'shadow-form-'))
++  const specBase = join(base, 'specroot', '.sillyspec')
++  const changeDir = join(specBase, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true }) // runtimeStatePath 落 <runtimeRoot>/state/
++  if (flowStateYaml !== null) writeFileSync(join(changeDir, 'flow-state.yaml'), flowStateYaml, 'utf8')
++  if (tier) writeFileSync(join(specBase, '.runtime', 'state', `ceremony-tier-${change}.json`), JSON.stringify({ tier, components: {}, reasons: [], transitions: [] }), 'utf8')
++  return { base, specBase, runtimeRoot: join(specBase, '.runtime'), change }
++}
++
++async function dispatch(fx, stage = 'brainstorm') {
++  return dispatchShadowReview({ mode: 'create', cwd: fx.base, specBase: fx.specBase, changeName: fx.change, stage, client: undefined })
++}
++
++// ── 1. FR-01 形态门 ──────────────────────────────────────────
++section('1. FR-01 形态免评审 skip：review_force=false / turbo=true 留痕，缺失/强制档放行')
++
++{
++  const fx = makeFixture({ change: 'chg-no-review', flowStateYaml: 'tier: thin\nreview_force: false\n', tier: 'S1' })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true, 'review_force=false → skipped=true')
++  ok(typeof r.reason === 'string' && r.reason.includes('form-review-exempt'), `reason 含 form-review-exempt（实际 ${r.reason}）`)
++  ok(r.reason.includes('--no-review'), 'reason 含形态表述 --no-review')
++  const ledger = readShadowLedger(fx.runtimeRoot)
++  const last = (ledger.skips || []).filter((s) => s.change === fx.change).pop()
++  ok(!!last && last.reason.includes('form-review-exempt'), 'ledger skips 留痕该 change 条目')
++  ok(!!last && last.stage === 'brainstorm' && last.tier === 'S1', '留痕带 stage+tier')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++{
++  const fx = makeFixture({ change: 'chg-turbo', flowStateYaml: 'tier: thin\nturbo: true\nturbo_since: "2026-11-21T00:00:00.000Z"\n', tier: 'S1' })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true && r.reason.includes('form-review-exempt'), 'turbo=true → skipped + form-review-exempt')
++  ok(r.reason.includes('turbo'), 'reason 含形态表述 turbo')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++{
++  const fx = makeFixture({ change: 'chg-nofs', flowStateYaml: null, tier: 'S1' })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true && String(r.reason).startsWith('platform-client-missing'), 'flow-state 缺失（run 跑道）→ 不命中形态门，走到既有 client 检查')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++{
++  const fx = makeFixture({ change: 'chg-force', flowStateYaml: 'tier: thin\nreview_force: true\n', tier: 'S1' })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true && String(r.reason).startsWith('platform-client-missing'), 'review_force=true（--review 强制档）→ 不豁免，走既有链')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++// ── 2. FR-03 既有链零改动 ────────────────────────────────────
++section('2. FR-03 既有 skip 文案逐字不漂移')
++
++{
++  const fx = makeFixture({ change: 'chg-s2', flowStateYaml: null, tier: 'S2' })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true && r.reason === 'tier-not-light（当前档 S2——影子派发只覆盖 S0/S1 轻档，S2/S3 本就是重仪式）', 'tier-not-light 既有文案逐字不变')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++{
++  const fx = makeFixture({ change: 'chg-notier', flowStateYaml: 'tier: thin\n', tier: null })
++  const r = await dispatch(fx)
++  ok(r && r.skipped === true && String(r.reason).startsWith('tier-file-missing（'), 'tier 文件缺失 → 既有 tier-file-missing 文案（形态检查不抢跑）')
++  rmSync(fx.base, { recursive: true, force: true })
++}
++
++// ── 3. FR-02 gates 影子挂点同步化（源码结构断言）──────────────
++section('3. FR-02 gates 挂点 await 同步（披露行退出前恒打出）')
++
++{
++  const src = readFileSync(join(REPO_ROOT, 'src', 'run', 'gates.js'), 'utf8')
++  ok(/await Promise\.all\(\[\s*\n\s*import\('\.\.\/review-dispatch\.js'\)/.test(src), '影子派发链已 await（Promise.all 前缀 await 语义）')
++  ok(!/\.catch\(\(\) => \{ \/\* fire-and-forget/.test(src), '孤儿 fire-and-forget .catch 形态已移除')
++}
++
++console.log(`\n── 结果：${pass} passed, ${fail} failed ──`)
++if (fail > 0) process.exit(1)

@@ -10,3 +10,4 @@
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-21 | 2026-10-21-review-dispatch-answer-salvage | 修独立评审回收链：answer 原文兜底 |
 | 2026-10-23 | 2026-10-23-review-inline-dispatch | 评审派发平台通道单调用化 |
+| 2026-11-21 | 2026-11-21-shadow-dispatch-form-respect | 免评审形态收口不再自动派影子审查 |
