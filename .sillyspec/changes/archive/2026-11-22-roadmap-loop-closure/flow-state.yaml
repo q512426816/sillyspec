@@ -1,0 +1,43 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  吸收路线闭环化入工具工作区
+
+  用户指出：docs/ROADMAP.md 与 docs/sillyspec/out-of-scope/ 是死文档——无工具消费（不进 knowledge 检索注入，防复潮为零）、无状态回写（批 0-3a
+  已归档但路线仍写「建议立项」）、位置在项目 docs 而非工具工作区（.sillyspec/ 是长期项目资产区非临时区）。本变更把路线资产三环闭合：机器消费（knowledge 化）、状态推进（状态列回写）、位置归位（入
+  .sillyspec/docs/）。
+
+  成功标准：
+
+  - 不抄清单与拒绝概念沉淀为 knowledge 可检索条目（decision/gotcha 域，INDEX 路由行齐），sillyspec knowledge search <关键词> 可命中
+
+  - ROADMAP 迁移至 .sillyspec/docs/sillyspec/ROADMAP.md 并新增「状态」列，批 0-3a 如实回写「已归档（提交号）」
+
+  - 删除 docs/ROADMAP.md 与 docs/sillyspec/out-of-scope/（内容已 knowledge 化，不留死文档）
+
+  - CLAUDE.md 中「记录到 docs/（troubleshooting.md / ROADMAP / quicklog）」指引句修正为工作区路径与 knowledge 通道
+
+  - 归档件（审计事实）不追改
+autopilot: true
+prestage_ack: false
+baseline_commit: 896b51276319709b2d53ff002086c4decdab8210
+updatedAt: '2026-11-21T23:17:11.792Z'
+baseline_sha256: b68446efb2102bef64fa8c2e6da52dd71d52c36be9a10bc46f2ed14acfacbc75
+spec_approved: true
+spec_approved_at: '2026-11-21T23:15:42.442Z'
+spec_approved_by: mattpocock-absorb
+spec_approved_channel: user-confirmed
+spec_attested_by: mattpocock-absorb
+batch_ticked: true
+gate_summary: 'test: —｜lint: —｜门文件 7 个'
+

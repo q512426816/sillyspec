@@ -32,7 +32,7 @@
 15. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；存量 quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突（quick 已退役，新工作不再产生 quicklog 条目）。**主文件超 500 行时 CLI 自动轮转**：历史条目整体挪到同目录 `QUICKLOG-<user>-<日期>.md`，主文件仅剩新条目——git diff 上主文件呈大幅删除是正常轮转不是数据丢失，勿从 git 恢复（会与轮转副本重复），提交时带上轮转归档文件。
 16. **quicklog 手动精修（存量通道）**：CLI 只写骨架，存量 quick 会话 `--done` 后手动补语义化标题 / 文件多行带括注 / 结果四段；新工作的记录以变更级归档为准（flow done 机器产出）。
 17. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
-18. **发现 SillySpec 自身缺陷或改进点**，记录到 `docs/`（troubleshooting.md / ROADMAP / quicklog），处理好后归档。
+18. **发现 SillySpec 自身缺陷或改进点**：故障排查记 `docs/troubleshooting.md`；决策/否决/坑走 knowledge 通道（变更内 `decisions add` 随收口蒸馏，机器检索防复潮）；路线/规划类资产归 `.sillyspec/docs/sillyspec/ROADMAP.md`（工具工作区，勿放项目 docs/）。处理好后归档。
 19. **改动触及 `src/stages/*` 或文件生命周期代码**，按下方「文件生命周期文档同步」「提示词文档同步」同步文档与 `.claude/skills/`。
 20. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 21. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged/Dirty 文件不替人提交或清理。

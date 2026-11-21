@@ -27,7 +27,7 @@
 15. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠。
 16. **quicklog 手动精修**：CLI 只写骨架，`--done` 后手动补语义化标题 / 文件多行带括注 / 结果四段。
 17. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
-18. **发现 SillySpec 自身缺陷或改进点**，记录到 `docs/`（troubleshooting.md / ROADMAP / quicklog），处理好后归档。
+18. **发现 SillySpec 自身缺陷或改进点**：故障排查记 `docs/troubleshooting.md`；决策/否决/坑走 knowledge 通道（变更内 `decisions add` 随收口蒸馏，机器检索防复潮）；路线/规划类资产归 `.sillyspec/docs/sillyspec/ROADMAP.md`（工具工作区，勿放项目 docs/）。处理好后归档。
 19. **改动触及 `src/stages/*` 或文件生命周期代码**，按下方「文件生命周期文档同步」「提示词文档同步」同步文档与 `.claude/skills/`。
 20. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 

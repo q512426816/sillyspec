@@ -122,3 +122,28 @@
 文件：docs/sillyspec/prompt-primitives-survey.md
 最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
 理由：派只读子代理全量扫描 `src/stages/*.js`（含 `templates/prompts/` 现状），识别被 ≥2 阶段/步骤复用的纪律散文段，产出结构化清单落 `docs/sillyspec/prompt-primitives-survey.md`。选子代理扫描：stages 全量 ~5000+ 行，独立上下文做重复段比对不占主会话；选纯文档落盘（不动 src/）：批 3b/3c 是独立变更，本变更只供设计输入——调研与施工分离，避免一个变更既盘点又重构。
+
+## D-docs-010@v1 2026-11-22-roadmap-loop-closure——三环闭合：①机器消费——拒绝概念与位置裁决走变更内 decisions.md 记 D-001/D-002，收口 distill 自动蒸馏进 knowledge
+状态：implemented
+变更：2026-11-22-roadmap-loop-closure
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-22-roadmap-loop-closure/design.md
+文件：docs/ROADMAP.md, docs/sillyspec/out-of-scope/README.md, docs/sillyspec/out-of-scope/mattpocock-skills-full-adoption.md, docs/troubleshooting.md
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+理由：三环闭合：①机器消费——拒绝概念与位置裁决走变更内 decisions.md 记 D-001/D-002，收口 distill 自动蒸馏进 knowledge decisions 域（这是工具自带的防复潮通道，批 0/批 1 误把同类内容写进无人检索的 md 是绕开了正道）；②状态推进——ROADMAP 迁入 `.sillyspec/docs/sillyspec/` 并加状态列，批 0-3a 回写已归档提交号；③位置归位——删除项目 docs/ 下的死文档（ROADMAP+out-of-scope），修正两份 CLAUDE.md 的过时指引句。归档件历史引用不追改（审计事实）。
+
+## 拒绝 mattpocock skills 全量照搬流程形态（八条不抄与内核冲突点）
+
+问题：是否把 mattpocock/skills（33 万 star 工程 skill 集）的流程形态整套搬进 SillySpec（纯提示词承载纪律/无状态机无门禁/Skill-tool 互调/GLOSSARY 单文件常读/配置落盘 docs/agents/frontier 整轮齐发/spec 禁写文件路径）？
+答案：拒绝。SillySpec 的存在理由是机器护栏（CLI 状态机+实测门+冻结对账），纯提示词纪律上限是 agent 自觉、下限没有。
+否决理由：1) frontier 整轮齐发与 brainstorm P0 逐轮逐问状态机冲突；2) spec 禁写文件路径拆掉 NEW: 前缀机器对账数据源；3) 双轴并行子代理评审的成本抵触审查经济学三律且遮蔽已由 review.json 硬门禁兜底；4) triage 状态机需绑外部 tracker 违反工具中立性规约 00；5) Skill-tool 互调不可验证，{{include:}} 模板才是同构等价物；6) GLOSSARY 取代 knowledge 会拆大仓路由机制；7) 配置落盘 docs/agents 与 local.yaml 双源漂移；8) 不发 npm/PR 关门/newsletter 漏斗不适用（护城河是进程+SQLite+实测门）。吸收的是文本工程纪律（seam 约定/三层审查优先级/微设计/原语复用），不是流程形态。
+复潮条件：无（除非放弃机器护栏内核=产品重定位）。单项技术观察性吸收（wayfinder/retro）不属本拒绝范围。
+来源：2026-11-21 四视角调研收敛；决策登记变更 2026-11-22-roadmap-loop-closure D-001。
+
+## 路线规划类资产归工具工作区而非项目 docs（D-002 位置裁决）
+
+问题：ROADMAP/规划/路线类资产放项目 docs/ 还是工具工作区 .sillyspec/？
+答案：归工具工作区 .sillyspec/docs/sillyspec/ROADMAP.md；项目 docs/ 不承载工具域路线。
+否决理由：项目 docs/ 下的路线文件无工具消费——不进 knowledge 检索注入（防复潮为零）、无状态回写（路线与事实脱节），是死文档；.sillyspec/ 是长期项目资产区（knowledge/模块映射/归档全在其中）非临时目录。闭环三环：拒绝概念走 decisions→distill 进 knowledge（机器检索）、路线状态随归档回写（批次表状态列）、位置归工作区与 scan 文档同域。
+复潮条件：工具出现 roadmap 一等公民命令族（sillyspec roadmap add/tick）时可重评位置与形态；在那之前手工回写状态列够用。
+来源：2026-11-22 用户裁决（会话原话「不写到工作目录里有什么用/工作目录肯定不是临时目录」）；决策登记变更 2026-11-22-roadmap-loop-closure D-002；路径迁移映射 docs/ROADMAP.md→.sillyspec/docs/sillyspec/ROADMAP.md、docs/sillyspec/out-of-scope/→撤销归 knowledge。

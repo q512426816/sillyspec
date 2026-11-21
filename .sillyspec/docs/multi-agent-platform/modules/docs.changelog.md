@@ -48,3 +48,4 @@
 | 2026-11-21 | 2026-11-21-mattpocock-absorb-roadmap | 登记 mattpocock skills 吸收路线图 |
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
 | 2026-11-21 | 2026-11-22-prompt-primitive-survey | 盘点阶段提示词可抽取纪律原语 |
+| 2026-11-21 | 2026-11-22-roadmap-loop-closure | 吸收路线闭环化入工具工作区 |

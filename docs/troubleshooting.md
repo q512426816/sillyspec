@@ -178,3 +178,20 @@ sed -n '20,34p' src/decision-values.js
 复核条件：下一次出现「提议做某个已被裁决否决/冻结的能力」时，若召回仍失效，本条目升级为必修。
 
 > 关联：[[D-001@v1]]（`2026-10-15-fr-chain-l3-adjudication`——本轮被漏掉的裁决本体）。
+
+---
+
+## flow done 冻结面把 `.claude/skills/` 判空——纯 skill 交付变更被迫走 --accept-empty-face
+
+### 现象
+变更 2026-11-22-diagnose-skill（唯一交付=NEW:.claude/skills/sillyspec-diagnose/SKILL.md，已按显式 pathspec 提交入库 fc09622b）收口时 patch 子步报「冻结面为空但 design 声明清单有 1 条未标注交付条目」，被迫 `--accept-empty-face` 签收——审计件 change.patch 为空，交付事实只存在于 git 历史。
+
+### 根因
+冻结面采集（baseline..HEAD 提交面归属判定）对 `.claude/` 路径下的交付文件不识别/不归属（判定为可归属文件面为空——「治理工件不入冻结面」分支把 skill 文件一并排掉），而 design 声明面含该路径，两边口径不一致。
+
+### 处置
+**未修复 · 观察项**——登记待修。候选方向：冻结面归属判定把 `.claude/` 下非治理工件路径（如 skills）计入可归属交付面；或收口提示明确「.claude/ 交付建议走 --accept-empty-face」前置化。
+
+复核条件：下一个含 `.claude/` 交付的变更收口时验证是否仍判空。
+
+> 关联：[[D-002@v1]]（`2026-11-22-roadmap-loop-closure`——工具工作区资产位置裁决，同批闭环欠账清理）。

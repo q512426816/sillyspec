@@ -2290,3 +2290,38 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-22-prompt-primitive-survey/requirements.md#FR-04
 最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
+
+## FR-docs-128 不抄清单与拒绝概念沉淀为 knowledge 可检索条目（decision/gotcha 域，INDEX 路由行齐），sillyspec knowledge search "<关键词>" 可命中
+变更：2026-11-22-roadmap-loop-closure
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-01
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+
+## FR-docs-129 ROADMAP 迁移至 .sillyspec/docs/sillyspec/ROADMAP.md 并新增「状态」列，批 0-3a 如实回写「已归档（提交号）」
+变更：2026-11-22-roadmap-loop-closure
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-02
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+
+## FR-docs-130 删除 docs/ROADMAP.md 与 docs/sillyspec/out-of-scope/（内容已 knowledge 化，不留死文档）
+变更：2026-11-22-roadmap-loop-closure
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-03
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+
+## FR-docs-131 CLAUDE.md 中「记录到 docs/（troubleshooting.md / ROADMAP / quicklog）」指引句修正为工作区路径与 knowledge 通道
+变更：2026-11-22-roadmap-loop-closure
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-04
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+
+## FR-docs-132 归档件（审计事实）不追改
+变更：2026-11-22-roadmap-loop-closure
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-05
+最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d

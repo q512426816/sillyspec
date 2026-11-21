@@ -1,0 +1,114 @@
+{
+  "change": "2026-11-22-roadmap-loop-closure",
+  "baseline": "896b51276319709b2d53ff002086c4decdab8210",
+  "head": "1bfcebf873204a5256a8c83cf495de4ca999186d",
+  "files": [
+    ".sillyspec/docs/sillyspec/ROADMAP.md",
+    "docs/ROADMAP.md",
+    "docs/sillyspec/out-of-scope/README.md",
+    "docs/sillyspec/out-of-scope/mattpocock-skills-full-adoption.md",
+    "docs/troubleshooting.md"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 52,
+    "deletions": 76
+  },
+  "savedAt": "2026-11-21T23:17:10.989Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 4,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "896b51276319709b2d53ff002086c4decdab8210",
+    "totals": {
+      "files": 7,
+      "additions": 52,
+      "deletions": 76
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/ROADMAP.md",
+        "additions": 35,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/ROADMAP.md",
+        "additions": 0,
+        "deletions": 41,
+        "kind": "deleted",
+        "planned": "删除",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/out-of-scope/README.md",
+        "additions": 0,
+        "deletions": 18,
+        "kind": "deleted",
+        "planned": "删除",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/out-of-scope/mattpocock-skills-full-adoption.md",
+        "additions": 0,
+        "deletions": 17,
+        "kind": "deleted",
+        "planned": "删除",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/troubleshooting.md",
+        "additions": 17,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": ".claude/CLAUDE.md",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "00fb60ecdf9a436c4944db1321d617a51a98392368272fa40aa8f88f1f57e688",
+  "patchStatus": "ok"
+}
