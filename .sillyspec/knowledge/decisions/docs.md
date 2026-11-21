@@ -95,3 +95,12 @@
 文件：docs/sillyspec/file-lifecycle.md, src/scan-incremental.js, test/scan-incremental.test.mjs
 最近确认：8f76681fb6d3515737e5b11a9c6da44838180d75
 理由：上游变更 2026-11-14-scan-incremental 的 `_module-map` 对账存在多项目跨域污染：`computeIncrementalPlan` 的对账用「codegraph 索引全仓文件清单 × 本项目 scope」求未归属——多项目仓（如 multi-agent-platform 的 backend/frontend/daemon/SillyHub 子项目）里，其他项目的文件全部落在本项目 scope 之外，被误报为「未归属」（backend 项目实测误报 3296 个，真实盲区是根项目口径的 1 个）。 修复：对账按**注册项目 path 剥前缀对齐口径**——读 `projects/<projectName>.yaml` 的 `path`（子项目=其仓内目录如 `backend`；主项目 `path: .`/未注册=空前缀）：索引文件路径剥项目前缀后与 map paths（项目相对口径）比对，剥不动的文件（其他项目域内）不进对账分母与未归属（跨域污染修复）；空前缀项目（主项目/单项目仓）不剥不滤，根级散文件仍是该报的真实盲区（行为不变）。真机暴露的深层根因：子项目 map paths 是项目相对（`app/core/**`）而索引是全仓相对（`backend/app/...`）——上游「3296 未归属」本质是口径错配，本修复同时纠正覆盖判定。改动点集中在 `src/scan-incremental.js` 对账段（数行）+ 单测补正反例。 文件变更清单：`src/scan-incremental.js`（对账段剥前缀+双口径+readProjectPathPrefix 内联）、`test/scan-incremental.test.mjs`（新增域过滤 2 用例）、`docs/sillyspec/file-lifecycle.md`（scan 增量模式段补记对账口径对齐，收口补证提交 8f76681f）。
+
+## D-docs-007@v1 2026-11-21-mattpocock-absorb-roadmap——把四子代理调研（生态分发/架构复用/方法论盲维/提示词微设计）的收敛结论作为新章节追加进 ROADMAP 文档：批次表（批 0-批 5）+ 搁置区 + 明确不抄
+状态：implemented
+变更：2026-11-21-mattpocock-absorb-roadmap
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-21-mattpocock-absorb-roadmap/design.md
+文件：docs/ROADMAP.md
+最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
+理由：把四子代理调研（生态分发/架构复用/方法论盲维/提示词微设计）的收敛结论作为新章节追加进 ROADMAP 文档：批次表（批 0-批 5）+ 搁置区 + 明确不抄清单。只做登记不做实现——每个后续批次各自立项时按行引用本章条目。选纯文档追加形态：调研结论的时效价值在「可引用落盘」（防复潮：重复提案可一句引用关掉），实现动作归各批次变更，避免一个巨型变更混 doc 与 code。

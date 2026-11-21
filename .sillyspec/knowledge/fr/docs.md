@@ -2106,3 +2106,31 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-19-pitfall-trio-closeout
   status: active
+
+## FR-docs-112 docs/ROADMAP.md 新增吸收路线章节，含批次表（批0-批5：内容/立项形态/依赖）与搁置区（wayfinder/retro/triage 及触发条件）
+变更：2026-11-21-mattpocock-absorb-roadmap
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-mattpocock-absorb-roadmap/requirements.md#FR-01
+最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
+
+## FR-docs-113 含明确不抄清单（frontier 整轮齐发/spec 禁路径/双轴并行评审/triage 状态机等）及各条理由
+变更：2026-11-21-mattpocock-absorb-roadmap
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-mattpocock-absorb-roadmap/requirements.md#FR-02
+最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
+
+## FR-docs-114 每个批次条目可直接按行引用立项（含建议变更名与立项形态）
+变更：2026-11-21-mattpocock-absorb-roadmap
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-mattpocock-absorb-roadmap/requirements.md#FR-03
+最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
+
+## FR-docs-115 纯文档变更，不触及 src/test
+变更：2026-11-21-mattpocock-absorb-roadmap
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-mattpocock-absorb-roadmap/requirements.md#FR-04
+最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23

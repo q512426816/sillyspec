@@ -1,0 +1,62 @@
+{
+  "change": "2026-11-21-mattpocock-absorb-roadmap",
+  "baseline": "7b67b14e2c73ea7ac9414a3dcfbd34aad060276d",
+  "head": "9167bc28a3ae954abccba36f68dda69a716e7e23",
+  "files": [
+    "docs/ROADMAP.md"
+  ],
+  "totals": {
+    "files": 1,
+    "additions": 41,
+    "deletions": 0
+  },
+  "savedAt": "2026-11-21T15:29:50.493Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7b67b14e2c73ea7ac9414a3dcfbd34aad060276d",
+    "totals": {
+      "files": 1,
+      "additions": 41,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": "docs/ROADMAP.md",
+        "additions": 41,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "e5a1d5d70ce0e95bc46eb401b10383bd43f114c40bd4379896f96408f2049447",
+  "patchStatus": "ok"
+}

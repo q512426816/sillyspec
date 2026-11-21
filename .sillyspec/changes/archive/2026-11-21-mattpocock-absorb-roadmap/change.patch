@@ -1,0 +1,47 @@
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+new file mode 100644
+index 00000000..072ac5b9
+--- /dev/null
++++ b/docs/ROADMAP.md
+@@ -0,0 +1,41 @@
++# ROADMAP
++
++> 本文件是路线登记载体（CLAUDE.md 指引：改进点记录到 docs/ 的 ROADMAP）。每条路线一个章节；专项工程的详档另存 `docs/sillyspec/*-roadmap.md` 并在此登记指针。章节内批次条目可直接按行引用立项（建议变更名以实际立项为准，立项前用 `sillyspec status` 核对活跃变更）。
++
++## mattpocock/skills 吸收路线
++
++> 来源：2026-11-21 四视角调研（生态分发 / 架构复用 / 方法论盲维 / 提示词微设计），调研仓 clone 于 `C:/Users/qinyi/IdeaProjects/mattpocock-skills`（v1.3.2，33 万 star）。
++> 总判断：纪律拓扑两家同构（需求拷问→spec→任务图→TDD→审查→交接），差距在我们 prompt 数据源面的文本工程质量（词汇化、参数化复用、薄厚分层、经济学）——吸收其文本工程纪律，不动机器护栏内核。
++
++### 批次表（批 0-批 5）
++
++| 批次 | 内容 | 建议变更名（以实际立项为准） | 立项形态 | 依赖 |
++|---|---|---|---|---|
++| 批 0 | 方案+调研清单落盘 ROADMAP（本章节） | 2026-11-21-mattpocock-absorb-roadmap | 轻量变更 | 无 |
++| 批 1 | 一行级吸收包：① design.md 模板补「测试 seam 约定」节（每 seam 附能查出什么/查不出什么）② 代码审查三层优先级（CONVENTIONS 覆盖 smell 基线/基线只是 judgement call/工具已拦不报）③ 提问措辞「是」=接受推荐 ④ `[DEBUG-<id>]` 前缀+变异造红后 diff 干净副本自证 ⑤ verify-result 风险节补「单向门/双向门+一词爆炸半径」⑥ 建 out-of-scope 目录（首个文件=下方不抄清单）。改 stages 后须跑 `node docs/prompt/_extract.mjs` 同步镜像 | 2026-11-21-prompt-microdesign-pack | 轻量变更 | 无 |
++| 批 2 | 诊断环 skill：新增 `.claude/skills/sillyspec-diagnose/`（red-capable 复现命令硬前置/可证伪假设排序/tagged 探针/回归测试收尾），配文档指引「bug 类轻量变更在 design 面填复现命令」；先纯 skill 层不动状态机 | 2026-11-21-diagnose-skill | 轻量变更 | 无（可与批 1 并行） |
++| 批 3a | 纪律原语盘点（不动码）：全量扫 `src/stages/*.js`，产出「被 ≥2 阶段复用的纪律段」清单+各自参数化需求（focus/收窄形态），落 docs/sillyspec/ 供批 3b/3c 使用 | 2026-11-21-prompt-primitive-survey | 轻量变更（纯 doc） | 建议批 1 合入后做（避免盘到正要改的段） |
++| 批 3b | include 参数化：`shared.js` `resolvePromptIncludes` 增 `{{include:name\|focus=x}}` 微参数；抽 3-5 个原语试点（候选：token 减负/报告落盘规则/长测试前台执行） | 待 3a 结论定名 | 轻量或小完整流程 | 3a |
++| 批 3c | 指令层/证据层分离：实证引用外移 knowledge/注释，prompt 正文留纯指令（execute.js 1668 行膨胀的根治）；全阶段 prompt 重写+镜像再生+测试面大 | 待 3b 试点后定名 | 完整流程 | 3b 试点验证 |
++| 批 4 | knowledge 词汇通道：`buildKnowledgeInjection` 增「常读词汇」旁路（glossary 类条目阶段首步无条件注入）+ `knowledge propose` 套 ADR 三条件门（难逆+无上下文会惊讶+真权衡） | 待定名（建议 2026-11 月底前） | 轻量变更 | 建议 3b 后（同触碰 prompt 注入面） |
++| 批 5① | 上架 Claude 插件市场：`.claude-plugin/marketplace.json`+`plugin.json`+版本同步 check，复用现有 `.claude/skills/sillyspec-*` 集 | 待用户拍板后定名 | 轻量变更 | 用户决策 |
++| 批 5② | init/config 三段式交互（先探测后问/每问带推荐/已定跳过/草稿先改后落盘） | 待用户拍板后定名 | 轻量变更 | 用户决策 |
++
++### 搁置区（不立项，攒证据后重评）
++
++| 条目 | 观察方式 | 重评触发条件 |
++|---|---|---|
++| wayfinder 跨会话决策票图 | 下一个多阶段大工程（如 noai-ir 后续）先手工按「决策图+票」方式管理 | 手工用出频率证明价值，再考虑做成 skill |
++| retro 环境轴（会话后审视 steering 文件质量） | 下次 CLAUDE/AGENTS 再膨胀时手工做一次审视 | 一次手工审视验证价值后再固化 |
++| SKILL.md frontmatter 最小校验 | 随批 1 顺带评估是否并入（CI 或 flow done 顺带） | 批 1 实施时定 |
++
++### 明确不抄清单（每条附理由——重复提案时直接引用）
++
++1. **frontier 整轮齐发**（grilling「Ask the whole frontier in one round」）：与 brainstorm P0 逐轮逐问状态机冲突——CLI `--answer`/wait 驱动的是终端异步交互模型，打包一屏清单用户记不住、答不全（brainstorm 已有明文禁令）；其「不问依赖未决问题」的内核已隐含在深度优先策略中。
++2. **spec 禁写文件路径与代码片段**（to-spec 模板规则）：会拆掉机器对账数据源——design.md 文件清单是 NEW: 前缀存在性核验、plan-postcheck、allowed_paths、探针对账的输入；mattpocock 防过期的问题我们用 CLI 亲测核验解决。
++3. **双轴并行子代理评审**（code-review Standards/Spec 双 sub-agent）：遮蔽问题已由 CLI 硬门禁兜底（review.json schema、探针重跑对比、fail-closed 槽行）；双子代理成本与「审查经济学三律」的请求预算哲学相抵触；仅「分节报告、不跨轴重排」的输出纪律可轻量借用。
++4. **triage 状态机**：需绑定外部 issue tracker 才有意义，撞「不枚举定义开放世界」规约 00（2026-11-02 用户纠正实证）；其「已实现冗余检查」习惯可入 knowledge。
++5. **Skill-tool 互调复用机制**：复用靠 agent 运行时自觉调用 Skill 工具，不可验证；我们的同构等价物是 `{{include:}}` 模板机制（编译期织入、可测试）。
++6. **GLOSSARY.md 取代 knowledge 库**：mattpocock 假设小仓单文件全读；knowledge 路由机制（INDEX 关键词→锚点、注入上限）为大仓而生——只加「常读词汇」通道（批 4），不换底盘。
++7. **配置落盘 docs/agents/*.md 形态**（setup-matt-pocock-skills）：与 local.yaml+config validate 构成双源漂移，违反本仓双写禁令。
++8. **不发 npm / PR 关门策略 / newsletter 漏斗**：SillySpec 护城河是进程+SQLite+实测门，必须 npm 重分发；PR 关门建立在个人品牌流量资产上，无对应资产照抄等于关死贡献门。
