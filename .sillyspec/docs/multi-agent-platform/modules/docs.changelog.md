@@ -46,3 +46,4 @@
 | 2026-11-14 | 2026-11-15-scan-audit-domain | 修复增量 scan 对账的多项目跨域污染 |
 | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
 | 2026-11-21 | 2026-11-21-mattpocock-absorb-roadmap | 登记 mattpocock skills 吸收路线图 |
+| 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |

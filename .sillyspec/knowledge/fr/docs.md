@@ -2134,3 +2134,131 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-21-mattpocock-absorb-roadmap/requirements.md#FR-04
 最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
+
+## FR-docs-116 brainstorm.js 的 design.md 模板新增「测试 seam 约定」节：列出本变更测试落点，每个 seam 附一行「能查出什么/查不出什么」
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-01
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-01
+  tests: test/design-facts.test.mjs「十四章节标题契约（含 8.5 测试 seam 约定，字面、有序、无多无漏）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active
+
+## FR-docs-117 brainstorm.js 提问纪律补「问题措辞让『是』即接受推荐答案」
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-02
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-02
+  tests: test/prompt-golden.test.mjs「brainstorm 阶段金档哈希锁（随变更再生成后全过）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active
+
+## FR-docs-118 execute.js 代码审查步骤补三层优先级：CONVENTIONS 覆盖 smell 基线、基线仅 judgement call、工具已拦不人工报
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-03
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-03
+  tests: test/prompt-golden.test.mjs「execute 阶段金档哈希锁（随变更再生成后全过）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active
+
+## FR-docs-119 execute.js 测试纪律补 [DEBUG-<id>] 前缀约定与「变异造红后 diff 干净副本自证」
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-04
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-04
+  tests: test/prompt-golden.test.mjs「execute 阶段金档哈希锁（随变更再生成后全过）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active
+
+## FR-docs-120 verify.js 的 verify-result 风险节补「单向门/双向门+一词爆炸半径」字段
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-05
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-05
+  tests: test/prompt-golden.test.mjs「verify 阶段金档哈希锁（随变更再生成后全过）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active
+
+## FR-docs-121 新建 docs/sillyspec/out-of-scope/（README 说明用途+首个被拒概念文件）
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-06
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+## FR-docs-122 改动后运行 node docs/prompt/_extract.mjs 同步 docs/prompt/ 镜像
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-07
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+## FR-docs-123 相关既有测试零回归
+变更：2026-11-21-prompt-microdesign-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-21-prompt-microdesign-pack/requirements.md#FR-08
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-08
+  tests: test/design-facts.test.mjs「全量零回归（十四章节新契约+六章 readiness+literal-any 门禁）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-prompt-microdesign-pack
+  status: active

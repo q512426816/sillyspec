@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-21-prompt-microdesign-pack",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-01",
+      "tests": [
+        "test/design-facts.test.mjs「十四章节标题契约（含 8.5 测试 seam 约定，字面、有序、无多无漏）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-02",
+      "tests": [
+        "test/prompt-golden.test.mjs「brainstorm 阶段金档哈希锁（随变更再生成后全过）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-03",
+      "tests": [
+        "test/prompt-golden.test.mjs「execute 阶段金档哈希锁（随变更再生成后全过）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-04",
+      "tests": [
+        "test/prompt-golden.test.mjs「execute 阶段金档哈希锁（随变更再生成后全过）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-05",
+      "tests": [
+        "test/prompt-golden.test.mjs「verify 阶段金档哈希锁（随变更再生成后全过）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-11-21-prompt-microdesign-pack:flow:测试绑定FR-08",
+      "tests": [
+        "test/design-facts.test.mjs「全量零回归（十四章节新契约+六章 readiness+literal-any 门禁）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-21-prompt-microdesign-pack"
+    }
+  ]
+}

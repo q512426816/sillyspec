@@ -104,3 +104,12 @@
 文件：docs/ROADMAP.md
 最近确认：9167bc28a3ae954abccba36f68dda69a716e7e23
 理由：把四子代理调研（生态分发/架构复用/方法论盲维/提示词微设计）的收敛结论作为新章节追加进 ROADMAP 文档：批次表（批 0-批 5）+ 搁置区 + 明确不抄清单。只做登记不做实现——每个后续批次各自立项时按行引用本章条目。选纯文档追加形态：调研结论的时效价值在「可引用落盘」（防复潮：重复提案可一句引用关掉），实现动作归各批次变更，避免一个巨型变更混 doc 与 code。
+
+## D-docs-008@v1 2026-11-21-prompt-microdesign-pack——按 docs/ROADMAP.md「mattpocock/skills 吸收路线」批 1，把五条提示词微设计直接织入阶段提示词源码：brainstorm.js
+状态：implemented
+变更：2026-11-21-prompt-microdesign-pack
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-21-prompt-microdesign-pack/design.md
+文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, docs/prompt/execute.md, docs/prompt/verify.md, docs/sillyspec/out-of-scope/README.md, docs/sillyspec/out-of-scope/mattpocock-skills-full-adoption.md, src/design-facts.js, src/index.js, src/stages/brainstorm.js, src/stages/execute.js, src/stages/verify.js, src/verify-probes.js, test/design-facts.test.mjs, test/prompt-golden.json
+最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
+理由：按 docs/ROADMAP.md「mattpocock/skills 吸收路线」批 1，把五条提示词微设计直接织入阶段提示词源码：brainstorm.js 两处（design 模板 8.5「测试 seam 约定」节+提问措辞「是=接受推荐」）、execute.js 三处（代码审查三层优先级/DEBUG 前缀/变异自证）、verify.js+verify-probes.js 一处（风险节回退门+爆炸半径字段），另建 out-of-scope 沉淀位。8.5 节采用 7.5 生命周期契约表的条件必填+豁免短语模式（不进 stage-contract-spec 硬门禁），使联动面收敛在模板×骨架×帮助文案×章节契约测试四处。提示词为数据源不是逻辑，改后机械再生 docs/prompt 镜像与 prompt 金档（设计内的快照维护通道）。
