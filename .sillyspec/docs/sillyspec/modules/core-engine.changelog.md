@@ -127,3 +127,4 @@
 | 2026-11-12 | 2026-11-13-probe7-existing-tests-cap | 探针7既有用例候选行加展示帽并去重 |
 | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+| 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |

@@ -1,6 +1,12 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
 born_face: thin
 with_tasks: false
 review_force: false
@@ -24,11 +30,16 @@ input: >-
 autopilot: true
 prestage_ack: false
 baseline_commit: 436ef561f9c73ba4285ab0988af33076ba50dc5f
-updatedAt: '2026-11-21T16:07:14.345Z'
+updatedAt: '2026-11-21T16:19:57.072Z'
 baseline_sha256: 11bb56b267d645a0379e4d2e08641e6f4ac1b492b7b3e1837227ec9af1f40049
 spec_approved: true
 spec_approved_at: '2026-11-21T16:07:14.345Z'
 spec_approved_by: mattpocock-absorb
 spec_approved_channel: user-confirmed
 spec_attested_by: mattpocock-absorb
+gate_summary: 'test: —｜lint: —｜门文件 1 个'
+accept_empty_face:
+  at: '2026-11-21T16:19:55.618Z'
+  declaredCount: 1
+  by: mattpocock-absorb
 

@@ -43,3 +43,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-28 | 2026-10-29-metrics-routes | 指标门路由形态：路径集合多语言路由 |
 | 2026-11-04 | 2026-11-04-question-typing-subagent-guard | 提问分型与子代理豁免两处提示词修正 |
 | 2026-11-08 | 2026-11-08-flow-askuser-confirm | 轻量变更确认环节改用工具问询 |
+| 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |

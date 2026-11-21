@@ -2588,3 +2588,135 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-29-metrics-routes
   status: active
+
+## FR-setup-151 缺省阻断面收窄到自身测试∪非枢纽依赖命中
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-006@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given 未配置 gate_scope（或 gate_scope: lean）的仓执行收口实测；When 动态子集三源组装完成；Then 阻断面=changedFiles 中的测试文件∪仅命中非枢纽源（命中测试数≤DEPS_SYMBOL_NARROW_HUB_MIN）的依赖测试；命中任一枢纽源的测
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-01
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-01
+  tests: test/verify-gate-lean-scope.test.mjs「缺省阻断面=自身∪非枢纽命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active
+
+## FR-setup-152 间接面收口不执行且披露归 pre-push
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-004@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given 阻断面与间接面拆分完成；When 收口实测执行；Then 间接面（枢纽命中测试∪FR 关联回归层）不在收口执行；收口输出披露行列出间接面构成与「归 pre-push」去向；间接面清单落 ledger
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-02
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-02
+  tests: test/verify-gate-lean-scope.test.mjs「间接面不执行且披露归 pre-push」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active
+
+## FR-setup-153 阻断面构成披露可审计
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 收口实测执行完成（无论通过/失败/降级）；When 输出结果；Then 披露行含各源文件数（自身/依赖直接/间接）与总时长；ledger 落盘面构成与间接面清单，事后可查证
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-03
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-03
+  tests: test/verify-gate-lean-scope.test.mjs「披露行构成与 ledger 留痕可查证」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active
+
+## FR-setup-154 时长护栏超预算转留痕不阻断
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-002@v1、D-003@v1
+场景正文：
+- 场景：默认场景 — Given timeout_policy: degrade（缺省）；When 阻断面执行超 TEST_TIMEOUT_MS 预算且 isTimeoutOnlyTestFailure 判定命中；Then 结果改判 degraded-timeout 不阻断收口，loud 披露「阻断面超预算未跑完，转 pre-push/CI 门」+ledger 留痕；timeout
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-04
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-04
+  tests: test/verify-gate-lean-scope.test.mjs「护栏 degrade 转留痕不阻断与 block 旧行为」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active
+
+## FR-setup-155 gate_scope: legacy 逃生阀恢复旧行为
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-006@v1
+场景正文：
+- 场景：默认场景 — Given 配置 verify: gate_scope: legacy + timeout_policy: block；When 收口实测执行；Then 阻断面=三源全阻断面（本变更测试∪FR 关联回归∪import 依赖）且超时=失败阻断，逐字对齐 2026-11-21 前现状行为
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-05
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-05
+  tests: test/verify-gate-lean-scope.test.mjs「legacy+block 组合逐字对齐旧行为」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active
+
+## FR-setup-156 归因出参 opt-in 零回归
+变更：2026-11-21-verify-gate-scope-speed
+状态：active
+摘要：默认场景
+依据决策：D-005@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given discoverModuleDependentTests 不带 withAttribution 调用（三个既有消费点：收口主路径 src/verify-post；When 执行；Then 返回 string[]（逐字现状）；带 withAttribution: true 时返回 { files, attribution, hitCountBySr
+全文：.sillyspec/changes/archive/2026-11-21-verify-gate-scope-speed/requirements.md#FR-06
+最近确认：436ef561f9c73ba4285ab0988af33076ba50dc5f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-21-verify-gate-scope-speed:flow:测试绑定FR-06
+  tests: test/verify-gate-lean-scope.test.mjs「归因出参 opt-in 零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-21-verify-gate-scope-speed
+  status: active

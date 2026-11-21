@@ -97,3 +97,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称
 - 2026-11-15-auxiliary-scan-no-stick | 辅助阶段 scan/explore 豁免变更吸附路由
 - 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露
+- 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed

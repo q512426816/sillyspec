@@ -1492,3 +1492,31 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-09-legacy-red-fixes
   status: active
+
+## FR-skills-docs-079 新增 .claude/skills/sillyspec-diagnose/SKILL.md：五阶段 gated 诊断环（复现回路先行/最小化/可证伪假设排序/tagged 插桩/修复+回归锚定），frontmatter 含触发场景描述
+变更：2026-11-22-diagnose-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-diagnose-skill/requirements.md#FR-01
+最近确认：20a95b611a3f05b5f9dd965992be7f82de0d57dc
+
+## FR-skills-docs-080 skill 内含 SillySpec 流程衔接指引：bug 类轻量变更把复现命令写进成功标准、收口实测优先跑它、根因一句话 distill 进 knowledge
+变更：2026-11-22-diagnose-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-diagnose-skill/requirements.md#FR-02
+最近确认：20a95b611a3f05b5f9dd965992be7f82de0d57dc
+
+## FR-skills-docs-081 纯 skill 层新增，不修改 src/ 与任何状态机代码
+变更：2026-11-22-diagnose-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-diagnose-skill/requirements.md#FR-03
+最近确认：20a95b611a3f05b5f9dd965992be7f82de0d57dc
+
+## FR-skills-docs-082 插桩前缀等纪律引用 execute 既有铁律口径，不双写正文
+变更：2026-11-22-diagnose-skill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-diagnose-skill/requirements.md#FR-04
+最近确认：20a95b611a3f05b5f9dd965992be7f82de0d57dc
