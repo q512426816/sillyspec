@@ -10,8 +10,9 @@
  *     friction-ledger 累计账 → escalateByFriction → .runtime/ceremony-tier-<change>.json
  *     迁移留痕，只升不降、fail-soft 不阻断完成）；verify 检查族末位接 ceremony 双跑收口第一
  *     出口（runCeremonyDualRunCheck：声明档 vs 实际 diff 事实档，mismatch=errors 硬 flag 阻断，
- *     task-04 接线 / execute 评审 FAIL 修复）；升档检查块后 fire-and-forget 影子审查派发
- *     （dispatchShadowReview，task-06 接线 / execute 评审 GAP 修复，只记账不阻断）
+ *     task-04 接线 / execute 评审 FAIL 修复）；升档检查块后同步派发影子审查
+ *     （dispatchShadowReview，task-06 接线 / execute 评审 GAP 修复 / 2026-11-21-shadow-dispatch-form-respect
+ *     FR-02 改 await——披露行退出前恒打出，只记账不阻断）
  *   - enforceDepsGate：execute depsStatus 不达标且非 wave 级 opt-out 时阻断 --done（exit 1）
  *   - rollbackCompletionAndReturn / rollbackStageCompletion：统一回滚 stage/step 状态 + 落盘 + sync
  *   - isCurrentWaveAllNoDepsVerify：enforceDepsGate 的私有 helper（wave 级 no_deps_verify opt-out 判定）
@@ -1729,22 +1730,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
   }
 
-  // ── 影子期后台静默派发触发点（2026-09-18-ceremony-risk-pricing task-06 / Phase 3；
-  //    execute 评审 GAP 项补接线）：升档检查块后 fire-and-forget（dispatchShadowReview JSDoc
-  //    建议挂点），S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重
-  //    对照——只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
-  //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（档位∈S0/S1、ceremony.shadow
-  //    开关、幂等闸、平台 client 可用性）全在函数内部，不满足 → skip 留痕对照账（零噪音）。
+  // ── 影子期静默派发触发点（2026-09-18-ceremony-risk-pricing task-06 / Phase 3；
+  //    execute 评审 GAP 项补接线）：升档检查块后同步派发（2026-11-21-shadow-dispatch-form-respect
+  //    FR-02：原 fire-and-forget 孤儿 Promise 在收口命令退出后才打出 ℹ️ 行——主会话读不到披露，
+  //    实证 pi 影子会话无声起会话、披露行丢失；改 await，dispatchShadowReview 自身 catch-all
+  //    永不抛 + 网络面有界（client 缺省 10s 超时），await 不引入无界等待，ℹ️ 行保证退出前打出）。
+  //    S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重对照——
+  //    只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
+  //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（形态免评审门
+  //    form-review-exempt、档位∈S0/S1、ceremony.shadow 开关、幂等闸、平台 client 可用性）全在
+  //    函数内部，不满足 → skip 留痕对照账（零噪音）。
   //    client 供给面（P3-1 收口，ql-20260918-006）：复用 review-dispatch 命令先例（index.js:1273）
   //    懒加载 SillyHubMcpClient 注入——构造只读 local.yaml 配置不联网；未配平台的仓在函数内
   //    probe no-config 仍走 skip 留痕（合理：影子只在配了平台的仓积累对照数据）。specBase 平台
   //    接管优先（与上方 Stage Review Gate effectiveSpecBase 同口径）。异常双保险：函数自身
-  //    catch-all 永不抛 + 外层 try-catch/promise.catch 吞掉（影子是旁路数据面，任何异常绝不影响
-  //    门判定与完成）。──
+  //    catch-all 永不抛 + 外层 try-catch 吞掉（影子是旁路数据面，任何异常绝不影响门判定与完成）。──
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && changeName) {
     try {
       const shadowSpecBase = platformOpts?.specRoot || specBase
-      Promise.all([
+      const shadowResult = await Promise.all([
         import('../review-dispatch.js'),
         import('../sillyhub-mcp/client.js'),
       ])
@@ -1761,13 +1765,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             client: shadowClient,
           });
         })
-        .then((r) => {
-          if (r && r.ok && !r.skipped && r.missionId) {
-            console.log(`\nℹ️ 影子审查已后台派发（mission ${r.missionId}，fire-and-forget 只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)
-          }
-        })
-        .catch(() => { /* fire-and-forget：影子链路异常吞掉，绝不向主线传播 */ })
-    } catch { /* 动态 import 触发失败静默（影子是旁路数据面） */ }
+      if (shadowResult && shadowResult.ok && !shadowResult.skipped && shadowResult.missionId) {
+        console.log(`\nℹ️ 影子审查已派发（mission ${shadowResult.missionId}，只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)
+      }
+    } catch { /* 影子链路异常吞掉（旁路数据面），绝不向主线传播 */ }
   }
   return null
 }

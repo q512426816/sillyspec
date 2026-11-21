@@ -25,6 +25,7 @@ import { writeAtomicSync } from './fs-atomic.js'
 import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
 import { assembleProbeLinesForScope } from './review-probes.js'
 import { CEREMONY_TIERS } from './ceremony-tier.js'
+import { readFlowState } from './flow-state.js'
 import { withFileLock } from './quicklog.js'
 import {
   renderReviewJsonContract,
@@ -922,6 +923,16 @@ export async function dispatchShadowReview(opts = {}) {
       const skip = async (reason) => {
         await appendShadowLedgerSkip(runtimeRoot, { change: changeName, stage, tier: tierDoc ? tierDoc.tier : null, reason })
         return { ok: true, shadow: true, skipped: true, reason }
+      }
+      // 前置⓪：形态免评审门（2026-11-21-shadow-dispatch-form-respect，用户裁决「形态压过旁路+保留」）：
+      // 声明 --no-review（review_force=false）/ --turbo（turbo=true）的 thin 变更，收口影子不再派发——
+      // 用户对评审形态的显式选择压过旁路对照数据采集（主会话如实报告「不派平台评审」时，任何通道
+      // 含数据采集旁路都不派）。留痕归因 form-review-exempt；flow-state 缺失（run 跑道）/损坏 →
+      // readFlowState fail-soft 返 null 不命中，既有链零改动；review_force=true 强制档不豁免。
+      const formState = readFlowState(join(specBase, 'changes', changeName))
+      if (formState && (formState.review_force === false || formState.turbo === true)) {
+        const formDesc = formState.turbo === true ? '--turbo（turbo: true）' : '--no-review（review_force: false）'
+        return skip(`form-review-exempt（变更声明免评审形态 ${formDesc}——形态压过旁路，不派影子对照）`)
       }
       // 前置①：档位 ∈ S0/S1（task-03 档位文件契约；无档位文件 = 未定价变更，不开影子）
       if (!tierDoc) return skip('tier-file-missing（.runtime/ceremony-tier-<change>.json 不存在——影子派发只对已定价的轻档变更开跑）')
