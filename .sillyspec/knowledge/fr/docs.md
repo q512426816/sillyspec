@@ -2262,3 +2262,31 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-21-prompt-microdesign-pack
   status: active
+
+## FR-docs-124 docs/sillyspec/prompt-primitives-survey.md 落盘：纪律原语候选清单，每条含原语定位（文件+行号区间）、复用点清单（哪些阶段/步骤出现）、逐字或改写重复度、抽取优先级
+变更：2026-11-22-prompt-primitive-survey
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-prompt-primitive-survey/requirements.md#FR-01
+最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
+
+## FR-docs-125 清单区分「已由 templates/prompts/ 的 {{include:}} 机制承载」与「散文级重复待抽取」两类
+变更：2026-11-22-prompt-primitive-survey
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-prompt-primitive-survey/requirements.md#FR-02
+最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
+
+## FR-docs-126 含 include 参数化需求建议：哪些原语需要 focus/收窄参数（同一原语不同侧重形态），给出 {{include:name|focus=x}} 用法场景示例
+变更：2026-11-22-prompt-primitive-survey
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-prompt-primitive-survey/requirements.md#FR-03
+最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
+
+## FR-docs-127 纯调研文档，不修改 src/ 与 test/
+变更：2026-11-22-prompt-primitive-survey
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-22-prompt-primitive-survey/requirements.md#FR-04
+最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef

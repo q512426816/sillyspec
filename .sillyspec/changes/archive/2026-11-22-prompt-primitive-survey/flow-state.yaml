@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  盘点阶段提示词可抽取纪律原语
+
+  mattpocock/skills 调研吸收路线批 3a（docs/ROADMAP.md）：批 3c 指令层/证据层分离与 execute.js 1668 行膨胀的根治前置——先全量盘点 src/stages/
+  下被多个阶段/步骤复用的纪律散文段，产出可抽取原语清单与 include 参数化需求，供批 3b/3c 直接引用。纯调研文档变更，不动 src/。
+
+  成功标准：
+
+  - docs/sillyspec/prompt-primitives-survey.md 落盘：纪律原语候选清单，每条含原语定位（文件+行号区间）、复用点清单（哪些阶段/步骤出现）、逐字或改写重复度、抽取优先级
+
+  - 清单区分「已由 templates/prompts/ 的 {{include:}} 机制承载」与「散文级重复待抽取」两类
+
+  - 含 include 参数化需求建议：哪些原语需要 focus/收窄参数（同一原语不同侧重形态），给出 {{include:name|focus=x}} 用法场景示例
+
+  - 纯调研文档，不修改 src/ 与 test/
+autopilot: true
+prestage_ack: false
+baseline_commit: 2eebe7ded4514e2c034914d2466c416de389c3d5
+updatedAt: '2026-11-21T16:40:49.416Z'
+baseline_sha256: 009517f355ebcc76bf3d53febf6762ae68cf67d0f4c60205d6abe3ea4f8e115f
+spec_approved: true
+spec_approved_at: '2026-11-21T16:27:04.250Z'
+spec_approved_by: mattpocock-absorb
+spec_approved_channel: user-confirmed
+spec_attested_by: mattpocock-absorb
+batch_ticked: true
+gate_summary: 'test: —｜lint: —｜门文件 2 个'
+

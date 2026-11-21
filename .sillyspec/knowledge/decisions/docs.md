@@ -113,3 +113,12 @@
 文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, docs/prompt/execute.md, docs/prompt/verify.md, docs/sillyspec/out-of-scope/README.md, docs/sillyspec/out-of-scope/mattpocock-skills-full-adoption.md, src/design-facts.js, src/index.js, src/stages/brainstorm.js, src/stages/execute.js, src/stages/verify.js, src/verify-probes.js, test/design-facts.test.mjs, test/prompt-golden.json
 最近确认：29480fa39967e39dc9ec21c718ff9c9991660f64
 理由：按 docs/ROADMAP.md「mattpocock/skills 吸收路线」批 1，把五条提示词微设计直接织入阶段提示词源码：brainstorm.js 两处（design 模板 8.5「测试 seam 约定」节+提问措辞「是=接受推荐」）、execute.js 三处（代码审查三层优先级/DEBUG 前缀/变异自证）、verify.js+verify-probes.js 一处（风险节回退门+爆炸半径字段），另建 out-of-scope 沉淀位。8.5 节采用 7.5 生命周期契约表的条件必填+豁免短语模式（不进 stage-contract-spec 硬门禁），使联动面收敛在模板×骨架×帮助文案×章节契约测试四处。提示词为数据源不是逻辑，改后机械再生 docs/prompt 镜像与 prompt 金档（设计内的快照维护通道）。
+
+## D-docs-009@v1 2026-11-22-prompt-primitive-survey——派只读子代理全量扫描 `src/stages/*.js`（含 `templates/prompts/` 现状），识别被 ≥2 阶段/步骤复用的纪律散文段，产出结
+状态：implemented
+变更：2026-11-22-prompt-primitive-survey
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-22-prompt-primitive-survey/design.md
+文件：docs/sillyspec/prompt-primitives-survey.md
+最近确认：dddf86ff2fd0b1b145ea6c50af6439b5f05e65ef
+理由：派只读子代理全量扫描 `src/stages/*.js`（含 `templates/prompts/` 现状），识别被 ≥2 阶段/步骤复用的纪律散文段，产出结构化清单落 `docs/sillyspec/prompt-primitives-survey.md`。选子代理扫描：stages 全量 ~5000+ 行，独立上下文做重复段比对不占主会话；选纯文档落盘（不动 src/）：批 3b/3c 是独立变更，本变更只供设计输入——调研与施工分离，避免一个变更既盘点又重构。
