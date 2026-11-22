@@ -97,6 +97,9 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge, isRecallRelevantScored } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
+// 词汇通道（mattpocock-absorb ticket-01）：readVocabSection 为 fs/path 叶子纯函数，
+// 静态 import 不引入环（旁路读取，不经 matchKnowledge 任何匹配层——见 knowledge-vocab.js 头注释）。
+import { readVocabSection } from '../knowledge-vocab.js'
 import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
@@ -578,17 +581,23 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
  * @param {string} opts.runtimeDir - .runtime 目录（hits.jsonl 落点）
  * @param {string} opts.change - 变更名 / quick sessionId（进遥测记录 change 字段）
  * @param {string} opts.query - 匹配查询串（execute: changeName+tasks.md 任务行；quick: guard.taskDescription）
- * @returns {{matched: boolean, section: string, report: string, json: object}}
+ * @returns {{matched: boolean, section: string, report: string, json: object, vocabSection: string}}
  *   section：命中时的「📚 命中知识」段（含段头与正文）；未命中恒 ''（调用方零字节）。
  *   report/json：matchKnowledge 原样透传（execute 调用方沿用旧 report.json 落盘与未命中替换口径）。
+ *   vocabSection（mattpocock-absorb ticket-01）：词汇基准段（「📖 词汇基准」独立小节），
+ *   knowledge/glossary.md 在场即恒有值（query 零命中也在场——旁路不经匹配层、不占 top-3、
+ *   不进命中分母）；缺失/全空白恒 ''（proceed silently）。由调用方拼装到注入文本，matched
+ *   等既有四字段语义与值零变化。
  *   遥测 append 单独 fail-soft（hits 写失败不影响注入本体）；匹配/渲染异常向上抛由调用方降级。
  */
 export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, scopeFiles = [], maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
   // 融合（2026-11-02-knowledge-fusion）：同步入口 = matchKnowledge（路由/词片）+ scope 融合；
   // scopeFiles 为机器键（design 交付清单/quick allowedFiles），键规整在 graphPathCandidates 内做
   const knowledgeResult = matchKnowledgeWithScope(knowledgeDir, String(query || ''), { scopeFiles })
+  // 词汇基准段（旁路，ticket-01）：读取独立于匹配结果——在场恒注入、缺失恒 ''，零告警
+  const vocabSection = readVocabSection(knowledgeDir)
   if (!knowledgeResult.matched) {
-    return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json }
+    return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json, vocabSection }
   }
   const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
   const section = kSection
@@ -604,7 +613,7 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
       ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
-  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json}
+  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, vocabSection }
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
@@ -1522,9 +1531,16 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
         query: taskContext,
         scopeFiles,
       })
+      // 词汇基准段拼装（mattpocock-absorb ticket-01）：词汇文件在场时恒追加到替换值尾部
+      // （命中知识段/未命中报告之后的并列独立小节，零命中也注入）；缺失 → vocabSection ''
+      // → 替换值与基线逐字一致（零膨胀零告警）。json 落盘不含词汇（旁路不进命中分母）。
+      const injectBase = knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
+      const injectText = knowledgeInjection.vocabSection
+        ? `${injectBase}\n\n${knowledgeInjection.vocabSection}`
+        : injectBase
       substitute(
         /\{KNOWLEDGE_HIT_REPORT\}/g,
-        knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
+        injectText
       )
       // 写入 runtime JSON（既有机制照旧，新旧遥测共存）
       mkdirSync(runtimeDir, { recursive: true })
@@ -2049,8 +2065,11 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
           query: kiQuery,
           scopeFiles: kiScope,
         })
-        if (ki.section) {
-          promptText = promptText + '\n\n' + ki.section
+        // 词汇基准段对称拼装（ticket-01）：section（命中段）与 vocabSection（旁路段）并列追加；
+        // 双空（零命中 + 无词汇文件）零追加，prompt 与现状字节一致
+        const kiParts = [ki.section, ki.vocabSection].filter(Boolean)
+        if (kiParts.length > 0) {
+          promptText = promptText + '\n\n' + kiParts.join('\n\n')
         }
       }
     } catch { /* fail-soft：知识注入异常不阻断 quick step1 prompt 输出 */ }
