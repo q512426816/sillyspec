@@ -2325,3 +2325,97 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-22-roadmap-loop-closure/requirements.md#FR-05
 最近确认：1bfcebf873204a5256a8c83cf495de4ca999186d
+
+## FR-docs-133 词汇文件存在时阶段级与 Wave 级注入均恒带词汇基准段（旁路：不进三层匹配/不占 top-3 名额/不进命中分母）
+变更：2026-11-22-knowledge-vocab-channel
+状态：active
+摘要：主路径（词汇在场恒注入）；旁路不占名额
+场景正文：
+- 场景：主路径（词汇在场恒注入） — Given knowledge/glossary.md 存在且含 ≥1 条术语 / When 分别调用阶段级与 Wave 级注入（query 零命中词汇的任意串） / Th
+- 场景：旁路不占名额 — Given 词汇文件存在且既有匹配命中 top-3 / When 注入 / Then 命中文件清单与无词汇文件时逐字一致（词汇段为纯新增，不改写命中面）。
+全文：.sillyspec/changes/archive/2026-11-22-knowledge-vocab-channel/requirements.md#FR-01
+最近确认：56c2c33f73b6ed5aef36ab9da21b1c5b6e7306f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-01
+  tests: test/knowledge-vocab-channel.test.mjs「词汇在场恒注入（阶段级+Wave 级）+不挤占 top-3」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-knowledge-vocab-channel
+  status: active
+
+## FR-docs-134 词汇文件缺失静默跳过（零告警零注入），既有注入行为零回归（既有测试零修改即绿）
+变更：2026-11-22-knowledge-vocab-channel
+状态：active
+摘要：缺失静默
+场景正文：
+- 场景：缺失静默 — Given knowledge 目录无 glossary.md / When 阶段级/Wave 级注入 / Then 输出与基线（本次改动前）逐字一致，无 console.
+全文：.sillyspec/changes/archive/2026-11-22-knowledge-vocab-channel/requirements.md#FR-02
+最近确认：56c2c33f73b6ed5aef36ab9da21b1c5b6e7306f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-02
+  tests: test/knowledge-inject.test.mjs | test/knowledge-vocab-channel.test.mjs「缺失静默零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-knowledge-vocab-channel
+  status: active
+
+## FR-docs-135 词汇段行数上限截断+超限一次留痕；遥测词汇注入独立 type 与检索命中可区分
+变更：2026-11-22-knowledge-vocab-channel
+状态：active
+摘要：截断与留痕
+场景正文：
+- 场景：截断与留痕 — Given 词汇文件超出上限行数 / When 注入 / Then 词汇段恰为上限行数，console.warn 出现一次且含「截断」提示。
+全文：.sillyspec/changes/archive/2026-11-22-knowledge-vocab-channel/requirements.md#FR-03
+最近确认：56c2c33f73b6ed5aef36ab9da21b1c5b6e7306f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-03
+  tests: test/knowledge-vocab-channel.test.mjs「行数上限截断+一次留痕+遥测独立 type」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-knowledge-vocab-channel
+  status: active
+
+## FR-docs-136 决策记录提示面含 ADR 三条件（难逆+无上下文会惊讶+真权衡，缺一跳过）
+变更：2026-11-22-knowledge-vocab-channel
+状态：active
+摘要：提示在场
+场景正文：
+- 场景：提示在场 — Given 渲染决策指引段 / When prompt 组装 / Then 段内含三条件关键措辞（难逆/惊讶/权衡），金档再生后 docs/prompt 镜像一致。
+全文：.sillyspec/changes/archive/2026-11-22-knowledge-vocab-channel/requirements.md#FR-04
+最近确认：56c2c33f73b6ed5aef36ab9da21b1c5b6e7306f6
+
+## FR-docs-137 新增单测覆盖旁路行为（在场/缺失/截断/不挤占 top-3）跑绿
+变更：2026-11-22-knowledge-vocab-channel
+状态：active
+摘要：单测全绿
+场景正文：
+- 场景：单测全绿 — Given 全部新用例 / When 运行测试 / Then 全部通过 exit 0；既有 knowledge 注入相关测试零修改即绿。
+全文：.sillyspec/changes/archive/2026-11-22-knowledge-vocab-channel/requirements.md#FR-05
+最近确认：56c2c33f73b6ed5aef36ab9da21b1c5b6e7306f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-05
+  tests: test/knowledge-vocab-channel.test.mjs「全量用例跑绿 exit 0」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-knowledge-vocab-channel
+  status: active

@@ -1,0 +1,47 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  knowledge 词汇通道与 ADR 三条件门
+
+
+  动机与背景：ROADMAP 批 4（mattpocock/skills 吸收路线，全量比对差距矩阵 T1）。域词汇散落 knowledge 仅检索命中才注入——会话无检索时术语漂移、维护者把定义复制进多条知识致漂移；本日
+  grilling GLOSSARY 四术语零歧义实证「语言先行」。D-001 边界内：旁路补充，不取代 knowledge 通道。详细 spec 见吸收工作树
+  .claude/worktrees/matt-absorb/.scratch/mattpocock-absorb/spec.md（to-spec 产出，接缝经用户确认）。
+
+
+  成功标准：
+
+  - 词汇文件存在时阶段级与 Wave 级注入均恒带词汇基准段（旁路：不进三层匹配/不占 top-3 名额/不进命中分母）
+
+  - 词汇文件缺失静默跳过（零告警零注入），既有注入行为零回归（既有测试零修改即绿）
+
+  - 词汇段行数上限截断+超限一次留痕；遥测词汇注入独立 type 与检索命中可区分
+
+  - 决策记录提示面含 ADR 三条件（难逆+无上下文会惊讶+真权衡，缺一跳过）
+
+  - 新增单测覆盖旁路行为（在场/缺失/截断/不挤占 top-3）跑绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 2ed5ddf0971cad723e7d8f3b05b4f3f2667d6ffe
+updatedAt: '2026-11-22T04:39:19.119Z'
+baseline_sha256: e93329ab31ef82e2b9001936900234a5302f5a88009607f2cb46c68180577733
+spec_approved: true
+spec_approved_at: '2026-11-22T04:37:51.981Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+gate_summary: >-
+  test: skipped 结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261122043849\test-result.json
+  — 跳过原因：变更与测试面零关系（10 个变更文件无自身测试、无 import 依赖测试、FR 关联回归层被 fr_regress_cap 跳过（绑定 188 个未跑，归 pre-push/CI
+  门））——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: skipped — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+

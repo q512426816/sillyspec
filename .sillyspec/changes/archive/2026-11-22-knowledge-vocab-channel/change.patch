@@ -1,0 +1,12 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2035da4b..31863ed8 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -144,6 +144,7 @@ modules:
+       - src/fr-index.js
+       - src/knowledge-digest.js
+       - src/knowledge-scope.js
++      - src/knowledge-vocab.js
+       - src/redomain.js
+       - src/decision-redomain.js
+       - src/redomain-unmapped.js

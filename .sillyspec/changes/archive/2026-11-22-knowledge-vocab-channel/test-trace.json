@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-22-knowledge-vocab-channel",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-vocab-channel.test.mjs「词汇在场恒注入（阶段级+Wave 级）+不挤占 top-3」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-knowledge-vocab-channel"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-inject.test.mjs",
+        "test/knowledge-vocab-channel.test.mjs「缺失静默零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-knowledge-vocab-channel"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-vocab-channel.test.mjs「行数上限截断+一次留痕+遥测独立 type」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-knowledge-vocab-channel"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-22-knowledge-vocab-channel:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-vocab-channel.test.mjs「全量用例跑绿 exit 0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-knowledge-vocab-channel"
+    }
+  ]
+}
