@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  init 与 config 三段式问询交互
+
+
+  动机与背景：ROADMAP 批 5②（mattpocock/skills 吸收路线，setup skill「先探测后问/每问带推荐（一词接受）/已定跳过」三段式思想）+ 单 A 感知 1
+  实证（推荐的价值建立在探测深度上）。现状：init skill 固定 7 问顺序模板（无探测前置、无已定跳过）；config skill 同缺。与批 1
+  提问分型纪律协同：意图类问题保持开放（禁选项防锚定），决策类问题必带推荐+一手依据锚（单 A 刚立）。
+
+
+  成功标准：
+
+  - init skill（.claude/skills/sillyspec-init/SKILL.md）问询改三段式：先探测（能自查的不问——工作区模式/已有配置/用户输入中已给的答案）→ 意图问开放+决策问带推荐与依据（与
+  brainstorm 分型同源）→ 已定项跳过并回放确认
+
+  - config skill（.claude/skills/sillyspec-config/SKILL.md）同款三段式：先探测 local.yaml 既有键与仓现状，已配置项跳过问，决策问带推荐与依据
+
+  - 既有「一次只问一个」与 AskUserQuestion 交互规范保留不变
+
+  - 纯 skill 文本改动（不触 src/test），文本规范审读验收
+autopilot: false
+prestage_ack: false
+baseline_commit: 32403fd67e8d1d5a89b8a1afd3f7d158750ab148
+updatedAt: '2026-11-22T16:48:27.781Z'
+baseline_sha256: af3a7d75b8a328ed86d9b61772016b662659bc64ced2c9d59c08f8a6a593b7e1
+spec_approved: true
+spec_approved_at: '2026-11-22T16:48:27.780Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

@@ -34,6 +34,8 @@ description: 用于 SillySpec local.yaml 配置引导。适合用户说"配置�
 1. **看现状**：`sillyspec config cat`（权威路径链解析——worktree 内也能拿到主仓真实文件；不存在=零配置形态，正常）。
 2. **对决策表**：确认触发场景真实存在；不在表内的场景**不写任何键**，向用户说明缺省行为已覆盖。
 3. **获得值**：凭据族走 `sillyspec platform connect`（禁止手填 token 到 yaml）；其余键从仓库结构（package.json/pyproject/Makefile）或收口输出提示取值。
+   - **已配置跳过**（2026-11-22-init-config-three-phase）：config cat 已显示的既有键值，非用户主动要求**不重新问询**——仅在值需变更时向用户确认（推荐「保持现状」+依据=既有配置生效中，用户一词可接受）。
+   - **决策问带依据**：决策表触发但仓内事实取不到值、需用户决策的键——先给推荐+一手依据（「依据：」= 探测到的仓库结构事实或收口输出提示），再问；无依据不给推荐，开放问并声明。
 4. **写文件**：编辑 `.sillyspec/local.yaml`（config cat 显示的路径；整文件 YAML，注意缩进用空格、保存为 UTF-8 无 BOM——PS 下用 Set-Content -Encoding utf8NoBOM 或让 CLI 命令代写）。**只写决策表需要的键，逐键照抄 schema 的 example 形态。**
 5. **硬门验证（必做，不许跳过）**：跑 `sillyspec config validate`
    - **exit 0 才算配置完成**；exit 1 时按输出的错误行逐条修复后重跑。
