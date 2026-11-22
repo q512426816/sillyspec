@@ -256,8 +256,125 @@ console.log('\n--- 6. quick step1 词汇段对称注入 ---')
   } finally { cleanup(fx) }
 }
 
+// ── 7. 膨胀防线·截断（ticket-03）：超限截到上限行数 + warn 一次 ────────────────
+console.log('\n--- 7. 词汇超限截断（60 行 → 恰 40 行正文 + warn 恰 1 次） ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fx.knowledgeDir)
+    // 60 行词汇 fixture（术语行式），超缺省上限 40
+    const gloss60 = Array.from({ length: 60 }, (_, i) => `术语${String(i + 1).padStart(2, '0')}：定义行 ${i + 1}`).join('\n') + '\n'
+    writeGlossary(fx.knowledgeDir, gloss60)
+    const origWarn = console.warn
+    const warns = []
+    console.warn = (...a) => { warns.push(a.map(x => String(x)).join(' ')) }
+    let cap
+    try {
+      cap = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+    } finally { console.warn = origWarn }
+    // ① 词汇段恰为上限行数：正文（段头与截断标记行之外）恰 40 行
+    const secLines = cap.vocabSection.split('\n')
+    assertTrue(secLines[0].startsWith(VOCAB_HEADER), '截断后段头仍为首行')
+    assertTrue(secLines[secLines.length - 1].includes('截断') && secLines[secLines.length - 1].includes('精简'),
+      '末行为截断标记（含截断说明与「词汇文件需精简」提示）')
+    const bodyLines = secLines.slice(1, -1)
+    assertTrue(bodyLines.length === 40, `词汇正文恰为上限 40 行（实际 ${bodyLines.length}）`)
+    assertTrue(bodyLines[0] === '术语01：定义行 1' && bodyLines[39] === '术语40：定义行 40',
+      '截断保留前 40 行（首行术语01、末行术语40；41+ 被裁）')
+    // ② 截断 warn 恰一次，含截断说明与精简提示（按调用即一次，不做跨调用去重）
+    assertTrue(warns.length === 1, `截断告警恰 1 次（实际 ${warns.length}）`)
+    assertTrue(warns[0].includes('截断') && warns[0].includes('精简') && warns[0].includes('40'),
+      'warn 含截断说明（上限 40）与「词汇文件需精简」提示')
+    assertTrue(cap.vocabMeta && cap.vocabMeta.truncated === true && cap.vocabMeta.lines === 40,
+      'vocabMeta.truncated=true / lines=40（截断元数据供遥测）')
+    // ④ 上限内不截断零告警（恰 40 行边界不触发；41 行触发）
+    writeGlossary(fx.knowledgeDir, Array.from({ length: 40 }, (_, i) => `边界${i + 1}：定义`).join('\n') + '\n')
+    const warns2 = []
+    console.warn = (...a) => { warns2.push(a.map(x => String(x)).join(' ')) }
+    let atCap, overCap
+    try {
+      atCap = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+      writeGlossary(fx.knowledgeDir, Array.from({ length: 41 }, (_, i) => `越界${i + 1}：定义`).join('\n') + '\n')
+      overCap = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+    } finally { console.warn = origWarn }
+    assertTrue(atCap.vocabSection.split('\n').length === 41 && !atCap.vocabSection.includes('（词汇超行截断'),
+      '恰 40 行（=上限）不截断：段 = 段头 + 40 行，无截断标记')
+    assertTrue(atCap.vocabMeta.truncated === false && atCap.vocabMeta.lines === 40, '恰上限 truncated=false')
+    assertTrue(warns2.length === 1 && overCap.vocabMeta.truncated === true && overCap.vocabMeta.lines === 40,
+      '41 行触发截断（边界含头不含尾）且仅该次 warn（恰上限那次零告警）')
+  } finally { restore(); cleanup(fx) }
+}
+
+// ── 8. 遥测独立 type（ticket-03）：vocab-inject 与 inject 可区分、不进命中分母 ──
+console.log('\n--- 8. 词汇注入遥测 type:vocab-inject（与 type:inject 区分） ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fx.knowledgeDir)
+    writeGlossary(fx.knowledgeDir)
+    // 8a. 命中 change：inject 与 vocab-inject 两条独立记录并存
+    const changeHit = '2026-11-22-vocab-tele'
+    mkdirSync(join(fx.specBase, 'changes', changeHit, 'tasks'), { recursive: true })
+    writeFileSync(join(fx.specBase, 'changes', changeHit, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 限流 登录 修复\n', 'utf8')
+    const stepsHit = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
+    await captureOutput(() => outputStep('execute', 0, stepsHit, fx.root, changeHit, 'ki-proj', { specRoot: fx.specBase }))
+    const hits = readKnowledgeHits(fx.runtimeDir)
+    const injectHit = hits.find(h => h.type === 'inject')
+    const vocabHit = hits.find(h => h.type === 'vocab-inject')
+    assertTrue(injectHit && vocabHit, `遥测含 type:inject 与 type:vocab-inject 独立记录（实际 types: ${hits.map(h => h.type).join(',')}）`)
+    assertTrue(vocabHit && !('matchedFiles' in vocabHit) && vocabHit.change === changeHit,
+      'vocab-inject 无 matchedFiles（不进命中分母）且记 change 字段')
+    assertTrue(vocabHit && vocabHit.truncated === false && vocabHit.lines === 3,
+      '上限内 vocab-inject truncated=false / lines=3')
+    // 8b. 零命中 change：不落 inject（既有口径）但 vocab-inject 仍在（恒注入恒遥测）
+    const changeMiss = '2026-11-22-vocab-tele-miss'
+    mkdirSync(join(fx.specBase, 'changes', changeMiss, 'tasks'), { recursive: true })
+    writeFileSync(join(fx.specBase, 'changes', changeMiss, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 完全不相关的事\n', 'utf8')
+    const stepsMiss = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
+    await captureOutput(() => outputStep('execute', 0, stepsMiss, fx.root, changeMiss, 'ki-proj', { specRoot: fx.specBase }))
+    const hitsAfterMiss = readKnowledgeHits(fx.runtimeDir)
+    assertTrue(hitsAfterMiss.filter(h => h.type === 'inject').length === 1, '零命中不落 inject（既有口径不变）')
+    assertTrue(hitsAfterMiss.filter(h => h.type === 'vocab-inject').length === 2, '零命中 change 也落 vocab-inject（词汇恒注入恒遥测）')
+    // 8c. 截断态遥测：60 行 glossary → vocab-inject truncated:true / lines:40
+    writeGlossary(fx.knowledgeDir, Array.from({ length: 60 }, (_, i) => `遥测${String(i + 1).padStart(2, '0')}：定义行 ${i + 1}`).join('\n') + '\n')
+    const changeCap = '2026-11-22-vocab-tele-cap'
+    mkdirSync(join(fx.specBase, 'changes', changeCap, 'tasks'), { recursive: true })
+    writeFileSync(join(fx.specBase, 'changes', changeCap, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 完全不相关的另事\n', 'utf8')
+    const stepsCap = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
+    const origWarn = console.warn
+    console.warn = () => {}
+    try {
+      await captureOutput(() => outputStep('execute', 0, stepsCap, fx.root, changeCap, 'ki-proj', { specRoot: fx.specBase }))
+    } finally { console.warn = origWarn }
+    const capVocabHits = readKnowledgeHits(fx.runtimeDir).filter(h => h.type === 'vocab-inject')
+    assertTrue(capVocabHits.length === 3 && capVocabHits[capVocabHits.length - 1].truncated === true
+      && capVocabHits[capVocabHits.length - 1].lines === 40, '截断态 vocab-inject truncated=true / lines=40')
+    // 8d. 无词汇文件：零 vocab-inject 新增
+    rmSync(join(fx.knowledgeDir, 'glossary.md'), { force: true })
+    const changeNone = '2026-11-22-vocab-tele-none'
+    mkdirSync(join(fx.specBase, 'changes', changeNone, 'tasks'), { recursive: true })
+    writeFileSync(join(fx.specBase, 'changes', changeNone, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 完全不相关的三事\n', 'utf8')
+    const stepsNone = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
+    await captureOutput(() => outputStep('execute', 0, stepsNone, fx.root, changeNone, 'ki-proj', { specRoot: fx.specBase }))
+    assertTrue(readKnowledgeHits(fx.runtimeDir).filter(h => h.type === 'vocab-inject').length === 3,
+      '词汇文件缺失零 vocab-inject 新增（无注入即无遥测）')
+    // 8e. quick step1 对称遥测
+    writeGlossary(fx.knowledgeDir)
+    const sid = 'quick-tele7777'
+    const guardDir = join(fx.specBase, '.runtime', 'quick-sessions', sid)
+    mkdirSync(guardDir, { recursive: true })
+    writeFileSync(join(guardDir, 'guard.json'), JSON.stringify({ taskDescription: '改个文案和样式而已' }), 'utf8')
+    const stepsQuick = [{ name: '理解任务', prompt: '解析任务参数，加载项目上下文。' }]
+    await captureOutput(() => outputStep('quick', 0, stepsQuick, fx.root, sid, 'ki-proj', { specRoot: fx.specBase }))
+    assertTrue(readKnowledgeHits(fx.runtimeDir).some(h => h.type === 'vocab-inject' && h.change === sid),
+      'quick step1 词汇注入对称落 vocab-inject 遥测（change=sessionId）')
+  } finally { restore(); cleanup(fx) }
+}
+
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${6} 节  ❌ 失败断言: ${failed}`)
+console.log(`✅ 通过: ${8} 节  ❌ 失败断言: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)
