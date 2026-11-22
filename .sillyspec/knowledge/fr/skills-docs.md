@@ -1520,3 +1520,41 @@ created_at: 2026-10-15T01:21:44.811Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-11-22-diagnose-skill/requirements.md#FR-04
 最近确认：20a95b611a3f05b5f9dd965992be7f82de0d57dc
+
+## FR-skills-docs-083 init skill（.claude/skills/sillyspec-init/SKILL.md）问询改三段式：先探测（能自查的不问——工作区模式/已有配置/用户输入中已给的答案）→ 意图问开放+决策问带推荐与依据（与 brainstorm 分型同源）→ 已定项跳过并回放确认
+变更：2026-11-22-init-config-three-phase
+状态：active
+摘要：主路径；决策问带依据
+场景正文：
+- 场景：主路径 — Given 用户输入已含技术栈偏好 / When Step 3 提问 / Then 技术偏好问跳过，回放清单标「[已定] 用户输入」，后续步骤直接采用。
+- 场景：决策问带依据 — Given 触发技术选型（Step 4）/ When 推荐 / Then 推荐附「依据：」（版本事实/生态状态/仓内探测结果），无依据时降级开放问并声明。
+全文：.sillyspec/changes/archive/2026-11-22-init-config-three-phase/requirements.md#FR-01
+最近确认：7cadccfd7c7cad7b486168061a81cc94cc93b4d9
+
+## FR-skills-docs-084 config skill（.claude/skills/sillyspec-config/SKILL.md）同款三段式：先探测 local.yaml 既有键与仓现状，已配置项跳过问，决策问带推荐与依据
+变更：2026-11-22-init-config-three-phase
+状态：active
+摘要：已配置跳过；决策问带依据
+场景正文：
+- 场景：已配置跳过 — Given local.yaml 已有 commands.test / When config 引导 / Then 不重问该键；用户未提及变更则整段跳过。
+- 场景：决策问带依据 — Given 决策表触发 lint 键且仓内探测到 lint 脚本 / When 询问 / Then 推荐「取 package.json 的 lint 脚本」并附依据（探测事
+全文：.sillyspec/changes/archive/2026-11-22-init-config-three-phase/requirements.md#FR-02
+最近确认：7cadccfd7c7cad7b486168061a81cc94cc93b4d9
+
+## FR-skills-docs-085 既有「一次只问一个」与 AskUserQuestion 交互规范保留不变
+变更：2026-11-22-init-config-three-phase
+状态：active
+摘要：规范保留
+场景正文：
+- 场景：规范保留 — Given 改后两份 SKILL.md / When 审读 / Then「一次只问一个」「AskUserQuestion」「绝对规则」段全部在场。
+全文：.sillyspec/changes/archive/2026-11-22-init-config-three-phase/requirements.md#FR-03
+最近确认：7cadccfd7c7cad7b486168061a81cc94cc93b4d9
+
+## FR-skills-docs-086 纯 skill 文本改动（不触 src/test），文本规范审读验收
+变更：2026-11-22-init-config-three-phase
+状态：active
+摘要：审读验收
+场景正文：
+- 场景：审读验收 — Given 两份 SKILL.md 改后文本 / When 逐条对照 FR-01/02/03 审读 / Then 探测三查/分型问询/已定跳过/规范保留全部在场。
+全文：.sillyspec/changes/archive/2026-11-22-init-config-three-phase/requirements.md#FR-04
+最近确认：7cadccfd7c7cad7b486168061a81cc94cc93b4d9

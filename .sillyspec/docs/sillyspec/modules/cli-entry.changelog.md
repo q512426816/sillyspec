@@ -121,3 +121,4 @@
 | 2026-11-19 | 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露 |
 | 2026-11-19 | 2026-11-19-closeout-noise-fix | 收口对账降噪：删除面误报与dirty缺口口径 |
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+| 2026-11-22 | 2026-11-22-tasks-blocked-by | 轻量任务清单阻塞依赖行支持 |
