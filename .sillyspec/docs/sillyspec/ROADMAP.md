@@ -20,7 +20,7 @@
 | 批 3c | 指令层/证据层分离：实证引用外移 knowledge，prompt 正文留纯指令（execute.js 1668 行根治） | 待 3b 试点后定名 | 完整流程 | 3b 试点验证 | ⬜ 待立项 |
 | 批 4 | knowledge 词汇通道：常读词汇旁路（glossary 类无条件注入）+ ADR 三条件门 | 2026-11-22-knowledge-vocab-channel | 轻量变更（倒推收口：实现经 mattpocock 链路交付后登记） | 无（实际先于 3b 交付——2026-11-22 用户拍板差距矩阵 T1+T2） | ✅ 已归档（5 票 implement-spec 并行+双轴 code-review 修复；integration/vocab-channel 合回 main；归档 44ba191b；体验复盘见吸收工作树 .scratch/mattpocock-absorb/retro-report.md） |
 | 批 5① | 上架 Claude 插件市场：.claude-plugin/marketplace.json+plugin.json+版本同步 check | 待用户拍板后定名 | 轻量变更 | 用户决策 | ⬜ 待拍板 |
-| 批 5② | init/config 三段式交互（先探测后问/每问带推荐/已定跳过） | 待用户拍板后定名 | 轻量变更 | 用户决策 | ⬜ 待拍板 |
+| 批 5② | init/config 三段式交互（先探测后问/每问带推荐/已定跳过） | 2026-11-22-init-config-three-phase | 轻量变更 | 用户决策（2026-11-22 优化起手序拍板） | ✅ 已归档（推荐依据锚随单 A 同源织入；归档 7cba9e69） |
 
 ### 搁置区（不立项，攒证据后重评）
 
@@ -34,10 +34,11 @@
 
 | 条目 | 实证 | 建议形态 |
 |---|---|---|
-| T4 中途纠正协议（wait-what 形态：偏航时用简化语言+GLOSSARY 通用语言重新推销） | 本会话用户两次方向性纠偏（「你没听懂吗」/「纯 matt 流程」） | prompt 纪律行（轻量） |
-| 轻量 tasks 可选 blocked-by 行 | 5 票并行的 frontier 加派节奏收益 | tasks.md 纯文本约定+task tick 识别（轻量） |
-| 评审任务书双轴分报（Standards/Spec 并行不合并不重排） | 双轴评审抓到 2 硬违规+1 缺口且各归其位 | 评审任务书模板吸收（轻量） |
-| A1 提取器路径锚定（_extract.mjs demo 目录绝对路径→仓相对） | 票 04/05 各撞一次路径噪音 | mechanical 小修（一处修复） |
+| ~~T4 中途纠正协议~~ ✅ 已交付（2026-11-22-recommend-anchor-recorrect，wait 两注入点+autoMeta 分支不注入） | 本会话用户两次方向性纠偏（「你没听懂吗」/「纯 matt 流程」） | 已落：prompt 纪律行 |
+| ~~轻量 tasks 可选 blocked-by 行~~ ✅ 已交付（2026-11-22-tasks-blocked-by：标注解析/软门警告/frontier 指针） | 5 票并行的 frontier 加派节奏收益 | 已落：task-tick 识别+flow 横幅语法说明 |
+| 推荐依据锚（决策问推荐必附一手锚，无依据降级开放问）——brainstorm 分型协议增量 | Q1 无依据推荐被用户识破实证 | 已落：随 2026-11-22-recommend-anchor-recorrect 织入 brainstorm 分型协议 |
+| 评审任务书双轴分报（Standards/Spec 并行不合并不重排） | 双轴评审抓到 2 硬违规+1 缺口且各归其位 | 评审任务书模板吸收（轻量）——⬜ 未开工 |
+| ~~A1 提取器路径锚定~~ ✅ 已交付（2026-11-22-recommend-anchor-recorrect：sanitizeDemoPath+main-guard，产物环境无关） | 票 04/05 各撞一次路径噪音 | 已落：mechanical 修复 |
 
 ### 明确不抄清单
 
