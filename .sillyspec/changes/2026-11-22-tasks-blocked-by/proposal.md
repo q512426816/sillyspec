@@ -1,0 +1,32 @@
+---
+author: flow-machine-draft
+created_at: 2026-11-22T16:37:40.035Z
+---
+# 提案书（Proposal）— 2026-11-22-tasks-blocked-by
+
+## 动机
+
+任务原话转写：轻量任务清单阻塞依赖行支持
+
+动机与背景：mattpocock 链路实测沉淀（retro-report.md/ROADMAP 新增候选）：5 票带阻塞边并行时 frontier 加派节奏是阻塞边的直接收益（01/04 同开→02/03 随解锁→05 收尾），SillySpec 轻量道 tasks.md 平铺无阻塞概念，多任务变更时 agent 只能凭自觉排序。吸收 to-tickets/implement-spec 的阻塞边思想做轻量形态：纯文本约定+task tick 机器识别，不引入重状态机。
+
+成功标准：
+- tasks.md 任务行支持可选阻塞标注：- [ ] task-NN: 描述 [blocked-by: task-MM/task-KK]（多值斜杠分隔），无标注行为零变化
+- task tick 勾选被阻塞任务（blocked-by 列表中有未勾任务）时给出明确警告留痕（提示被谁阻塞），不阻断勾选（轻量软门）
+- task tick/flow status 的下一任务指针优先指向未被阻塞的最小号任务（frontier 语义）
+- 既有 tasks.md（无 blocked-by）解析与勾选行为零回归；新增单测覆盖标注解析/警告/指针三面并跑绿
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. tasks.md 任务行支持可选阻塞标注：- [ ] task-NN: 描述 [blocked-by: task-MM/task-KK]（多值斜杠分隔），无标注行为零变化
+2. task tick 勾选被阻塞任务（blocked-by 列表中有未勾任务）时给出明确警告留痕（提示被谁阻塞），不阻断勾选（轻量软门）
+3. task tick/flow status 的下一任务指针优先指向未被阻塞的最小号任务（frontier 语义）
+4. 既有 tasks.md（无 blocked-by）解析与勾选行为零回归；新增单测覆盖标注解析/警告/指针三面并跑绿
+
+## 成功标准（可验证）
+
+1. tasks.md 任务行支持可选阻塞标注：- [ ] task-NN: 描述 [blocked-by: task-MM/task-KK]（多值斜杠分隔），无标注行为零变化
+2. task tick 勾选被阻塞任务（blocked-by 列表中有未勾任务）时给出明确警告留痕（提示被谁阻塞），不阻断勾选（轻量软门）
+3. task tick/flow status 的下一任务指针优先指向未被阻塞的最小号任务（frontier 语义）
+4. 既有 tasks.md（无 blocked-by）解析与勾选行为零回归；新增单测覆盖标注解析/警告/指针三面并跑绿
