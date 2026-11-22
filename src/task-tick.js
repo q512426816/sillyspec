@@ -38,6 +38,21 @@ export function normalizeTaskId(id) {
  * 文档围栏常含 `- [ ] task-N:` 形态示例，逐行正则会把它们当真实任务（幻影行污染
  * 进度 N/M 与下一任务指针）。按 fenceScan 行标记过滤，围栏语法口径见 md-fence.js。
  */
+// 阻塞标注解析（2026-11-22-tasks-blocked-by，mattpocock 链路实测沉淀）：行尾可选
+// [blocked-by: task-MM/task-KK]（多值斜杠分隔，裸数字归一 task-NN）。合法时剥出进
+// blockedBy 数组、desc 留描述本体；空值等不合法形态按普通文本保留并置 _invalidBlockedBy
+// （tickTasksMd 层 warn 一次）；无标注行为零变化（blockedBy 恒为空数组）。
+const BLOCKED_BY_RE = /\[blocked-by:\s*([^\]]*)\]\s*$/
+function parseBlockedBy(desc) {
+  const raw = String(desc || '')
+  const m = raw.match(BLOCKED_BY_RE)
+  if (!m) return { desc: raw.trim(), blockedBy: [] }
+  const ids = m[1].split('/').map((s) => s.trim()).filter(Boolean).map((s) =>
+    /^\d+$/.test(s) ? `task-${String(Number(s)).padStart(2, '0')}` : s)
+  if (ids.length === 0) return { desc: raw.trim(), blockedBy: [], invalid: m[0] }
+  return { desc: raw.replace(BLOCKED_BY_RE, '').trim(), blockedBy: ids }
+}
+
 function collectRows(md) {
   const text = String(md || '')
   const { inFence } = fenceScan(text)
@@ -49,7 +64,16 @@ function collectRows(md) {
   for (let i = 0; i < lines.length; i++) {
     if (inFence[i]) continue
     const m = lines[i].match(TASK_ROW_RE)
-    if (m) rows.push({ id: `task-${String(Number(m[4])).padStart(2, '0')}`, checked: m[2].toLowerCase() === 'x', desc: (m[5] || '').trim() })
+    if (m) {
+      const pb = parseBlockedBy((m[5] || '').trim())
+      rows.push({
+        id: `task-${String(Number(m[4])).padStart(2, '0')}`,
+        checked: m[2].toLowerCase() === 'x',
+        desc: pb.desc,
+        blockedBy: pb.blockedBy,
+        ...(pb.invalid ? { _invalidBlockedBy: pb.invalid } : {}),
+      })
+    }
   }
   return rows
 }
@@ -88,13 +112,31 @@ export function tickTasksMd({ tasksMd, taskId }) {
   }
   const after = collectRows(out)
   const checked = after.filter((r) => r.checked).length
-  const pending = after.find((r) => !r.checked)
+  const checkedSet = new Set(after.filter((r) => r.checked).map((r) => r.id))
+  // 软门（2026-11-22-tasks-blocked-by FR-02）：tick 目标被未勾任务阻塞时给 blockedWarning
+  // 留痕——不阻断翻格（轻量软纪律）；前置全部已勾或无标注恒 null（零噪音）。
+  const unfinishedBlockers = (target.blockedBy || []).filter((id) => !checkedSet.has(id))
+  const blockedWarning = unfinishedBlockers.length > 0
+    ? `被 ${unfinishedBlockers.join('、')} 阻塞（未勾）——已勾选但顺序存疑，确认前置完成`
+    : null
+  // 下一任务指针 frontier 化（FR-03）：优先未阻塞（blockedBy 全已勾或无标注）的最小号未勾；
+  // 全部被阻塞时回退最小号未勾并带 blockedBy 注记；无标注场景与现状一致（第一个未勾行）。
+  const pendingRows = after.filter((r) => !r.checked)
+  let next = null
+  if (pendingRows.length > 0) {
+    const unblocked = pendingRows.find((r) => (r.blockedBy || []).every((id) => checkedSet.has(id)))
+    const chosen = unblocked || pendingRows[0]
+    next = { id: chosen.id, desc: chosen.desc }
+    const chosenUnfinished = (chosen.blockedBy || []).filter((id) => !checkedSet.has(id))
+    if (chosenUnfinished.length > 0) next.blockedBy = chosenUnfinished
+  }
   return {
     kind: target.checked ? 'already' : 'ticked',
     tasksMd: out,
     checked,
     total: after.length,
-    next: pending ? { id: pending.id, desc: pending.desc } : null,
+    next,
+    blockedWarning,
     unclosedFence: scanInfo.unclosed,
     unclosedFenceLine: scanInfo.fenceStartLine,
   }
@@ -214,8 +256,10 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
       await triggerSync(cwd, changeName, { specRoot: specBase })
     } catch { /* 重推 best-effort：失败不影响翻格主流程 */ }
   }
+  // 软门留痕（2026-11-22-tasks-blocked-by FR-02）：被未勾任务阻塞仍翻格成功——warn 提示顺序存疑
+  if (r.blockedWarning) console.warn(`⚠️ ${r.blockedWarning}`)
   const nextTip = r.next
-    ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
+    ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}${r.next.blockedBy ? `（等 ${r.next.blockedBy.join('/')}…）` : ''}`
     : `｜🎉 ${r.total}/${r.total} 全勾——可收口：sillyspec flow done --change ${changeName}`
   console.log(`${r.kind === 'ticked' ? '✅ 已勾' : 'ℹ️ 已是勾选态（幂等跳过写盘）'}（${r.checked}/${r.total}）${nextTip}`)
   if (r.kind === 'ticked') {

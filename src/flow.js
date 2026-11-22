@@ -1241,6 +1241,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   （每行=可独立完成并当场验证的一步：做什么+怎么验证；增删改随意，保持 \`- [ ] task-NN:\` 行形态）；`,
     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
+    `   任务行可选阻塞标注（2026-11-22-tasks-blocked-by）：行尾 [blocked-by: task-MM/task-KK]（多值斜杠分隔）——tick 软门警告顺序存疑、下一任务指针跳过被阻塞者（frontier 语义）；无标注行为零变化。`,
     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
     `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认；pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库，task tick 回显会给现成命令）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
     // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
