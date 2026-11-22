@@ -1,0 +1,31 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  发版 3.34.9：版本号最小升级与 npm 发布
+
+
+  动机与背景：词汇通道（2026-11-22-knowledge-vocab-channel）+
+  优化三单（recommend-anchor-recorrect/tasks-blocked-by/init-config-three-phase）已合入 main 并推送（a83768b3），按用户指令发布 npm
+  新版：3.34.8→3.34.9（patch 最小升级）。代码面均已经各自变更实测门验证，本单只做版本号变更+发布。
+
+
+  成功标准：
+
+  - package.json version 由 3.34.8 改为 3.34.9，无其他文件改动
+
+  - npm publish 成功发布 3.34.9（发布回执 tag/URL 留痕）
+autopilot: false
+prestage_ack: false
+baseline_commit: a83768b368dca2b615b1d010d0c07984144f6007
+updatedAt: '2026-11-22T16:59:58.071Z'
+baseline_sha256: a90edb33d249cc481b66f88312bf2a17c4a8da1936fa0e966a514276aa7a18ca
+spec_approved: true
+spec_approved_at: '2026-11-22T16:59:58.070Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+
