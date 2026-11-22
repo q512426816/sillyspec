@@ -168,8 +168,6 @@
 - release → [decisions/release.md](decisions/release.md)
 - eval → [decisions/eval.md](decisions/eval.md)
 - dispatch → [decisions/dispatch.md](decisions/dispatch.md)
-- 拒绝|mattpocock|skills|全量照搬流程形态|八条不抄与内核冲突点 → [decisions/docs.md#拒绝 mattpocock skills 全量照搬流程形态（八条不抄与内核冲突点）](decisions/docs.md#拒绝 mattpocock skills 全量照搬流程形态（八条不抄与内核冲突点）)
-- 路线规划类资产归工具工作区而非项目|docs|002|位置裁决 → [decisions/docs.md#路线规划类资产归工具工作区而非项目 docs（D-002 位置裁决）](decisions/docs.md#路线规划类资产归工具工作区而非项目 docs（D-002 位置裁决）)
 
 ## FR 需求索引
 - host-fs-handler → [fr/host-fs-handler.md](fr/host-fs-handler.md)

@@ -49,3 +49,4 @@
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
 | 2026-11-21 | 2026-11-22-prompt-primitive-survey | 盘点阶段提示词可抽取纪律原语 |
 | 2026-11-21 | 2026-11-22-roadmap-loop-closure | 吸收路线闭环化入工具工作区 |
+| 2026-11-22 | 2026-11-22-recommend-anchor-recorrect | 提问推荐带依据锚与中途纠正协议 |

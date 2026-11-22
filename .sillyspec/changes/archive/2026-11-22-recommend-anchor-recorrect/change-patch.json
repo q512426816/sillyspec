@@ -1,0 +1,160 @@
+{
+  "change": "2026-11-22-recommend-anchor-recorrect",
+  "baseline": "552e65ed5678910129c9f17f6786d0446cc8b96b",
+  "head": "1751c740c8609053d7f274fa5dc782ab61cbfb86",
+  "files": [
+    "docs/prompt/_extract.mjs",
+    "docs/prompt/_extracted.json",
+    "src/run/prompt.js",
+    "src/stages/brainstorm.js",
+    "test/brainstorm-prompt-discipline.test.mjs",
+    "test/output-step-render.test.mjs",
+    "test/prompt-extract-portable.test.mjs",
+    "test/prompt-golden.json"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 152,
+    "deletions": 48
+  },
+  "savedAt": "2026-11-22T16:37:08.310Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "552e65ed5678910129c9f17f6786d0446cc8b96b",
+    "totals": {
+      "files": 10,
+      "additions": 152,
+      "deletions": 48
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extract.mjs",
+        "additions": 65,
+        "deletions": 42,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/brainstorm-prompt-discipline.test.mjs",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/output-step-render.test.mjs",
+        "additions": 5,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/prompt-extract-portable.test.mjs",
+        "additions": 69,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/prompt-golden.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/prompt-injection-gaps.test.mjs",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "dab6f32874c1285c58f4e637b96925ac9a551f3109ed9bf97313ea3c09e32945",
+  "patchStatus": "ok"
+}

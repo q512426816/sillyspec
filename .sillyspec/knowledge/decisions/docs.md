@@ -147,3 +147,12 @@
 否决理由：项目 docs/ 下的路线文件无工具消费——不进 knowledge 检索注入（防复潮为零）、无状态回写（路线与事实脱节），是死文档；.sillyspec/ 是长期项目资产区（knowledge/模块映射/归档全在其中）非临时目录。闭环三环：拒绝概念走 decisions→distill 进 knowledge（机器检索）、路线状态随归档回写（批次表状态列）、位置归工作区与 scan 文档同域。
 复潮条件：工具出现 roadmap 一等公民命令族（sillyspec roadmap add/tick）时可重评位置与形态；在那之前手工回写状态列够用。
 来源：2026-11-22 用户裁决（会话原话「不写到工作目录里有什么用/工作目录肯定不是临时目录」）；决策登记变更 2026-11-22-roadmap-loop-closure D-002；路径迁移映射 docs/ROADMAP.md→.sillyspec/docs/sillyspec/ROADMAP.md、docs/sillyspec/out-of-scope/→撤销归 knowledge。
+
+## D-docs-011@v1 2026-11-22-recommend-anchor-recorrect——三个独立小改共用一单（同属提示词纪律面+机械修复）：①brainstorm.js 第 7 条提问分型协议追加「推荐附一手依据锚」增量句（推荐答案机制的实证弱点—
+状态：implemented
+变更：2026-11-22-recommend-anchor-recorrect
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-22-recommend-anchor-recorrect/design.md
+文件：docs/prompt/_extract.mjs, docs/prompt/_extracted.json, src/run/prompt.js, src/stages/brainstorm.js, test/brainstorm-prompt-discipline.test.mjs, test/output-step-render.test.mjs, test/prompt-extract-portable.test.mjs, test/prompt-golden.json
+最近确认：1751c740c8609053d7f274fa5dc782ab61cbfb86
+理由：三个独立小改共用一单（同属提示词纪律面+机械修复）：①brainstorm.js 第 7 条提问分型协议追加「推荐附一手依据锚」增量句（推荐答案机制的实证弱点——无依据推荐被用户识破，机制解=把调研深度变成推荐的硬前置）；②prompt.js 两处 wait 交互指引输出各追加一句中途纠正协议（wait-what 形态：纠正语义→停→复述目标→确认→再继续；挂两处既注入点最小扰动，autoMeta 分支不注入与既有分支条件一致）；③_extract.mjs 输出前归一化 demo 目录绝对路径（root 由 __dirname 推导，worktree 下跑渗入绝对路径——归一化函数 export 供直测，端到端双环境逐字节一致）。选此方案因为三处均为增量行/纯函数归一，不动任何既有语义，金档再生即可验证。

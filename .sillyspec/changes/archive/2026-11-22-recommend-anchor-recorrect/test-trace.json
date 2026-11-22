@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-22-recommend-anchor-recorrect",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-22-recommend-anchor-recorrect:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-prompt-discipline.test.mjs「提问分型段含依据锚纪律行（新增断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-recommend-anchor-recorrect"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-22-recommend-anchor-recorrect:flow:测试绑定FR-02",
+      "tests": [
+        "test/output-step-render.test.mjs「交互指引含中途纠正协议行（requiresWait/mayNeedWait 两处新增断言，76/0 绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-recommend-anchor-recorrect"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-22-recommend-anchor-recorrect:flow:测试绑定FR-03",
+      "tests": [
+        "test/prompt-extract-portable.test.mjs「归一函数直测+金档现状无绝对路径（新文件）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-recommend-anchor-recorrect"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-22-recommend-anchor-recorrect:flow:测试绑定FR-04",
+      "tests": [
+        "test/prompt-golden.test.mjs「金档哈希锁绿（SILLYSPEC_REGEN_PROMPT_GOLDEN 合法通道再生基线）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-recommend-anchor-recorrect"
+    }
+  ]
+}

@@ -99,3 +99,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-19-pitfall-trio-closeout | flow done 三坑修复倒推收编：归档自愈与冻结披露
 - 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed
 - 2026-11-21-shadow-dispatch-form-respect | 免评审形态收口不再自动派影子审查
+- 2026-11-22-recommend-anchor-recorrect | 提问推荐带依据锚与中途纠正协议

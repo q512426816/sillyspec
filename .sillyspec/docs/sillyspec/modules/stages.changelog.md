@@ -86,3 +86,4 @@
 | 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |
 | 2026-11-14 | 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物 |
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
+| 2026-11-22 | 2026-11-22-recommend-anchor-recorrect | 提问推荐带依据锚与中途纠正协议 |
