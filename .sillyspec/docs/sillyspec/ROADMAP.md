@@ -16,9 +16,9 @@
 | 批 1 | 一行级吸收包：seam 约定/三层审查优先级/「是」=推荐/DEBUG 前缀+变异自证/回退门+爆炸半径/out-of-scope 沉淀位 | 2026-11-21-prompt-microdesign-pack | 轻量变更 | 无 | ✅ 已归档（交付 23af3e55／归档 436ef561）；out-of-scope 沉淀位后被 D-002 撤销归 knowledge 通道 |
 | 批 2 | 诊断环 skill：red-capable 复现命令硬前置五阶段 gated（.claude/skills/sillyspec-diagnose/） | 2026-11-22-diagnose-skill | 轻量变更 | 无 | ✅ 已归档（交付 fc09622b／归档 2eebe7de） |
 | 批 3a | 纪律原语盘点（不动码）→ docs/sillyspec/prompt-primitives-survey.md（25 候选/高优 8 条） | 2026-11-22-prompt-primitive-survey | 轻量变更 | 批 1 合入后 | ✅ 已归档（交付 dddf86ff／归档 bf252852） |
-| 批 3b | include 参数化：resolvePromptIncludes 增 {{include:name\|focus=x}}；按 survey 施工顺序抽高优 2+5 直抽、后 4/9 参数化——每批跑金档再生+include 计数测试 | 建议名 2026-11 月内定 | 轻量或小完整流程 | 3a（已就绪） | ⬜ 待立项 |
+| 批 3b | include 参数化：resolvePromptIncludes 增 {{include:name\|focus=x}}；按 survey 施工顺序抽高优 2+5 直抽、后 4/9 参数化——每批跑金档再生+include 计数测试 | 2026-11-22-include-param-primitives（已立项挂起，spec 面已答，恢复重跑 flow start 同名） | 轻量或小完整流程 | 3a（已就绪） | ⏸ 挂起（2026-11-22 用户改拍 T1 词汇通道优先，本批未动工） |
 | 批 3c | 指令层/证据层分离：实证引用外移 knowledge，prompt 正文留纯指令（execute.js 1668 行根治） | 待 3b 试点后定名 | 完整流程 | 3b 试点验证 | ⬜ 待立项 |
-| 批 4 | knowledge 词汇通道：常读词汇旁路（glossary 类无条件注入）+ ADR 三条件门 | 待定名 | 轻量变更 | 建议 3b 后 | ⬜ 待立项 |
+| 批 4 | knowledge 词汇通道：常读词汇旁路（glossary 类无条件注入）+ ADR 三条件门 | 2026-11-22-knowledge-vocab-channel | 轻量变更（倒推收口：实现经 mattpocock 链路交付后登记） | 无（实际先于 3b 交付——2026-11-22 用户拍板差距矩阵 T1+T2） | ✅ 已归档（5 票 implement-spec 并行+双轴 code-review 修复；integration/vocab-channel 合回 main；归档 44ba191b；体验复盘见吸收工作树 .scratch/mattpocock-absorb/retro-report.md） |
 | 批 5① | 上架 Claude 插件市场：.claude-plugin/marketplace.json+plugin.json+版本同步 check | 待用户拍板后定名 | 轻量变更 | 用户决策 | ⬜ 待拍板 |
 | 批 5② | init/config 三段式交互（先探测后问/每问带推荐/已定跳过） | 待用户拍板后定名 | 轻量变更 | 用户决策 | ⬜ 待拍板 |
 
@@ -27,8 +27,17 @@
 | 条目 | 观察方式 | 重评触发条件 |
 |---|---|---|
 | wayfinder 跨会话决策票图 | 下一个多阶段大工程先手工按「决策图+票」方式管理 | 手工用出频率证明价值，再考虑做成 skill |
-| retro 环境轴（会话后审视 steering 文件质量） | 下次 CLAUDE/AGENTS 再膨胀时手工做一次审视 | 一次手工审视验证价值后再固化 |
+| ~~retro 环境轴~~ → **已转正候选（2026-11-22）**：重评条件提前满足——mattpocock 链路 retro 阶段完成首次手工审视，产出 2 条 mechanical finding（A1 提取器路径锚定/A2 再生 diff 提示），见 retro-report.md；建议形态=收口 distill 前加环境问句+A1 随小修带入 | 已做一次（retro-report.md） | 已满足 |
 | SKILL.md frontmatter 最小校验 | 随批 1 顺带评估是否并入（CI 或 flow done 顺带） | 批 1 已归档——未并入，独立小变更候选 |
+
+### 新增候选（2026-11-22 mattpocock 链路实测沉淀，来源 retro-report.md）
+
+| 条目 | 实证 | 建议形态 |
+|---|---|---|
+| T4 中途纠正协议（wait-what 形态：偏航时用简化语言+GLOSSARY 通用语言重新推销） | 本会话用户两次方向性纠偏（「你没听懂吗」/「纯 matt 流程」） | prompt 纪律行（轻量） |
+| 轻量 tasks 可选 blocked-by 行 | 5 票并行的 frontier 加派节奏收益 | tasks.md 纯文本约定+task tick 识别（轻量） |
+| 评审任务书双轴分报（Standards/Spec 并行不合并不重排） | 双轴评审抓到 2 硬违规+1 缺口且各归其位 | 评审任务书模板吸收（轻量） |
+| A1 提取器路径锚定（_extract.mjs demo 目录绝对路径→仓相对） | 票 04/05 各撞一次路径噪音 | mechanical 小修（一处修复） |
 
 ### 明确不抄清单
 
