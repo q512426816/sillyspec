@@ -97,9 +97,11 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge, isRecallRelevantScored } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
-// 词汇通道（mattpocock-absorb ticket-01）：readVocabSection 为 fs/path 叶子纯函数，
-// 静态 import 不引入环（旁路读取，不经 matchKnowledge 任何匹配层——见 knowledge-vocab.js 头注释）。
-import { readVocabSection } from '../knowledge-vocab.js'
+// 词汇通道（mattpocock-absorb ticket-01/03）：knowledge-vocab 依赖 fs/path/knowledge-hits
+// （hits 又只向 fs 方向），静态 import 不引入环（旁路读取，不经 matchKnowledge 任何匹配
+// 层——见 knowledge-vocab.js 头注释；ticket-03：截断防线在 readVocabSectionDetailed 内，
+// 词汇注入遥测独立 type 经 appendVocabInjectTelemetry 落盘）。
+import { readVocabSectionDetailed, appendVocabInjectTelemetry } from '../knowledge-vocab.js'
 import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
@@ -588,16 +590,21 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
  *   knowledge/glossary.md 在场即恒有值（query 零命中也在场——旁路不经匹配层、不占 top-3、
  *   不进命中分母）；缺失/全空白恒 ''（proceed silently）。由调用方拼装到注入文本，matched
  *   等既有四字段语义与值零变化。
+ *   vocabMeta（ticket-03）：{ lines, truncated } 词汇正文行数与是否截断（超 VOCAB_MAX_LINES
+ *   时 readVocabSectionDetailed 截到上限并 warn 一次）——供拼装点落 vocab-inject 遥测。
  *   遥测 append 单独 fail-soft（hits 写失败不影响注入本体）；匹配/渲染异常向上抛由调用方降级。
  */
 export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, scopeFiles = [], maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
   // 融合（2026-11-02-knowledge-fusion）：同步入口 = matchKnowledge（路由/词片）+ scope 融合；
   // scopeFiles 为机器键（design 交付清单/quick allowedFiles），键规整在 graphPathCandidates 内做
   const knowledgeResult = matchKnowledgeWithScope(knowledgeDir, String(query || ''), { scopeFiles })
-  // 词汇基准段（旁路，ticket-01）：读取独立于匹配结果——在场恒注入、缺失恒 ''，零告警
-  const vocabSection = readVocabSection(knowledgeDir)
+  // 词汇基准段（旁路，ticket-01/03）：读取独立于匹配结果——在场恒注入、缺失恒 ''，零告警；
+  // 超行截断（ticket-03）在 readVocabSectionDetailed 内完成（截到上限 + warn 一次）
+  const vocab = readVocabSectionDetailed(knowledgeDir)
+  const vocabSection = vocab.section
+  const vocabMeta = { lines: vocab.lines, truncated: vocab.truncated }
   if (!knowledgeResult.matched) {
-    return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json, vocabSection }
+    return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json, vocabSection, vocabMeta }
   }
   const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
   const section = kSection
@@ -613,7 +620,7 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
       ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
-  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, vocabSection }
+  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, vocabSection, vocabMeta }
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
@@ -1538,6 +1545,12 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
       const injectText = knowledgeInjection.vocabSection
         ? `${injectBase}\n\n${knowledgeInjection.vocabSection}`
         : injectBase
+      // 词汇注入独立遥测（ticket-03）：拼装进 prompt 即落一行 type:vocab-inject（与检索命中
+      // type:inject 可区分、无 matchedFiles 不进命中分母）；零命中也在场（恒注入恒遥测），
+      // fail-soft 由 appendVocabInjectTelemetry 内部收口
+      if (knowledgeInjection.vocabSection) {
+        appendVocabInjectTelemetry(runtimeDir, changeName || '', knowledgeInjection.vocabMeta)
+      }
       substitute(
         /\{KNOWLEDGE_HIT_REPORT\}/g,
         injectText
@@ -2070,6 +2083,11 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
         const kiParts = [ki.section, ki.vocabSection].filter(Boolean)
         if (kiParts.length > 0) {
           promptText = promptText + '\n\n' + kiParts.join('\n\n')
+        }
+        // 词汇注入独立遥测（ticket-03，与 execute 占位符拼装点对称）：vocab-inject 独立 type，
+        // 恒注入恒遥测，fail-soft
+        if (ki.vocabSection) {
+          appendVocabInjectTelemetry(join(kiSpecBase, '.runtime'), changeName || '', ki.vocabMeta)
         }
       }
     } catch { /* fail-soft：知识注入异常不阻断 quick step1 prompt 输出 */ }
