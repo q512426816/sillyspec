@@ -2316,6 +2316,7 @@ ${maskVolatileForGuide(guideTemplate)}
     // 脚本驱动无交互 UI，不注入（命令模板零变化）。
     if (!autoMeta) {
       console.log(`提问方式：优先用 harness 的交互询问工具（Claude Code 即 AskUserQuestion）把「${step.waitReason || '等待用户输入'}」与候选项（${(step.waitOptions || ['确认']).join(' / ')}）呈现给用户等其选择/作答——不要只发纯文字问题；拿到回答后逐字带入 --answer 按下方主路径收口。harness 无询问工具时才退回纯文字提问。`)
+      console.log(`中途纠正协议：用户回复为纠正/否定理解语义（「你没听懂/不对/我说的是」类）时——先停当前动作，用词汇基准（知识注入「📖 词汇基准」段，在场时）与简化语言复述「我现在理解的目标」，经用户确认后才继续推进；禁止带着未确认的旧理解执行（2026-11-22 mattpocock 链路实测沉淀）。`)
     }
     console.log(`本步骤需要用户决策——主路径一步合并完成（--answer 自动补全 wait 状态，省 2 次 CLI 往返）：`)
     console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
@@ -2327,7 +2328,7 @@ ${maskVolatileForGuide(guideTemplate)}
     if (mayNeedWait) {
       console.log(autoMeta
         ? `如果需要用户决策（选择方案/确认设计等），拿到回答后一步完成（--answer 自动补全 wait 状态）：`
-        : `如果需要用户决策（选择方案/确认设计等），优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）呈现问题与选项提问，拿到回答后一步完成（--answer 自动补全 wait 状态）：`)
+        : `如果需要用户决策（选择方案/确认设计等），优先用 harness 交互询问工具（Claude Code 即 AskUserQuestion）呈现问题与选项提问，拿到回答后一步完成（--answer 自动补全 wait 状态）；用户回复为纠正/否定理解语义时按中途纠正协议处理——停当前动作、复述「我现在理解的目标」、确认后再继续：`)
       console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
       console.log(``)
       console.log(`如果不需要用户决策，正常完成：`)

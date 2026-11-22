@@ -36,6 +36,12 @@ test('提问分型规则文本断言：一刀切通则移除，意图开放式/�
   assert.match(src, /被问「你觉得呢\/先猜一个」时给一个具体方案并标「我的判断」/, '原尾句保留：被问你觉得呢给具体方案标我的判断')
 })
 
+test('推荐依据锚纪律（2026-11-22-recommend-anchor-recorrect）：推荐必须附一手依据，无依据降级开放问', () => {
+  const src = readFileSync(join(ROOT, '..', 'src', 'stages', 'brainstorm.js'), 'utf8')
+  assert.match(src, /推荐必须以「依据：」附一手锚/, '推荐以「依据：」前缀附一手锚')
+  assert.match(src, /无一手依据时不给推荐[^`]*?降级为开放式提问/, '无一手依据不给推荐，降级为开放式提问')
+})
+
 test('子代理豁免条款双文件同步断言', () => {
   const tpl = readFileSync(join(ROOT, '..', 'templates', 'agents-instruction.md'), 'utf8')
   const repoAgents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')

@@ -7,6 +7,9 @@
  *           execute → buildExecuteSteps（示例 planFilePath + worktreePath）
  *
  * 输出：docs/prompt/_extracted.json
+ * 可移植（2026-11-22-recommend-anchor-recorrect）：demo 变更目录按 root=__dirname 推导，
+ * worktree/任意目录下运行会渗入绝对路径（票 04/05 路径噪音双实证）——写盘前归一为仓
+ * 相对形，主仓与任意 worktree 产物逐字节一致；主体包 main-guard，import 零副作用。
  */
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -45,21 +48,35 @@ function extractDef(def, auxiliary, extra = {}) {
   }
 }
 
-const out = {}
-
-// ── 静态阶段（definition.steps 直接定义）──
-const staticStages = ['brainstorm', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
-for (const name of staticStages) {
-  const mod = await import(stageUrl(name))
-  out[name] = extractDef(mod.definition, AUX.includes(name), {
-    sourceFile: `src/stages/${name}.js`,
-    inStageRegistry: true
-  })
+// 路径可移植归一（2026-11-22-recommend-anchor-recorrect FR-03）：把文本中出现的 demo
+// 变更目录绝对路径（反斜杠/正斜杠/JSON 转义三形态）替换为仓相对形。demoDir 可传参供
+// 测试直测；缺省或非串输入原样返回（容错不炸）。
+export function sanitizeDemoPath(text, demoDir) {
+  if (typeof text !== 'string' || !demoDir) return text
+  const rel = join('.sillyspec', 'changes', '2026-05-13-demo-change').replaceAll('\\', '/')
+  let out = text
+  for (const needle of [demoDir, demoDir.replaceAll('\\', '/'), demoDir.replaceAll('\\', '\\\\')]) {
+    out = out.split(needle).join(rel)
+  }
+  return out
 }
 
-// ── plan（动态：buildPlanSteps）──
-const planMod = await import(stageUrl('plan'))
-const demoPlanContent = `---
+async function main() {
+  const out = {}
+
+  // ── 静态阶段（definition.steps 直接定义）──
+  const staticStages = ['brainstorm', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
+  for (const name of staticStages) {
+    const mod = await import(stageUrl(name))
+    out[name] = extractDef(mod.definition, AUX.includes(name), {
+      sourceFile: `src/stages/${name}.js`,
+      inStageRegistry: true
+    })
+  }
+
+  // ── plan（动态：buildPlanSteps）──
+  const planMod = await import(stageUrl('plan'))
+  const demoPlanContent = `---
 plan_level: full
 ---
 
@@ -72,36 +89,42 @@ plan_level: full
 ## Wave 2（依赖 Wave 1）
 - [ ] task-03: 用户创建接口联调
 `
-const demoChangeDir = join(root, '.sillyspec', 'changes', '2026-05-13-demo-change')
-const planSteps = planMod.buildPlanSteps(demoChangeDir, demoPlanContent)
-out.plan = extractDef(planMod.definition, false, {
-  sourceFile: 'src/stages/plan.js',
-  inStageRegistry: true,
-  dynamic: 'steps 由 buildPlanSteps(changeDir, planContent) 动态生成；任务数为 0 时只有 3 个 fixedPrefix 步骤；有任务时追加 coordinator + postcheck',
-  demoNote: '下方 coordinator 步骤用 3-task 示例 plan 生成（task-01/02/03），实际任务列表与 changeDir 随变更变化',
-  stepsCount: planSteps.length,
-  steps: planSteps.map((s, i) => extractStep(s, i))
-})
+  const demoChangeDir = join(root, '.sillyspec', 'changes', '2026-05-13-demo-change')
+  const planSteps = planMod.buildPlanSteps(demoChangeDir, demoPlanContent)
+  out.plan = extractDef(planMod.definition, false, {
+    sourceFile: 'src/stages/plan.js',
+    inStageRegistry: true,
+    dynamic: 'steps 由 buildPlanSteps(changeDir, planContent) 动态生成；任务数为 0 时只有 3 个 fixedPrefix 步骤；有任务时追加 coordinator + postcheck',
+    demoNote: '下方 coordinator 步骤用 3-task 示例 plan 生成（task-01/02/03），实际任务列表与 changeDir 随变更变化',
+    stepsCount: planSteps.length,
+    steps: planSteps.map((s, i) => extractStep(s, i))
+  })
 
-// ── execute（动态：buildExecuteSteps）──
-const execMod = await import(stageUrl('execute'))
-const demoPlanFile = join(demoChangeDir, 'plan.md') // 不存在 → buildExecuteSteps 用默认 3 Wave
-// dispatchMode 固定 'local'：提取输入只有源码——不固定会读运行环境 local.yaml 的 mcp 段，
-// 主仓（有 mcp 配置）与 worktree（无 local.yaml overlay）各跑一次必漂移，镜像跨环境 git diff 永不干净
-const execSteps = execMod.buildExecuteSteps(demoPlanFile, { worktreePath: '/tmp/worktrees/demo-change', dispatchMode: 'local' })
-out.execute = extractDef(execMod.definition, false, {
-  sourceFile: 'src/stages/execute.js',
-  inStageRegistry: true,
-  dynamic: 'steps 由 buildExecuteSteps(planFilePath, options) 动态生成；Wave 步骤数 = plan.md 的 Wave 数（无 plan 时默认 3 Wave）',
-  demoNote: '下方 Wave 步骤用默认 3-wave 示例生成，实际 Wave 数/任务随 plan.md 变化；contractInjection/prototypeInjection 在无相关契约/原型时为空',
-  stepsCount: execSteps.length,
-  steps: execSteps.map((s, i) => extractStep(s, i))
-})
+  // ── execute（动态：buildExecuteSteps）──
+  const execMod = await import(stageUrl('execute'))
+  const demoPlanFile = join(demoChangeDir, 'plan.md') // 不存在 → buildExecuteSteps 用默认 3 Wave
+  // dispatchMode 固定 'local'：提取输入只有源码——不固定会读运行环境 local.yaml 的 mcp 段，
+  // 主仓（有 mcp 配置）与 worktree（无 local.yaml overlay）各跑一次必漂移，镜像跨环境 git diff 永不干净
+  const execSteps = execMod.buildExecuteSteps(demoPlanFile, { worktreePath: '/tmp/worktrees/demo-change', dispatchMode: 'local' })
+  out.execute = extractDef(execMod.definition, false, {
+    sourceFile: 'src/stages/execute.js',
+    inStageRegistry: true,
+    dynamic: 'steps 由 buildExecuteSteps(planFilePath, options) 动态生成；Wave 步骤数 = plan.md 的 Wave 数（无 plan 时默认 3 Wave）',
+    demoNote: '下方 Wave 步骤用默认 3-wave 示例生成，实际 Wave 数/任务随 plan.md 变化；contractInjection/prototypeInjection 在无相关契约/原型时为空',
+    stepsCount: execSteps.length,
+    steps: execSteps.map((s, i) => extractStep(s, i))
+  })
 
+  writeFileSync(join(__dirname, '_extracted.json'), sanitizeDemoPath(JSON.stringify(out, null, 2), demoChangeDir) + '\n', 'utf8')
+  console.log('✅ extracted -> docs/prompt/_extracted.json')
+  for (const [k, v] of Object.entries(out)) {
+    const gw = v.globalGuardrails ? ' [+guardrails]' : ''
+    console.log(`  ${k.padEnd(16)} steps=${String(v.stepsCount).padStart(2)}${gw}`)
+  }
+}
 
-writeFileSync(join(__dirname, '_extracted.json'), JSON.stringify(out, null, 2) + '\n', 'utf8')
-console.log('✅ extracted -> docs/prompt/_extracted.json')
-for (const [k, v] of Object.entries(out)) {
-  const gw = v.globalGuardrails ? ' [+guardrails]' : ''
-  console.log(`  ${k.padEnd(16)} steps=${String(v.stepsCount).padStart(2)}${gw}`)
+// main-guard：import 零副作用（test/prompt-extract-portable.test.mjs 直测 sanitizeDemoPath），
+// 直接运行（node docs/prompt/_extract.mjs）才执行提取主体。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main()
 }

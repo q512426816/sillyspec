@@ -123,6 +123,10 @@ console.log('\n--- quick requiresWait：--done --answer 一步合并主路径 + 
   assert(r.stdout.includes('AskUserQuestion'), 'requiresWait → 提问方式指引（AskUserQuestion 优先）')
   assert(r.stdout.includes('等待用户确认'), '指引行携带 waitReason')
   assert(r.stdout.includes('确认 / 取消'), '指引行携带候选项（waitOptions）')
+  // 2026-11-22-recommend-anchor-recorrect FR-02：中途纠正协议——用户纠正语义时
+  // 停当前动作→复述理解的目标→确认后再继续（mattpocock 链路两次纠偏实证）
+  assert(r.stdout.includes('中途纠正协议'), 'requiresWait → 中途纠正协议在场')
+  assert(r.stdout.includes('复述「我现在理解的目标」'), '纠正协议含复述目标句')
 }
 
 // ── Case 11: mayNeedWait（WAIT 标记正文命中，非 requiresWait）→ 同样注入提问方式指引 ──
@@ -138,6 +142,7 @@ console.log('\n--- mayNeedWait：[WAIT_FOR_USER] 标记步 → 提问方式指�
 
   assert(!r.error, 'mayNeedWait 步不应 process.exit')
   assert(r.stdout.includes('AskUserQuestion'), 'mayNeedWait → 提问方式指引在场')
+  assert(r.stdout.includes('中途纠正协议'), 'mayNeedWait → 中途纠正协议在场')
   assert(r.stdout.includes('sillyspec run brainstorm --done --answer "用户回答" --change ' + cn), 'mayNeedWait → 合并式命令在场')
 }
 
