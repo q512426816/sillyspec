@@ -24,6 +24,10 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 import { matchKnowledge, resultChannel } from '../knowledge-match.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
+// 词汇通道（mattpocock-absorb ticket-02）：Wave 面复用票 01 阶段级同一 readVocabSection
+// （fs/path 叶子纯函数，静态 import 无环），词汇读取与段渲染禁止第二套实现——同源锁见
+// test/knowledge-vocab-channel.test.mjs 第 7 节。
+import { readVocabSection } from '../knowledge-vocab.js'
 
 // 机械知识注入限额（与 run/prompt.js KNOWLEDGE_INJECT_MAX_FILES/MAX_LINES 同值孪生，R-02 膨胀控制）
 const KNOWLEDGE_INJECT_MAX_FILES = 3
@@ -64,8 +68,14 @@ export function parseTaskCardPaths(text) {
 /**
  * Wave 粒度机械知识注入段（task-04，FR-04 / D-002@v1 总体方案 D）：用本 Wave 各 task 标题拼接
  * 串跑 matchKnowledge，命中文件正文以纯文本段注入 buildWavePrompt 输出（**禁止 {{include:}} 形式**
- * ——execute-testcase-design-include.test.mjs:74 include 计数恰为 1 的断言约束）。未命中返回 ''
- * （零字节零变化）。命中同时 appendKnowledgeHit 落 hits.jsonl 一条 type:inject 记录。
+ * ——execute-testcase-design-include.test.mjs:74 include 计数恰为 1 的断言约束）。未命中知识段为
+ * ''（零字节零变化）。命中同时 appendKnowledgeHit 落 hits.jsonl 一条 type:inject 记录。
+ *
+ * 词汇基准段旁路（mattpocock-absorb ticket-02）：knowledge/glossary.md 在场时本段恒追加
+ * 「📖 词汇基准」小节（复用票 01 readVocabSection 同一读取与渲染，禁止第二套实现）——
+ * 零命中 Wave 也在场（旁路独立于匹配层，不占 top-3、不进命中分母、不产生遥测），子代理
+ * 与主代理共享同一套域语言；缺失/全空白恒 ''（proceed silently，Wave prompt 与无本特性时
+ * 逐字一致）。拼装序与阶段级一致：命中知识段 → 空行 → 词汇段。
  * best-effort：任何异常返回 ''，不阻断 Wave prompt 组装（INDEX/knowledge 缺失时 matchKnowledge
  * 本就返回 matched:false，brownfield no-op）。
  */
@@ -74,10 +84,12 @@ function buildWaveKnowledgeSection(changeDir, wave) {
   try {
     const specBase = path.dirname(path.dirname(changeDir))
     const knowledgeDir = path.join(specBase, 'knowledge')
+    // 词汇基准段（ticket-02）：旁路读取独立于匹配结果——在场恒注入、缺失恒 '' 零告警
+    const vocabSection = readVocabSection(knowledgeDir)
     // Wave 任务名串：本 Wave 各 task 标题拼接（buildWavePrompt 唯一稳定的 Wave 级任务语料）
     const query = (Array.isArray(wave && wave.tasks) ? wave.tasks : [])
       .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
-    if (!query.trim()) return ''
+    if (!query.trim()) return vocabSection ? vocabSection + '\n' : ''
     // scope 键（2026-11-02-knowledge-fusion FR-04）：Wave 用 task 卡 target_files/allowed_paths
     // （机器键）→ graphPathCandidates 规整为图内精确文件路径；无卡/无声明不编造
     const scopeFiles = graphPathCandidates((wave.tasks || []).flatMap((t) => {
@@ -91,7 +103,10 @@ function buildWaveKnowledgeSection(changeDir, wave) {
     const humanEntries = result.entries || []
     const routeHits = result.routeHits || []
     const scopeEntries = result.scopeEntries || []
-    if (humanEntries.length === 0 && routeHits.length === 0 && scopeEntries.length === 0) return ''
+    if (humanEntries.length === 0 && routeHits.length === 0 && scopeEntries.length === 0) {
+      // 零命中：知识段零字节（既有口径不变），词汇段仍恒注入（旁路独立路径）
+      return vocabSection ? vocabSection + '\n' : ''
+    }
     const lines = []
     if (humanEntries.length > 0 || routeHits.length > 0 || scopeEntries.length > 0) {
     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
@@ -149,7 +164,10 @@ function buildWaveKnowledgeSection(changeDir, wave) {
         })() : {}),
       })
     } catch { /* 遥测 fail-soft（R-04） */ }
-    return lines.join('\n') + '\n'
+    // 组装（ticket-02）：命中知识段（既有字节）→ 空行 → 词汇段；词汇缺失时返回值与
+    // 既有实现逐字一致（零膨胀）。段尾统一 '\n'，与调用点模板行衔接。
+    const knowledgeBlock = lines.join('\n') + '\n'
+    return vocabSection ? `${knowledgeBlock}\n${vocabSection}\n` : knowledgeBlock
   } catch {
     return ''
   }

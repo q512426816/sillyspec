@@ -1,5 +1,5 @@
 /**
- * 词汇通道（常读词汇旁路注入）——mattpocock-absorb ticket-01
+ * 词汇通道（常读词汇旁路注入）——mattpocock-absorb ticket-01 / ticket-02
  *
  * 契约（.scratch/mattpocock-absorb/spec.md Implementation Decisions 1-3）：
  *   1. 词汇文件 knowledge/glossary.md 在场 → 阶段级注入输出恒含「📖 词汇基准」段
@@ -7,6 +7,10 @@
  *   2. 词汇段不挤占 top-3 命中名额、不进命中分母（matched/section/report/json/遥测
  *      与无词汇文件时逐字段一致；词汇内容本身也不参与任何匹配层）
  *   3. 词汇文件缺失 → 静默（vocabSection 恒 ''，输出与基线逐字一致，零告警）
+ *
+ * ticket-02（Wave 面）：同一词汇基准在 Wave 级子代理 prompt（buildWavePrompt）里同样
+ * 在场——子代理与主代理共享同一套域语言；复用票 01 readVocabSection 读取与段渲染
+ * （同源断言锁定，禁止第二套实现）；缺失时 Wave 面输出与基线逐字一致（静默零注入）。
  *
  * fixture：临时 knowledge 目录（mkdtempSync）+ glossary.md 写入/删除两态切换；
  * 不动仓内真实 knowledge 目录。只断言注入函数输出的 section 文本形态（外部行为），
@@ -17,6 +21,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildKnowledgeInjection, outputStep } from '../src/run/prompt.js'
+import { buildWavePrompt } from '../src/stages/execute.js'
+import { readVocabSection, VOCAB_FILE, VOCAB_SECTION_HEADER } from '../src/knowledge-vocab.js'
 import { readKnowledgeHits } from '../src/knowledge-hits.js'
 
 let failed = 0
@@ -373,8 +379,87 @@ console.log('\n--- 8. 词汇注入遥测 type:vocab-inject（与 type:inject 区
   } finally { restore(); cleanup(fx) }
 }
 
+// ── 9. Wave 面词汇注入：同源恒注入（ticket-02，子代理与主代理共享域语言） ───────
+console.log('\n--- 9. buildWavePrompt Wave 面词汇注入（同源恒注入） ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fx.knowledgeDir)
+    // 用票 01 约定锚 VOCAB_FILE 落词汇文件（锁 Wave 面读取的文件名与阶段级同一约定）
+    writeFileSync(join(fx.knowledgeDir, VOCAB_FILE), GLOSSARY_TEXT, 'utf8')
+    const changeDir = join(fx.specBase, 'changes', '2026-11-22-vocab-wave')
+    mkdirSync(changeDir, { recursive: true })
+    // 7a. 命中 Wave：知识段照常 + 词汇段同场，拼装序与阶段级一致（base + 词汇段）
+    const hitWave = { index: 1, tasks: [
+      { index: 1, name: '限流 登录 修复' },
+      { index: 2, name: 'worktree 计数 补丁 灰度' },
+    ] }
+    const out = buildWavePrompt(hitWave, 1, changeDir, join(fx.root, 'wt'), { cwd: fx.root })
+    assertTrue(out.includes('### 📚 命中知识（CLI 按 Wave 任务名机械匹配'), '命中 Wave 知识段照常在场（既有口径不变）')
+    assertTrue(out.includes(VOCAB_SECTION_HEADER), 'Wave prompt 含票 01 约定锚段头原文（VOCAB_SECTION_HEADER 同源）')
+    assertTrue(out.includes(VOCAB_HEADER), 'Wave prompt 含「📖 词汇基准」段头（子代理共享域语言）')
+    assertTrue(out.includes('吸收：把外部实践转写为本仓可执行约定并落 knowledge 的过程'), '词汇段含术语行原文（吸收）')
+    assertTrue(out.indexOf('📚 命中知识') < out.indexOf(VOCAB_HEADER), '词汇基准段位于命中知识段之后（base + 词汇段拼装序，与阶段级一致）')
+    // 同源渲染锁：Wave 面词汇段文本 == readVocabSection 同一渲染输出（禁止第二套实现漂移）
+    const stageVocab = readVocabSection(fx.knowledgeDir)
+    assertTrue(stageVocab && out.includes(stageVocab), 'Wave 面词汇段与 readVocabSection 渲染逐字同源（无第二套实现）')
+    const n = (out.match(/\{\{include: testcase-design\}\}/g) || []).length
+    assertTrue(n === 1, `词汇段为纯文本注入，include 计数仍恰为 1（实际 ${n}）`)
+    // 词汇旁路不进遥测：matchedFiles 不含 glossary.md
+    const hits = readKnowledgeHits(fx.runtimeDir)
+    assertTrue(hits.length === 1 && !hits[0].matchedFiles.some(f => String(f).includes('glossary.md')),
+      '词汇不进 Wave 遥测 matchedFiles（旁路零参与）')
+    // 7b. 零命中 Wave：知识段零注入（既有口径不变），词汇段恒注入（旁路独立于匹配）
+    const missWave = { index: 2, tasks: [{ index: 3, name: '纯文案调整' }] }
+    const outMiss = buildWavePrompt(missWave, 2, changeDir, join(fx.root, 'wt'), { cwd: fx.root })
+    assertTrue(!outMiss.includes('📚 命中知识'), '零命中 Wave 知识段零注入（既有口径不变）')
+    assertTrue(outMiss.includes(VOCAB_HEADER) && outMiss.includes('批次：一次 push 压扁的提交分组单位'),
+      '零命中 Wave 词汇段仍恒注入（旁路独立于匹配结果）')
+    assertTrue(readKnowledgeHits(fx.runtimeDir).length === 1, '零命中 Wave 不追加遥测（词汇不产生遥测）')
+  } finally { restore(); cleanup(fx) }
+}
+
+// ── 10. Wave 面缺失态静默零回归：无 glossary 输出与基线逐字一致（A/B 全文对比） ──
+console.log('\n--- 10. buildWavePrompt 缺失态与基线逐字一致（A/B 全文对比） ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fx.knowledgeDir)
+    const changeDir = join(fx.specBase, 'changes', '2026-11-22-vocab-wave-baseline')
+    mkdirSync(changeDir, { recursive: true })
+    const hitWave = { index: 1, tasks: [
+      { index: 1, name: '限流 登录 修复' },
+      { index: 2, name: 'worktree 计数 补丁 灰度' },
+    ] }
+    const missWave = { index: 2, tasks: [{ index: 3, name: '纯文案调整' }] }
+    const build = w => buildWavePrompt(w, w.index, changeDir, join(fx.root, 'wt'), { cwd: fx.root })
+    // A：无 glossary 基线——零词汇段膨胀（与没有本特性时逐字一致的前提面）
+    const hitNo = build(hitWave)
+    const missNo = build(missWave)
+    assertTrue(!hitNo.includes(VOCAB_HEADER) && !missNo.includes(VOCAB_HEADER), '无 glossary 时 Wave 面零词汇段膨胀')
+    // B：写入 glossary → 恰在「### Wave 开始前」缝口插入词汇段字节，其余逐字不变
+    writeGlossary(fx.knowledgeDir)
+    const V = readVocabSection(fx.knowledgeDir)
+    const hitYes = build(hitWave)
+    const missYes = build(missWave)
+    const seamHit = hitNo.indexOf('\n### Wave 开始前')
+    assertTrue(seamHit > 0 && hitYes === hitNo.slice(0, seamHit) + '\n' + V + '\n' + hitNo.slice(seamHit),
+      '命中 Wave 词汇段按「知识段后空行 + 词汇段」缝口插入，其余字节逐字不变')
+    const seamMiss = missNo.indexOf('\n### Wave 开始前')
+    assertTrue(seamMiss > 0 && missYes === missNo.slice(0, seamMiss) + V + '\n' + missNo.slice(seamMiss),
+      '零命中 Wave 词汇段按同缝口独立成节插入，其余字节逐字不变')
+    // C：删除 glossary → 输出回到基线逐字一致（静默零残留）
+    rmSync(join(fx.knowledgeDir, 'glossary.md'), { force: true })
+    const hitAgain = build(hitWave)
+    const missAgain = build(missWave)
+    assertTrue(hitAgain === hitNo && missAgain === missNo, '删除 glossary 后 Wave 输出回到基线逐字一致（静默零残留）')
+  } finally { restore(); cleanup(fx) }
+}
+
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${8} 节  ❌ 失败断言: ${failed}`)
+console.log(`✅ 通过: ${10} 节  ❌ 失败断言: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)
