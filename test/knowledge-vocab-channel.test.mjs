@@ -288,27 +288,32 @@ console.log('\n--- 7. 词汇超限截断（60 行 → 恰 40 行正文 + warn �
     assertTrue(bodyLines.length === 40, `词汇正文恰为上限 40 行（实际 ${bodyLines.length}）`)
     assertTrue(bodyLines[0] === '术语01：定义行 1' && bodyLines[39] === '术语40：定义行 40',
       '截断保留前 40 行（首行术语01、末行术语40；41+ 被裁）')
-    // ② 截断 warn 恰一次，含截断说明与精简提示（按调用即一次，不做跨调用去重）
+    // ② 截断 warn 恰一次，含截断说明与精简提示（新路径首次截断即 warn；跨调用去重见第 12 节）
     assertTrue(warns.length === 1, `截断告警恰 1 次（实际 ${warns.length}）`)
     assertTrue(warns[0].includes('截断') && warns[0].includes('精简') && warns[0].includes('40'),
       'warn 含截断说明（上限 40）与「词汇文件需精简」提示')
     assertTrue(cap.vocabMeta && cap.vocabMeta.truncated === true && cap.vocabMeta.lines === 40,
       'vocabMeta.truncated=true / lines=40（截断元数据供遥测）')
-    // ④ 上限内不截断零告警（恰 40 行边界不触发；41 行触发）
-    writeGlossary(fx.knowledgeDir, Array.from({ length: 40 }, (_, i) => `边界${i + 1}：定义`).join('\n') + '\n')
-    const warns2 = []
-    console.warn = (...a) => { warns2.push(a.map(x => String(x)).join(' ')) }
-    let atCap, overCap
+    // ④ 上限内不截断零告警（恰 40 行边界不触发；41 行触发）——独立 fixture 目录：截断 warn
+    //    已按文件路径进程级去重（见第 12 节），复用上方路径的 41 行告警会被去重吞掉
+    const fx2 = makeSpecRoot()
     try {
-      atCap = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
-      writeGlossary(fx.knowledgeDir, Array.from({ length: 41 }, (_, i) => `越界${i + 1}：定义`).join('\n') + '\n')
-      overCap = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
-    } finally { console.warn = origWarn }
-    assertTrue(atCap.vocabSection.split('\n').length === 41 && !atCap.vocabSection.includes('（词汇超行截断'),
-      '恰 40 行（=上限）不截断：段 = 段头 + 40 行，无截断标记')
-    assertTrue(atCap.vocabMeta.truncated === false && atCap.vocabMeta.lines === 40, '恰上限 truncated=false')
-    assertTrue(warns2.length === 1 && overCap.vocabMeta.truncated === true && overCap.vocabMeta.lines === 40,
-      '41 行触发截断（边界含头不含尾）且仅该次 warn（恰上限那次零告警）')
+      writeFiveFileFixture(fx2.knowledgeDir)
+      writeGlossary(fx2.knowledgeDir, Array.from({ length: 40 }, (_, i) => `边界${i + 1}：定义`).join('\n') + '\n')
+      const warns2 = []
+      console.warn = (...a) => { warns2.push(a.map(x => String(x)).join(' ')) }
+      let atCap, overCap
+      try {
+        atCap = buildKnowledgeInjection({ knowledgeDir: fx2.knowledgeDir, runtimeDir: fx2.runtimeDir, change: 'c1', query: MISS_QUERY })
+        writeGlossary(fx2.knowledgeDir, Array.from({ length: 41 }, (_, i) => `越界${i + 1}：定义`).join('\n') + '\n')
+        overCap = buildKnowledgeInjection({ knowledgeDir: fx2.knowledgeDir, runtimeDir: fx2.runtimeDir, change: 'c1', query: MISS_QUERY })
+      } finally { console.warn = origWarn }
+      assertTrue(atCap.vocabSection.split('\n').length === 41 && !atCap.vocabSection.includes('（词汇超行截断'),
+        '恰 40 行（=上限）不截断：段 = 段头 + 40 行，无截断标记')
+      assertTrue(atCap.vocabMeta.truncated === false && atCap.vocabMeta.lines === 40, '恰上限 truncated=false')
+      assertTrue(warns2.length === 1 && overCap.vocabMeta.truncated === true && overCap.vocabMeta.lines === 40,
+        '41 行触发截断（边界含头不含尾）且仅该次 warn（恰上限那次零告警）')
+    } finally { cleanup(fx2) }
   } finally { restore(); cleanup(fx) }
 }
 
@@ -458,8 +463,78 @@ console.log('\n--- 10. buildWavePrompt 缺失态与基线逐字一致（A/B 全�
   } finally { restore(); cleanup(fx) }
 }
 
+// ── 11. `#` 维护注释行过滤（评审修复 B）：注释不进段、不计上限 ──────────────────
+console.log('\n--- 11. `#` 维护注释行不进词汇段、不计上限 ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fx.knowledgeDir)
+    // 注释行（维护说明）+ 术语行混排：# 行只给人看，术语行式才注入
+    const mixed = [
+      '# 仓级域词汇基准（维护者注释——不应进 prompt）',
+      '# 上限约定：注释行不计入 40 行上限',
+      '',
+      '吸收：把外部方法论转化为本仓机制的过程',
+      '批次：一次 push 压扁的提交分组单位',
+      ''
+    ].join('\n')
+    writeGlossary(fx.knowledgeDir, mixed)
+    const r = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+    assertTrue(r.vocabSection.includes('吸收：把外部方法论转化为本仓机制的过程')
+      && r.vocabSection.includes('批次：一次 push 压扁的提交分组单位'), '术语行照常注入')
+    assertTrue(!r.vocabSection.includes('维护者注释') && !r.vocabSection.includes('上限约定'),
+      '`#` 维护注释行不进 vocabSection（注释只给人看）')
+    assertTrue(r.vocabMeta.lines === 2,
+      `行数口径=过滤 # 注释行后正文行数（实际 ${r.vocabMeta.lines}，期望 2 条术语行）`)
+    // 注释不计上限：40 条术语 + 2 条注释 → 恰 40 不截断（若注释计入会 42 触发截断）
+    writeGlossary(fx.knowledgeDir, [
+      '# 头部注释一',
+      '# 头部注释二',
+      ...Array.from({ length: 40 }, (_, i) => `术语${String(i + 1).padStart(2, '0')}：定义行 ${i + 1}`),
+    ].join('\n') + '\n')
+    const capped = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+    assertTrue(capped.vocabMeta.truncated === false && capped.vocabMeta.lines === 40,
+      '40 术语 + 2 注释行：注释不计上限，恰 40 不截断（段内无截断标记）')
+    // 仅注释行（无任何术语行）→ 与缺失同态静默
+    writeGlossary(fx.knowledgeDir, '# 只有注释行\n# 没有术语行\n')
+    const onlyComments = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: MISS_QUERY })
+    assertTrue(onlyComments.vocabSection === '', '仅注释行的 glossary 与缺失同态（vocabSection 恒 \'\'）')
+  } finally { restore(); cleanup(fx) }
+}
+
+// ── 12. 截断 warn 进程级去重（评审修复 D）：同文件恰一次、不同文件各一次 ────────
+console.log('\n--- 12. 截断 warn 跨调用去重（同 fixture 两次注入 warn 恰 1 次） ---')
+{
+  const fxA = makeSpecRoot()
+  const fxB = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    writeFiveFileFixture(fxA.knowledgeDir)
+    writeFiveFileFixture(fxB.knowledgeDir)
+    const over = Array.from({ length: 50 }, (_, i) => `术${i + 1}：定义行 ${i + 1}`).join('\n') + '\n'
+    writeGlossary(fxA.knowledgeDir, over)
+    writeGlossary(fxB.knowledgeDir, over)
+    const origWarn = console.warn
+    const warns = []
+    console.warn = (...a) => { warns.push(a.map(x => String(x)).join(' ')) }
+    let r1, r2, rB
+    try {
+      // 同 fixture 两次注入 + 不同 fixture 一次：三次都截断，warn 只 2 条（A 路径 1 + B 路径 1）
+      r1 = buildKnowledgeInjection({ knowledgeDir: fxA.knowledgeDir, runtimeDir: fxA.runtimeDir, change: 'c1', query: MISS_QUERY })
+      r2 = buildKnowledgeInjection({ knowledgeDir: fxA.knowledgeDir, runtimeDir: fxA.runtimeDir, change: 'c1', query: MISS_QUERY })
+      rB = buildKnowledgeInjection({ knowledgeDir: fxB.knowledgeDir, runtimeDir: fxB.runtimeDir, change: 'c1', query: MISS_QUERY })
+    } finally { console.warn = origWarn }
+    assertTrue(r1.vocabMeta.truncated === true && r2.vocabMeta.truncated === true && rB.vocabMeta.truncated === true,
+      '三次注入均发生截断（truncated 恒 true——去重只作用于 warn，不吞截断行为）')
+    assertTrue(warns.length === 2,
+      `同 fixture 两次注入 warn 恰 1 次 + 不同路径各 1 次（实际 ${warns.length}，期望 2）`)
+    assertTrue(warns.every(w => w.includes('截断') && w.includes('精简')), '两条 warn 均为截断说明（无其他噪声）')
+  } finally { restore(); cleanup(fxA); cleanup(fxB) }
+}
+
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${10} 节  ❌ 失败断言: ${failed}`)
+console.log(`✅ 通过: ${12} 节  ❌ 失败断言: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)

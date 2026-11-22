@@ -137,7 +137,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 
 | 占位符 | 替换为 | 出现阶段 |
 |---|---|---|
-| `{KNOWLEDGE_HIT_REPORT}` | `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目）；同时落盘 `.runtime/knowledge-hit-report.json` | execute（确认执行范围步） |
+| `{KNOWLEDGE_HIT_REPORT}` | 命中时＝`matchKnowledge()` 命中知识段（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目，top-3 文件正文注入）；零命中时＝既有 `Status: no matches` 报告；`knowledge/glossary.md` 在场时两态均在尾部追加「📖 词汇基准」段（词汇旁路，不经命中匹配、不占 top-3，零命中也注入）。同时落盘 `.runtime/knowledge-hit-report.json` | execute（确认执行范围步） |
 | `{DECISION_HITS}` | 决策防复潮注入（`run/prompt.js` outputStep，brainstorm 专属）：`matchKnowledge()` 的 `decisionHits` 命中 `knowledge/INDEX.md` `## Decisions` 路由的 **rejected** 条目时渲染「否决决策提示」段（ID/标题/否决理由/复潮条件，提示勿重新提出已否决方案）；无命中替换为空串零输出。注入结果同步落盘 `.runtime/decision-hits.json`（与 KNOWLEDGE_HIT_REPORT 落盘同口径） | brainstorm（Step 2 加载项目上下文，knowledge 路由说明行内） |
 | `{SCAN_STALENESS}` | scan 基线漂移事实注入（brainstorm 专属）：`scan-staleness.js` 的 `computeScanStaleness()` 算出 scan 文档 source_commit vs HEAD 的漂移事实，注入一行 `[docs-debt]` 提示；无 scan 文档（绿地）注入「跳过判定」；全降级不抛 | brainstorm（Step 2 加载项目上下文，读 scan 文档前） |
 | `{EXECUTE_RUN_ID}` | 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘） | execute（每个 Wave 执行步，用于 task review.json 路径） |

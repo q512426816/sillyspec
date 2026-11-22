@@ -212,7 +212,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文�
 6. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
 7. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
 
-**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：
+**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。记录门槛三条件（缺一建议跳过——防决策记录通胀，纯提示不设硬拦）：难逆（改主意成本高）+ 无上下文会惊讶（未来读者会问为什么）+ 真权衡（存在真替代品）。落盘规则：
 
 - **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`
 - 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`

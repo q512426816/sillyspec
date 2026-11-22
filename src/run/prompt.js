@@ -623,6 +623,26 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
   return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, vocabSection, vocabMeta }
 }
 
+/**
+ * 词汇旁路段拼装 + 独立遥测合一（mattpocock-absorb ticket-01/03，execute {KNOWLEDGE_HIT_REPORT}
+ * 与 quick step1 两个拼装点共用）：base 尾部追加词汇基准段（空行分隔的并列独立小节），同时在
+ * vocabSection 在场时落一行 type:vocab-inject 遥测（与检索命中 type:inject 可区分、无
+ * matchedFiles 不进命中分母；fail-soft 由 appendVocabInjectTelemetry 内部收口）。
+ * vocabSection 为 ''（缺失/全空白）时原样返回 base——零膨胀零遥测，与没有词汇文件时逐字一致。
+ * base 为 ''（quick 零命中态）时直接返回词汇段本体（无前导空行——缝口分隔符由调用方统一加）。
+ * @param {string} base - 既有注入基面（execute：命中知识段或未命中报告；quick：命中知识段，可为 ''）
+ * @param {{vocabSection: string, vocabMeta: {lines: number, truncated: boolean}}} injection
+ *        - buildKnowledgeInjection 产出的词汇两字段
+ * @param {string} runtimeDir - .runtime 目录（hits.jsonl 落点）
+ * @param {string} change - 变更名 / quick sessionId（进遥测记录 change 字段）
+ * @returns {string} base（词汇缺席）、base + 空行 + 词汇段（双在场）、或词汇段本体（base 空）
+ */
+function appendVocabBypassSection(base, injection, runtimeDir, change) {
+  if (!injection || !injection.vocabSection) return base
+  appendVocabInjectTelemetry(runtimeDir, change, injection.vocabMeta)
+  return base ? `${base}\n\n${injection.vocabSection}` : injection.vocabSection
+}
+
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
 // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
 
@@ -1538,19 +1558,16 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
         query: taskContext,
         scopeFiles,
       })
-      // 词汇基准段拼装（mattpocock-absorb ticket-01）：词汇文件在场时恒追加到替换值尾部
-      // （命中知识段/未命中报告之后的并列独立小节，零命中也注入）；缺失 → vocabSection ''
-      // → 替换值与基线逐字一致（零膨胀零告警）。json 落盘不含词汇（旁路不进命中分母）。
-      const injectBase = knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
-      const injectText = knowledgeInjection.vocabSection
-        ? `${injectBase}\n\n${knowledgeInjection.vocabSection}`
-        : injectBase
-      // 词汇注入独立遥测（ticket-03）：拼装进 prompt 即落一行 type:vocab-inject（与检索命中
-      // type:inject 可区分、无 matchedFiles 不进命中分母）；零命中也在场（恒注入恒遥测），
-      // fail-soft 由 appendVocabInjectTelemetry 内部收口
-      if (knowledgeInjection.vocabSection) {
-        appendVocabInjectTelemetry(runtimeDir, changeName || '', knowledgeInjection.vocabMeta)
-      }
+      // 词汇基准段拼装 + vocab-inject 遥测（mattpocock-absorb ticket-01/03）：词汇文件在场时
+      // 恒追加到替换值尾部（命中知识段/未命中报告之后的并列独立小节，零命中也注入），拼装与
+      // 遥测合一走 appendVocabBypassSection（与 quick step1 拼装点同源）；缺失 → vocabSection
+      // '' → 替换值与基线逐字一致（零膨胀零告警）。json 落盘不含词汇（旁路不进命中分母）。
+      const injectText = appendVocabBypassSection(
+        knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report,
+        knowledgeInjection,
+        runtimeDir,
+        changeName || ''
+      )
       substitute(
         /\{KNOWLEDGE_HIT_REPORT\}/g,
         injectText
@@ -2078,16 +2095,12 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
           query: kiQuery,
           scopeFiles: kiScope,
         })
-        // 词汇基准段对称拼装（ticket-01）：section（命中段）与 vocabSection（旁路段）并列追加；
-        // 双空（零命中 + 无词汇文件）零追加，prompt 与现状字节一致
-        const kiParts = [ki.section, ki.vocabSection].filter(Boolean)
-        if (kiParts.length > 0) {
-          promptText = promptText + '\n\n' + kiParts.join('\n\n')
-        }
-        // 词汇注入独立遥测（ticket-03，与 execute 占位符拼装点对称）：vocab-inject 独立 type，
-        // 恒注入恒遥测，fail-soft
-        if (ki.vocabSection) {
-          appendVocabInjectTelemetry(join(kiSpecBase, '.runtime'), changeName || '', ki.vocabMeta)
+        // 词汇基准段对称拼装 + vocab-inject 遥测（ticket-01/03，与 execute 占位符拼装点同源
+        // 合一走 appendVocabBypassSection）：section（命中段）为基面、vocabSection（旁路段）
+        // 恒追加；双空（零命中 + 无词汇文件）零追加，prompt 与现状字节一致
+        const kiTail = appendVocabBypassSection(ki.section, ki, join(kiSpecBase, '.runtime'), changeName || '')
+        if (kiTail) {
+          promptText = promptText + '\n\n' + kiTail
         }
       }
     } catch { /* fail-soft：知识注入异常不阻断 quick step1 prompt 输出 */ }

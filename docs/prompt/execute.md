@@ -124,7 +124,7 @@ worktree 路径 + 分支名 + 模式
 - 等待配置：无（可直接 `--done`）
 
 **本步出现的运行时占位符**
-- `{KNOWLEDGE_HIT_REPORT}` → `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目），同时落盘 `.runtime/knowledge-hit-report.json`；无命中时为 `Status: no matches` 文本
+- `{KNOWLEDGE_HIT_REPORT}` → 命中时为 `matchKnowledge()` 命中知识段（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目）；无命中时为 `Status: no matches` 文本；`knowledge/glossary.md` 在场时两态均在尾部追加「📖 词汇基准」段（词汇旁路，不经命中匹配，零命中也注入）。同时落盘 `.runtime/knowledge-hit-report.json`
 - `{DOCS_DEBT}` → `run/prompt.js` 调 `docs-debt.js` 的 `computeDocsDebt()` 算出的模块文档欠账事实（changedFiles 口径 = worktree 根已提交 `baselineCommit..HEAD` ∪ 未提交 status 并集 × `_module-map.yaml`），注入「### 模块文档欠账（CLI 算事实）」段；无欠账时替换为空串，异常时降级为单行说明
 
 **提示词原文**
