@@ -392,3 +392,21 @@ created_at: 2026-10-15T01:33:02.911Z
   confirmed_at: null
   source_change: 2026-10-26-target-files-main-docs-rescue
   status: active
+
+## FR-release-013 package.json version 由 3.34.8 改为 3.34.9，无其他文件改动
+变更：2026-11-22-release-3349
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given main @ a83768b3 已验证推送 / When bump 版本 / When `git diff` 仅 package.json version 一行
+全文：.sillyspec/changes/archive/2026-11-22-release-3349/requirements.md#FR-01
+最近确认：f96196f941b2ec1550fb828b07960627ec289617
+
+## FR-release-014 npm publish 成功发布 3.34.9（发布回执 tag/URL 留痕）
+变更：2026-11-22-release-3349
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — 
+全文：.sillyspec/changes/archive/2026-11-22-release-3349/requirements.md#FR-02
+最近确认：f96196f941b2ec1550fb828b07960627ec289617
