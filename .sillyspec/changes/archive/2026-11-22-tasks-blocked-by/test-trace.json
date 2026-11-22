@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-22-tasks-blocked-by",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-22-tasks-blocked-by:flow:测试绑定FR-01",
+      "tests": [
+        "test/task-tick-blocked-by.test.mjs「标注解析（单值/多值/裸数字/不合法 warn）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-tasks-blocked-by"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-22-tasks-blocked-by:flow:测试绑定FR-02",
+      "tests": [
+        "test/task-tick-blocked-by.test.mjs「软门警告与不阻断翻格」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-tasks-blocked-by"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-22-tasks-blocked-by:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick-blocked-by.test.mjs「frontier 指针（跳过/回退/现状一致）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-tasks-blocked-by"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-22-tasks-blocked-by:flow:测试绑定FR-04",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「零修改即绿（回归线）」",
+        "test/task-tick-blocked-by.test.mjs「全量绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-tasks-blocked-by"
+    }
+  ]
+}

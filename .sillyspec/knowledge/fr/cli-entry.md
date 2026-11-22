@@ -12476,3 +12476,90 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-19-closeout-noise-fix
   status: active
+
+## FR-cli-entry-659 tasks.md 任务行支持可选阻塞标注：- [ ] task-NN: 描述 [blocked-by: task-MM/task-KK]（多值斜杠分隔），无标注行为零变化
+变更：2026-11-22-tasks-blocked-by
+状态：active
+摘要：主路径（标注解析）；无标注零变化
+场景正文：
+- 场景：主路径（标注解析） — Given 行 `- [ ] task-02: Wave 级旁路 [blocked-by: task-01]` / When collectRows 解析 / Then b
+- 场景：无标注零变化 — Given 既有无标注 tasks.md / When 解析与翻格 / Then 行为与现状一致（既有测试零修改即绿）。
+全文：.sillyspec/changes/archive/2026-11-22-tasks-blocked-by/requirements.md#FR-01
+最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-tasks-blocked-by:flow:测试绑定FR-01
+  tests: test/task-tick-blocked-by.test.mjs「标注解析（单值/多值/裸数字/不合法 warn）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-tasks-blocked-by
+  status: active
+
+## FR-cli-entry-660 task tick 勾选被阻塞任务（blocked-by 列表中有未勾任务）时给出明确警告留痕（提示被谁阻塞），不阻断勾选（轻量软门）
+变更：2026-11-22-tasks-blocked-by
+状态：active
+摘要：软门警告；解锁后零警告
+场景正文：
+- 场景：软门警告 — Given task-02 blocked-by task-01 且 task-01 未勾 / When task tick task-02 / Then 翻格成功+war
+- 场景：解锁后零警告 — Given task-01 已勾 / When task tick task-02 / Then 无 blockedWarning。
+全文：.sillyspec/changes/archive/2026-11-22-tasks-blocked-by/requirements.md#FR-02
+最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-tasks-blocked-by:flow:测试绑定FR-02
+  tests: test/task-tick-blocked-by.test.mjs「软门警告与不阻断翻格」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-tasks-blocked-by
+  status: active
+
+## FR-cli-entry-661 task tick/flow status 的下一任务指针优先指向未被阻塞的最小号任务（frontier 语义）
+变更：2026-11-22-tasks-blocked-by
+状态：active
+摘要：frontier 指针；全阻塞回退
+场景正文：
+- 场景：frontier 指针 — Given task-01 已勾、task-02 blocked-by task-03（未勾）、task-03 无标注 / When tick 后计算 next / The
+- 场景：全阻塞回退 — Given 未勾任务全部被未勾任务互相阻塞 / When 计算 next / Then 返回最小号未勾+blockedBy 注记。
+全文：.sillyspec/changes/archive/2026-11-22-tasks-blocked-by/requirements.md#FR-03
+最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-tasks-blocked-by:flow:测试绑定FR-03
+  tests: test/task-tick-blocked-by.test.mjs「frontier 指针（跳过/回退/现状一致）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-tasks-blocked-by
+  status: active
+
+## FR-cli-entry-662 既有 tasks.md（无 blocked-by）解析与勾选行为零回归；新增单测覆盖标注解析/警告/指针三面并跑绿
+变更：2026-11-22-tasks-blocked-by
+状态：active
+摘要：单测全绿
+场景正文：
+- 场景：单测全绿 — Given 全部新用例与既有 tick 族 / When 运行 / Then 全绿 exit 0。
+全文：.sillyspec/changes/archive/2026-11-22-tasks-blocked-by/requirements.md#FR-04
+最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-tasks-blocked-by:flow:测试绑定FR-04
+  tests: test/approve-gate-tick.test.mjs「零修改即绿（回归线）」 | test/task-tick-blocked-by.test.mjs「全量绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-tasks-blocked-by
+  status: active

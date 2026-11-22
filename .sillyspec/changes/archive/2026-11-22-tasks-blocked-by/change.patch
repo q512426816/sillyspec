@@ -1,0 +1,241 @@
+diff --git a/src/flow.js b/src/flow.js
+index 17db8efe..62850da1 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1241,6 +1241,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   （每行=可独立完成并当场验证的一步：做什么+怎么验证；增删改随意，保持 \`- [ ] task-NN:\` 行形态）；`,
+     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
+     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
++    `   任务行可选阻塞标注（2026-11-22-tasks-blocked-by）：行尾 [blocked-by: task-MM/task-KK]（多值斜杠分隔）——tick 软门警告顺序存疑、下一任务指针跳过被阻塞者（frontier 语义）；无标注行为零变化。`,
+     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
+     `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认；pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库，task tick 回显会给现成命令）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+     // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
+diff --git a/src/task-tick.js b/src/task-tick.js
+index 42c01214..f58d844e 100644
+--- a/src/task-tick.js
++++ b/src/task-tick.js
+@@ -38,6 +38,21 @@ export function normalizeTaskId(id) {
+  * 文档围栏常含 `- [ ] task-N:` 形态示例，逐行正则会把它们当真实任务（幻影行污染
+  * 进度 N/M 与下一任务指针）。按 fenceScan 行标记过滤，围栏语法口径见 md-fence.js。
+  */
++// 阻塞标注解析（2026-11-22-tasks-blocked-by，mattpocock 链路实测沉淀）：行尾可选
++// [blocked-by: task-MM/task-KK]（多值斜杠分隔，裸数字归一 task-NN）。合法时剥出进
++// blockedBy 数组、desc 留描述本体；空值等不合法形态按普通文本保留并置 _invalidBlockedBy
++// （tickTasksMd 层 warn 一次）；无标注行为零变化（blockedBy 恒为空数组）。
++const BLOCKED_BY_RE = /\[blocked-by:\s*([^\]]*)\]\s*$/
++function parseBlockedBy(desc) {
++  const raw = String(desc || '')
++  const m = raw.match(BLOCKED_BY_RE)
++  if (!m) return { desc: raw.trim(), blockedBy: [] }
++  const ids = m[1].split('/').map((s) => s.trim()).filter(Boolean).map((s) =>
++    /^\d+$/.test(s) ? `task-${String(Number(s)).padStart(2, '0')}` : s)
++  if (ids.length === 0) return { desc: raw.trim(), blockedBy: [], invalid: m[0] }
++  return { desc: raw.replace(BLOCKED_BY_RE, '').trim(), blockedBy: ids }
++}
++
+ function collectRows(md) {
+   const text = String(md || '')
+   const { inFence } = fenceScan(text)
+@@ -49,7 +64,16 @@ function collectRows(md) {
+   for (let i = 0; i < lines.length; i++) {
+     if (inFence[i]) continue
+     const m = lines[i].match(TASK_ROW_RE)
+-    if (m) rows.push({ id: `task-${String(Number(m[4])).padStart(2, '0')}`, checked: m[2].toLowerCase() === 'x', desc: (m[5] || '').trim() })
++    if (m) {
++      const pb = parseBlockedBy((m[5] || '').trim())
++      rows.push({
++        id: `task-${String(Number(m[4])).padStart(2, '0')}`,
++        checked: m[2].toLowerCase() === 'x',
++        desc: pb.desc,
++        blockedBy: pb.blockedBy,
++        ...(pb.invalid ? { _invalidBlockedBy: pb.invalid } : {}),
++      })
++    }
+   }
+   return rows
+ }
+@@ -88,13 +112,31 @@ export function tickTasksMd({ tasksMd, taskId }) {
+   }
+   const after = collectRows(out)
+   const checked = after.filter((r) => r.checked).length
+-  const pending = after.find((r) => !r.checked)
++  const checkedSet = new Set(after.filter((r) => r.checked).map((r) => r.id))
++  // 软门（2026-11-22-tasks-blocked-by FR-02）：tick 目标被未勾任务阻塞时给 blockedWarning
++  // 留痕——不阻断翻格（轻量软纪律）；前置全部已勾或无标注恒 null（零噪音）。
++  const unfinishedBlockers = (target.blockedBy || []).filter((id) => !checkedSet.has(id))
++  const blockedWarning = unfinishedBlockers.length > 0
++    ? `被 ${unfinishedBlockers.join('、')} 阻塞（未勾）——已勾选但顺序存疑，确认前置完成`
++    : null
++  // 下一任务指针 frontier 化（FR-03）：优先未阻塞（blockedBy 全已勾或无标注）的最小号未勾；
++  // 全部被阻塞时回退最小号未勾并带 blockedBy 注记；无标注场景与现状一致（第一个未勾行）。
++  const pendingRows = after.filter((r) => !r.checked)
++  let next = null
++  if (pendingRows.length > 0) {
++    const unblocked = pendingRows.find((r) => (r.blockedBy || []).every((id) => checkedSet.has(id)))
++    const chosen = unblocked || pendingRows[0]
++    next = { id: chosen.id, desc: chosen.desc }
++    const chosenUnfinished = (chosen.blockedBy || []).filter((id) => !checkedSet.has(id))
++    if (chosenUnfinished.length > 0) next.blockedBy = chosenUnfinished
++  }
+   return {
+     kind: target.checked ? 'already' : 'ticked',
+     tasksMd: out,
+     checked,
+     total: after.length,
+-    next: pending ? { id: pending.id, desc: pending.desc } : null,
++    next,
++    blockedWarning,
+     unclosedFence: scanInfo.unclosed,
+     unclosedFenceLine: scanInfo.fenceStartLine,
+   }
+@@ -214,8 +256,10 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence
+       await triggerSync(cwd, changeName, { specRoot: specBase })
+     } catch { /* 重推 best-effort：失败不影响翻格主流程 */ }
+   }
++  // 软门留痕（2026-11-22-tasks-blocked-by FR-02）：被未勾任务阻塞仍翻格成功——warn 提示顺序存疑
++  if (r.blockedWarning) console.warn(`⚠️ ${r.blockedWarning}`)
+   const nextTip = r.next
+-    ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
++    ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}${r.next.blockedBy ? `（等 ${r.next.blockedBy.join('/')}…）` : ''}`
+     : `｜🎉 ${r.total}/${r.total} 全勾——可收口：sillyspec flow done --change ${changeName}`
+   console.log(`${r.kind === 'ticked' ? '✅ 已勾' : 'ℹ️ 已是勾选态（幂等跳过写盘）'}（${r.checked}/${r.total}）${nextTip}`)
+   if (r.kind === 'ticked') {
+diff --git a/test/task-tick-blocked-by.test.mjs b/test/task-tick-blocked-by.test.mjs
+new file mode 100644
+index 00000000..206e5f10
+--- /dev/null
++++ b/test/task-tick-blocked-by.test.mjs
+@@ -0,0 +1,133 @@
++/**
++ * tasks.md 阻塞标注（2026-11-22-tasks-blocked-by）
++ *
++ * 来源：mattpocock 链路实测（5 票带阻塞边并行的 frontier 加派节奏）——to-tickets/implement-spec
++ * 阻塞边思想的轻量形态：行尾可选 [blocked-by: task-MM/task-KK] 标注，tickTasksMd 纯函数
++ * 识别（软门警告 + frontier 下一任务指针），无标注路径零变化。
++ *
++ * 接缝：tickTasksMd 纯函数（collectRows 非导出，经 next.desc/blockedWarning 间接断言）。
++ */
++import { tickTasksMd } from '../src/task-tick.js'
++
++let failed = 0
++const failures = []
++function assertTrue(cond, msg) {
++  if (cond) console.log(`  ✅ PASS: ${msg}`)
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++function hookWarn() {
++  const orig = console.warn, warns = []
++  console.warn = (...a) => { warns.push(a.map(String).join(' ')) }
++  return [warns, () => { console.warn = orig; return warns }]
++}
++
++console.log('=== tasks.md 阻塞标注（blocked-by）===\n')
++
++// ── 1. 标注解析：desc 剥出 + blockedBy 生效（经 next/警告间接断言）──
++console.log('--- 1. 标注解析 ---')
++{
++  const md = [
++    '# Tasks', '',
++    '- [ ] task-01: 前置任务', '',
++    '- [ ] task-02: 后续任务 [blocked-by: task-01]', '',
++  ].join('\n')
++  // tick 前置（task-01）→ 解锁后的 task-02 应成 next 且 desc 已剥出标注
++  const r1 = tickTasksMd({ tasksMd: md, taskId: 'task-01' })
++  assertTrue(r1.kind === 'ticked', '翻格 task-01 成功')
++  assertTrue(r1.next && r1.next.id === 'task-02', `next=task-02（实际 ${r1.next && r1.next.id}）`)
++  assertTrue(r1.next.desc === '后续任务', `desc 剥出标注（实际「${r1.next && r1.next.desc}」）`)
++
++  // 多值斜杠 + 裸数字归一：task-03 blocked-by 01/task-02（裸数字 01 归一命中已勾的 task-01
++  // 而被排除、未勾的 task-02 列出——归一失败时 01 不匹配 task-01 会两者都列）
++  const md2 = [
++    '- [x] task-01: A',
++    '- [ ] task-02: B',
++    '- [ ] task-03: C [blocked-by: 01/task-02]',
++  ].join('\n')
++  const [w, done] = hookWarn()
++  let r2
++  try { r2 = tickTasksMd({ tasksMd: md2, taskId: 'task-03' }) } finally { done() }
++  assertTrue(r2.blockedWarning && r2.blockedWarning.includes('task-02') && !r2.blockedWarning.includes('task-01'),
++    `多值+裸数字归一：已勾的 01 归一后排除、未勾的 task-02 列出（实际 ${r2.blockedWarning}）`)
++  assertTrue(r2.kind === 'ticked', '被阻塞翻格照常执行（软门不阻断）')
++}
++
++// ── 2. 软门警告：阻塞 warn / 解锁零 warn ──
++console.log('\n--- 2. 软门警告 ---')
++{
++  const md = [
++    '- [ ] task-01: A',
++    '- [ ] task-02: B [blocked-by: task-01]',
++  ].join('\n')
++  const r = tickTasksMd({ tasksMd: md, taskId: 'task-02' })
++  assertTrue(r.kind === 'ticked' && r.blockedWarning && r.blockedWarning.includes('task-01'),
++    `前置未勾：ticked + blockedWarning 含 task-01（实际 ${r.blockedWarning}）`)
++
++  const md2 = [
++    '- [x] task-01: A',
++    '- [ ] task-02: B [blocked-by: task-01]',
++  ].join('\n')
++  const r2 = tickTasksMd({ tasksMd: md2, taskId: 'task-02' })
++  assertTrue(r2.kind === 'ticked' && r2.blockedWarning === null, `前置已勾：零警告（实际 ${r2.blockedWarning}）`)
++}
++
++// ── 3. frontier 下一任务指针：跳过被阻塞 / 全阻塞回退 / 无标注现状一致 ──
++console.log('\n--- 3. frontier 指针 ---')
++{
++  // 3a. task-01 已勾、task-02 blocked-by task-03（未勾）、task-03 无标注 → next=task-03
++  const md = [
++    '- [x] task-01: A',
++    '- [ ] task-02: B [blocked-by: task-03]',
++    '- [ ] task-03: C',
++  ].join('\n')
++  const r = tickTasksMd({ tasksMd: md, taskId: 'task-03' })
++  // 全勾后 next=null——改用不触发全勾的形态：只勾 task-01 场景
++  const mdA = [
++    '- [ ] task-01: A',
++    '- [ ] task-02: B [blocked-by: task-03]',
++    '- [ ] task-03: C',
++  ].join('\n')
++  const rA = tickTasksMd({ tasksMd: mdA, taskId: 'task-01' })
++  assertTrue(rA.next && rA.next.id === 'task-03' && !(rA.next.blockedBy && rA.next.blockedBy.length),
++    `frontier：task-01 勾后 next 跳过被阻塞的 task-02 直指 task-03（实际 ${rA.next && rA.next.id}）`)
++
++  // 3b. 全阻塞回退：未勾者互相阻塞 → next=最小号 + blockedBy 注记
++  const mdB = [
++    '- [x] task-01: A',
++    '- [ ] task-02: B [blocked-by: task-03]',
++    '- [ ] task-03: C [blocked-by: task-02]',
++  ].join('\n')
++  const rB = tickTasksMd({ tasksMd: mdB, taskId: 'task-01' })
++  assertTrue(rB.next && rB.next.id === 'task-02' && Array.isArray(rB.next.blockedBy) && rB.next.blockedBy.includes('task-03'),
++    `全阻塞回退：next=最小号 task-02 带 blockedBy 注记（实际 ${rB.next && rB.next.id}/${JSON.stringify(rB.next && rB.next.blockedBy)}）`)
++
++  // 3c. 无标注现状一致：next=第一个未勾行，desc 原样
++  const mdC = [
++    '- [x] task-01: A',
++    '- [ ] task-02: B',
++    '- [ ] task-03: C',
++  ].join('\n')
++  const rC = tickTasksMd({ tasksMd: mdC, taskId: 'task-01' })
++  assertTrue(rC.next && rC.next.id === 'task-02' && rC.next.desc === 'B' && rC.blockedWarning === null,
++    '无标注：next=第一个未勾、desc 原样、零警告（现状零回归）')
++}
++
++// ── 4. 不合法标注：warn 留痕按普通文本 ──
++console.log('\n--- 4. 不合法标注 ---')
++{
++  const md = [
++    '- [ ] task-01: A',
++    '- [ ] task-02: B [blocked-by:]',
++  ].join('\n')
++  const [w, done] = hookWarn()
++  let r
++  try { r = tickTasksMd({ tasksMd: md, taskId: 'task-01' }) } finally { done() }
++  assertTrue(r.next && typeof r.next.desc === 'string', '不合法标注不炸解析（按普通文本，next 正常返回）')
++  assertTrue(r.next.desc.includes('[blocked-by:]'), '不合法标注按普通文本保留在 desc（不剥出）')
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${failed === 0 ? 'all' : '部分'}  ❌ 失败断言: ${failed}`)
++if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
++console.log('='.repeat(50))
++if (failed > 0) process.exit(1)

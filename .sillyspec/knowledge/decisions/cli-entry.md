@@ -291,3 +291,12 @@ supersedes：D-010@v1
 文件：src/flow-parity.js, src/flow-preflight.js, src/flow.js, test/closeout-noise-fix.test.mjs
 最近确认：5657348e47b108040bbf945a658cbf320c23eac9
 理由：负面②：flow.js 冻结对账的 _suspects 判定新增删除面跳过——`collectDeletedFace`（flow-parity.js 新纯函数）采集本变更删除面（baseline..HEAD `--diff-filter=D` 已提交删除 ∪ `git status` XY 含 D 的工作树未提交删除），声明路径命中删除面即不落跨仓嫌疑并输出 ℹ️ 留痕行；existsSync 核验仍是第一道（在盘即非嫌疑），删除面是第二道（不在盘但被删=删除语义），余下才点名。负面③：flow.js dirty 权威门与 flow-preflight.js 预检同判定链加签收面剔除（flow-state `accept_dirty_gap.files`，--accept-dirty-gap 签收时持久化写入，对齐 --accept-empty-face 先例）——已签收面免拦、增量面照拦并报增量数；另在权威门加时点快照解释行（函数级变量 `_preflightDirtyCount` 传预检时点数，权威门数字更大即输出「实测窗口内新增、非口径漂移」）。选此方案是因为两处噪音都是「判定面缺一档语义」（删除 vs 跨仓、签收 vs 新增）而非架构问题，最小面补档即可，不动 collectFreezeFiles 的采集口径（残渣剔除 dirty_gate_ignore 既有通道不变）。
+
+## D-cli-entry-018@v1 2026-11-22-tasks-blocked-by——把 mattpocock 链路里 to-tickets/implement-spec 的阻塞边思想做进 SillySpec 轻量道的 tasks.md，形态刻意
+状态：implemented
+变更：2026-11-22-tasks-blocked-by
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-22-tasks-blocked-by/design.md
+文件：src/flow.js, src/task-tick.js, test/task-tick-blocked-by.test.mjs
+最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
+理由：把 mattpocock 链路里 to-tickets/implement-spec 的阻塞边思想做进 SillySpec 轻量道的 tasks.md，形态刻意最轻：标注是任务行描述段尾的可选方括号段（`[blocked-by: task-MM/task-KK]`），collectRows 解析挂 blockedBy 数组，tickTasksMd 在返回值上多给 blockedWarning（软门）与 frontier 化 next 指针，runTaskTick 回显 warn 与注记。不引入任务状态机/不阻断任何勾选（轻量哲学：提示词纪律+机器识别，不做机器硬门）；无标注路径零变化。选纯函数增量方案因为全部行为都在 tickTasksMd 一个纯函数接缝上可测，IO 层只加回显。
