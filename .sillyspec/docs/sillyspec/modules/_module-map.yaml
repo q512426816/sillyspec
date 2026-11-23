@@ -128,6 +128,13 @@ modules:
       - test/probe7-anchor-testfile.test.mjs
       - test/pitfall-probe7-noise.test.mjs
       - test/acceptance-matrix-probe.test.mjs
+      - test/verify-probes.test.mjs
+      - test/verify-probes-assertion-quality.test.mjs
+      - test/verify-probes-facts.test.mjs
+      - test/verify-probes-platform-note.test.mjs
+      - test/verify-probes-probe3-dualroot.test.mjs
+      - test/verify-probes-probe3-java-layout.test.mjs
+      - test/verify-probes-refresh-backup.test.mjs
       - src/verify-facts-schema.js
       - src/foreign-declared.js
       - src/overlap-detect.js

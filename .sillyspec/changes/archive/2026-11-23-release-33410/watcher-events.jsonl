@@ -1,0 +1,24 @@
+{"ts":1795449522877,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1795449522877,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1795449522877,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1795449590831,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795449598278,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795449627540,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795450831970,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1795451491956,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795451615502,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1795451616411,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1795451616217,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795451616217,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1795451617276,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1795451618121,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1795451620082,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795451620082,"kind":"task-done","stage":"tasks","detail":"checked 1→4","provisional":true}
+{"ts":1795451644634,"kind":"commit","stage":null,"detail":"8e106fea","provisional":true}
+{"ts":1795451680759,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1795451683767,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795451683767,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1795451684138,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-23-release-33410/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795451702099,"kind":"commit","stage":null,"detail":"ee95d2ab","provisional":true}
+{"ts":1795451716217,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-23-release-33410/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795451722933,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.4s） · 20261123163521","provisional":true}

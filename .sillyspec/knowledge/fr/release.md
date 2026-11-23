@@ -410,3 +410,72 @@ created_at: 2026-10-15T01:33:02.911Z
 - 场景：主路径 — 
 全文：.sillyspec/changes/archive/2026-11-22-release-3349/requirements.md#FR-02
 最近确认：f96196f941b2ec1550fb828b07960627ec289617
+
+## FR-release-015 core-engine 模块文档补探针 1 方括号字面路径行为变更说明
+变更：2026-11-23-release-33410
+状态：active
+摘要：文档在场
+场景正文：
+- 场景：文档在场 — Given 探针修复已归档；When 读 core-engine.md；Then 可见探针 1 行为变更说明节（含变更名锚）
+全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-01
+最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede
+
+## FR-release-016 _module-map.yaml core-engine 模块登记 verify-probes 同族测试文件
+变更：2026-11-23-release-33410
+状态：active
+摘要：模块命中
+场景正文：
+- 场景：模块命中 — Given 后续变更交付 verify-probes 同族测试文件；When 模块对账；Then 命中 core-engine 模块而非伪域 auto-*
+全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-02
+最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede
+
+## FR-release-017 package.json/package-lock 升 3.34.10，quick-retired R5 锚同步 3.34.10
+变更：2026-11-23-release-33410
+状态：active
+摘要：版本一致
+场景正文：
+- 场景：版本一致 — Given 版本面与锚同步完成；When 运行 quick-retired 测试；Then R5 断言通过
+全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-03
+最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-release-33410:flow:测试绑定FR-03
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-release-33410
+  status: active
+
+## FR-release-018 lint 绿、quick-retired 与 verify-probes 同族测试绿
+变更：2026-11-23-release-33410
+状态：active
+摘要：发版前门
+场景正文：
+- 场景：发版前门 — Given 版本面与文档改动完成；When 跑 lint 与相关测试；Then 全绿
+全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-04
+最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-release-33410:flow:测试绑定FR-04
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-release-33410
+  status: active
+
+## FR-release-019 npm publish 3.34.10 成功
+变更：2026-11-23-release-33410
+状态：active
+摘要：发布验证
+场景正文：
+- 场景：发布验证 — Given 发版提交完成；When npm publish + npm view sillyspec version；Then 输出 3.34.10
+全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-05
+最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede

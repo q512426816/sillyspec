@@ -202,3 +202,10 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 
 - import 依赖回归面收敛：`src/deps-symbol-narrow.js` 三导出（`extractTouchedExports` diff 精确改动行×export span、`namedImportEvidence` 命名导入三态 hit/miss/unknown、`collectTouchedExportSymbols` flow-state baseline 直锚收集器）；`discoverModuleDependentTests` 增可选 `touchedExportSymbols`/`hubMinDependents`（缺省 8=常量 DEPS_SYMBOL_NARROW_HUB_MIN）——枢纽文件（模块路径命中>阈值）的依赖测试经命名导入裁决：全命名导入均不含触达符号（miss）出面，hit/unknown 保留（fail-open 多跑侧）。
 - 无符号参数路径与 2026-09-26 现状逐字一致（零回归）；三个调用点（收口动态子集/runModuleSubset/task-start 前移）fail-soft 接线，收集失败回落模块级。Python 无符号收敛（回落模块级，语言中立）。
+
+## 探针 1 方括号字面路径与未扫描面结论（2026-11-23-probe1-bracket-path-blind）
+
+- 字面路径优先：探针 1 主循环改为先剥 `NEW:` 前缀、再按字面路径解析（主仓存在→扫描；主仓缺失且 worktree 存在→扫描并计 `worktreeHits`），两处都不存在时才判通配符入 `globEntries`——修复 `/[*?[\]]/` 把 Next.js `[id]`、Vue `[...slug]` 类**字面**路径整文件跳过的盲区（2026-11-22-workspace-redesign 的 useWorkspaceActivity 占位漏检事故根因）。
+- 报告结论收紧：`renderVerifyProbesReport` 在零命中时不再无条件打全清 ✅——仅 `globEntries` 与 `skippedFiles` 全空才输出「无标记命中」，否则输出「⚠️ 已扫描文件无未实现标记，但 N 项未扫描——结论不完整」；该 ⚠️ 行刻意不用反引号路径:行号格式，不撞 `PROBE1_HIT_LINE_RE`（探针一致性对账锚点零改动）。
+- 测试锚 test/verify-probes.test.mjs（方括号字面路径命中 / 真 glob 不误扫 / 报告两态断言）。
+
