@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-22-include-param-primitives",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-22-include-param-primitives:flow:测试绑定FR-01",
+      "tests": [
+        "test/prompt-include-params.test.mjs「带参解析/无参向后兼容/缺参与模板缺失/值字符集」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-include-param-primitives"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-22-include-param-primitives:flow:测试绑定FR-02",
+      "tests": [
+        "test/prompt-include-params.test.mjs「高 2/5 模板存在与渲染语义句在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-include-param-primitives"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-22-include-param-primitives:flow:测试绑定FR-03",
+      "tests": [
+        "test/prompt-include-params.test.mjs「高 4/9 带参渲染：budget/pack 落位与特有段在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-include-param-primitives"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-22-include-param-primitives:flow:测试绑定FR-04",
+      "tests": [
+        "test/execute-testcase-design-include.test.mjs「既有按名计数不回归」",
+        "test/knowledge-inject.test.mjs「知识注入段禁 include 维持」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-include-param-primitives"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-22-include-param-primitives:flow:测试绑定FR-05",
+      "tests": [
+        "test/prompt-include-params.test.mjs「全量用例跑绿 exit 0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-22-include-param-primitives"
+    }
+  ]
+}

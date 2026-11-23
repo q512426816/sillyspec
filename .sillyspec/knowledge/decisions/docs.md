@@ -156,3 +156,12 @@
 文件：docs/prompt/_extract.mjs, docs/prompt/_extracted.json, src/run/prompt.js, src/stages/brainstorm.js, test/brainstorm-prompt-discipline.test.mjs, test/output-step-render.test.mjs, test/prompt-extract-portable.test.mjs, test/prompt-golden.json
 最近确认：1751c740c8609053d7f274fa5dc782ab61cbfb86
 理由：三个独立小改共用一单（同属提示词纪律面+机械修复）：①brainstorm.js 第 7 条提问分型协议追加「推荐附一手依据锚」增量句（推荐答案机制的实证弱点——无依据推荐被用户识破，机制解=把调研深度变成推荐的硬前置）；②prompt.js 两处 wait 交互指引输出各追加一句中途纠正协议（wait-what 形态：纠正语义→停→复述目标→确认→再继续；挂两处既注入点最小扰动，autoMeta 分支不注入与既有分支条件一致）；③_extract.mjs 输出前归一化 demo 目录绝对路径（root 由 __dirname 推导，worktree 下跑渗入绝对路径——归一化函数 export 供直测，端到端双环境逐字节一致）。选此方案因为三处均为增量行/纯函数归一，不动任何既有语义，金档再生即可验证。
+
+## D-docs-012@v1 2026-11-22-include-param-primitives——按批 3a survey（docs/sillyspec/prompt-primitives-survey.md）施工路径分两步：①扩展 `src/run/sha
+状态：implemented
+变更：2026-11-22-include-param-primitives
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-22-include-param-primitives/design.md
+文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, docs/prompt/execute.md, docs/prompt/plan.md, docs/prompt/verify.md, src/run/shared.js, src/stages/brainstorm.js, src/stages/execute.js, src/stages/plan.js, src/stages/verify.js, templates/prompts/foreground-sync.md, templates/prompts/material-pack-baseline.md, templates/prompts/review-subagent-discipline.md, templates/prompts/review-unsupervised-exempt.md, test/prompt-golden.json, test/prompt-include-params.test.mjs
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+理由：按批 3a survey（docs/sillyspec/prompt-primitives-survey.md）施工路径分两步：①扩展 `src/run/shared.js` 的 resolvePromptIncludes——正则支持 `{{include: name|key=value|key2=value2}}` 参数段，模板文件内 `{{param:key}}` 占位被实参替换（缺参保留原样+warn；无参写法向后兼容；模板缺失保留占位符 warn 的 fail-soft 哲学不变）；②按 survey 顺序抽取四条高优原语进 templates/prompts/——高 2（前台同步禁后台，零参数直抽 ×2 处）与高 5（评审豁免，零参数直抽 ×3 处独立块，execute.js dispatchExec 段的指针句保留不动）；高 4（审查子代理纪律包，budget/scope 参数）与高 9（材料包基准面，pack 参数）参数化抽取，阶段特有差异段（既往勿重验/gate 重试修复）按最小扰动保留 stage 原文。选此方案因为共性进模板单一源+侧重走参数是 survey D 节既定路径，且每批抽取后金档可机械验证。

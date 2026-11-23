@@ -2506,3 +2506,110 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-22-recommend-anchor-recorrect
   status: active
+
+## FR-docs-142 resolvePromptIncludes 支持 {{include:name|key=value}} 参数化语法，模板内参数占位被实参替换；无参写法向后兼容，模板缺失仍保留占位符并 warn
+变更：2026-11-22-include-param-primitives
+状态：active
+摘要：主路径（带参解析）；向后兼容；缺参与模板缺失
+场景正文：
+- 场景：主路径（带参解析） — 
+- 场景：向后兼容 — Given 既有无参引用 `{{include: testcase-design}}` / When resolvePromptIncludes 处理 / Then 渲染结
+- 场景：缺参与模板缺失 — Given 带参引用缺某实参，或模板文件不存在 / When resolvePromptIncludes 处理 / Then 对应占位符原样保留且 console.warn
+全文：.sillyspec/changes/archive/2026-11-22-include-param-primitives/requirements.md#FR-01
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-include-param-primitives:flow:测试绑定FR-01
+  tests: test/prompt-include-params.test.mjs「带参解析/无参向后兼容/缺参与模板缺失/值字符集」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-include-param-primitives
+  status: active
+
+## FR-docs-143 高 2「前台同步执行禁后台」与高 5「评审豁免声明」抽为 templates/prompts/ 模板，原 6 处引用位改 include 引用，渲染文本语义不变
+变更：2026-11-22-include-param-primitives
+状态：active
+摘要：直抽后渲染对照
+场景正文：
+- 场景：直抽后渲染对照 — Given 抽取前三阶段渲染文本快照 / When 引用位改 include 后重新渲染 / Then 高 2/5 对应纪律句逐字在场（含禁令枚举与产物路径 review-
+全文：.sillyspec/changes/archive/2026-11-22-include-param-primitives/requirements.md#FR-02
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-include-param-primitives:flow:测试绑定FR-02
+  tests: test/prompt-include-params.test.mjs「高 2/5 模板存在与渲染语义句在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-include-param-primitives
+  status: active
+
+## FR-docs-144 高 4「审查子代理纪律包」与高 9「材料包基准面四句」以参数化模板抽取，budget/pack 等侧重差异以参数传入
+变更：2026-11-22-include-param-primitives
+状态：active
+摘要：参数化渲染对照
+场景正文：
+- 场景：参数化渲染对照 — Given 三阶段抽取前渲染文本 / When 改带参 include 后渲染 / Then 各阶段 budget 数字（12/10/15）、pack 名、特有段（既往勿重
+全文：.sillyspec/changes/archive/2026-11-22-include-param-primitives/requirements.md#FR-03
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-include-param-primitives:flow:测试绑定FR-03
+  tests: test/prompt-include-params.test.mjs「高 4/9 带参渲染：budget/pack 落位与特有段在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-include-param-primitives
+  status: active
+
+## FR-docs-145 docs/prompt/ 金档经 _extract.mjs 再生与改动一致；include 计数测试核对更新跑绿；知识注入段仍禁 include
+变更：2026-11-22-include-param-primitives
+状态：active
+摘要：金档与禁令一致
+场景正文：
+- 场景：金档与禁令一致 — Given stages 引用位改写完成 / When 跑 _extract.mjs 再生并跑既有 include 计数测试 / Then 金档反映新引用形态且全部测试绿，
+全文：.sillyspec/changes/archive/2026-11-22-include-param-primitives/requirements.md#FR-04
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-include-param-primitives:flow:测试绑定FR-04
+  tests: test/execute-testcase-design-include.test.mjs「既有按名计数不回归」 | test/knowledge-inject.test.mjs「知识注入段禁 include 维持」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-include-param-primitives
+  status: active
+
+## FR-docs-146 新增单测覆盖参数化解析/渲染/缺参行为并跑绿
+变更：2026-11-22-include-param-primitives
+状态：active
+摘要：单测全绿
+场景正文：
+- 场景：单测全绿 — Given 全部新用例 / When 运行测试 / Then 全部通过，exit 0。
+全文：.sillyspec/changes/archive/2026-11-22-include-param-primitives/requirements.md#FR-05
+最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-22-include-param-primitives:flow:测试绑定FR-05
+  tests: test/prompt-include-params.test.mjs「全量用例跑绿 exit 0」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-22-include-param-primitives
+  status: active

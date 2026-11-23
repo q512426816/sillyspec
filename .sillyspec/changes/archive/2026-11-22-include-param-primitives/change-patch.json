@@ -1,0 +1,286 @@
+{
+  "change": "2026-11-22-include-param-primitives",
+  "baseline": "2ed5ddf0971cad723e7d8f3b05b4f3f2667d6ffe",
+  "head": "97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c",
+  "files": [
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/sillyspec/ROADMAP.md",
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "docs/prompt/execute.md",
+    "docs/prompt/plan.md",
+    "docs/prompt/verify.md",
+    "src/run/shared.js",
+    "src/stages/brainstorm.js",
+    "src/stages/execute.js",
+    "src/stages/plan.js",
+    "src/stages/verify.js",
+    "templates/prompts/foreground-sync.md",
+    "templates/prompts/material-pack-baseline.md",
+    "templates/prompts/review-subagent-discipline.md",
+    "templates/prompts/review-unsupervised-exempt.md",
+    "test/prompt-golden.json",
+    "test/prompt-include-params.test.mjs"
+  ],
+  "totals": {
+    "files": 23,
+    "additions": 230,
+    "deletions": 41
+  },
+  "savedAt": "2026-11-23T01:13:32.299Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 5,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "2ed5ddf0971cad723e7d8f3b05b4f3f2667d6ffe",
+    "totals": {
+      "files": 23,
+      "additions": 230,
+      "deletions": 41
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/ROADMAP.md",
+        "additions": 14,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 7,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/execute.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/plan.md",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/verify.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 31,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/execute.js",
+        "additions": 27,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/plan.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/verify.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/prompts/foreground-sync.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/prompts/material-pack-baseline.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/prompts/review-subagent-discipline.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/prompts/review-unsupervised-exempt.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/prompt-golden.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/prompt-include-params.test.mjs",
+        "additions": 122,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "fc346aa7340ba10a471860efea66987e5cd0bb6f7699e1a624d791a161f4a56c",
+  "patchStatus": "ok"
+}
