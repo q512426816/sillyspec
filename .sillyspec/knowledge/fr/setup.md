@@ -2720,3 +2720,79 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-11-21-verify-gate-scope-speed
   status: active
+
+## FR-setup-157 git worktree add 失败时 wm.create 不再静默降级：默认 throw，错误信息含原始 git stderr 与处置建议（worktree doctor / 清残留分支 / --allow-in-place 指引）
+变更：2026-11-23-worktree-fallback-consent
+状态：active
+摘要：主路径；提示语不再猜测归因
+全文：.sillyspec/changes/archive/2026-11-23-worktree-fallback-consent/requirements.md#FR-01
+最近确认：a259eacec98420dede9f8509e59e167c6fa8bfd2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-worktree-fallback-consent:flow:测试绑定FR-01
+  tests: test/worktree-fallback-consent.test.mjs「fail-closed：add 失败默认抛错不降级（含 stderr 与处置指引）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-worktree-fallback-consent
+  status: active
+
+## FR-setup-158 显式同意（run execute --allow-in-place 或 local.yaml worktree.fallback: allow）时可降级：meta 记 explicit 标记与 fallbackReason 原始错误，且主仓 checkout 专用分支（baseHash 等于当前 HEAD 时），不再停在用户当前分支
+变更：2026-11-23-worktree-fallback-consent
+状态：active
+摘要：主路径；checkout 失败 fail-closed；baseHash ≠ HEAD 跳过 checkout
+全文：.sillyspec/changes/archive/2026-11-23-worktree-fallback-consent/requirements.md#FR-02
+最近确认：a259eacec98420dede9f8509e59e167c6fa8bfd2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-worktree-fallback-consent:flow:测试绑定FR-02
+  tests: test/worktree-policy.test.mjs「worktree.fallback 键：allow / 缺省 block / 非法值 block」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-worktree-fallback-consent
+  status: active
+
+## FR-setup-159 worktree-guard 的 isInsideRegisteredWorktree 对无 explicit 标记的遗留 in-place meta 不再授权：主仓源码写入与 Bash 命令回到阶段门禁
+变更：2026-11-23-worktree-fallback-consent
+状态：active
+摘要：遗留 meta 排雷；显式 meta 不受影响
+全文：.sillyspec/changes/archive/2026-11-23-worktree-fallback-consent/requirements.md#FR-03
+最近确认：a259eacec98420dede9f8509e59e167c6fa8bfd2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-worktree-fallback-consent:flow:测试绑定FR-03
+  tests: test/worktree-guard-execute-guard.test.mjs「遗留 in-place meta（无 explicit）不授权：写入拦截 / Bash 走阶段门禁；explicit:true 维持放行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-worktree-fallback-consent
+  status: active
+
+## FR-setup-160 config-schema 文档化 worktree.fallback（block|allow，缺省 block）
+变更：2026-11-23-worktree-fallback-consent
+状态：active
+摘要：文档化
+全文：.sillyspec/changes/archive/2026-11-23-worktree-fallback-consent/requirements.md#FR-04
+最近确认：a259eacec98420dede9f8509e59e167c6fa8bfd2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-worktree-fallback-consent:flow:测试绑定FR-04
+  tests: test/config-schema.test.mjs「worktree.fallback 键条目存在且文档化（live/readers/缺省语义）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-worktree-fallback-consent
+  status: active

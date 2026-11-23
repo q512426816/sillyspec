@@ -418,3 +418,12 @@ supersedes：D-004@v1
 文件：src/run/command.js, test/auxiliary-scan-no-stick.test.mjs
 最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61
 理由：run <stage> 入口（src/run/command.js:1425）在无 --change 时经 `resolveChangeName` 兜底吸附仓内活跃变更，随后 :1456 混跑回退块把「在轻量跑道变更上跑 run <stage>」当升厚意图拦进 --upgrade-thick 同意门——scan（辅助阶段，definition.auxiliary: true，无变更归属）也被一并吸附：仓里任一活跃轻量变更在场即整仓跑不了 scan（2026-11-14 端到端实测在 multi-agent-platform 被拦+libuv 崩溃；且行为状态敏感——currentChange 指向谁取决于并行会话推进，不可预测）。 修复：command.js 在 effectiveChange 解析前判定 stage ∈ 无变更归属辅助子集（本变更界定为 scan 与 explore——quick/archive 虽在 AUXILIARY_STAGES 但有变更归属语义（quick 会话/archive 收口锚定变更），不豁免；status/doctor 已有 READONLY 分流不受影响），命中则 effectiveChange=null——不吸附、不注册变更、不触发混跑回退门，辅助阶段直接执行。
+
+## D-runtime-026@v1 2026-11-23-worktree-fallback-consent——改 `worktree.js create()` 的 worktree add 失败分支（:882-893）：删「可能是沙箱权限限制」的静默降级，改 fail-
+状态：implemented
+变更：2026-11-23-worktree-fallback-consent
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-23-worktree-fallback-consent/design.md
+文件：src/config-schema.js, src/hooks/worktree-guard.js, src/run/command.js, src/run/stage.js, src/worktree-policy.js, src/worktree.js, test/config-schema.test.mjs, test/worktree-fallback-consent.test.mjs, test/worktree-guard-execute-guard.test.mjs, test/worktree-policy.test.mjs
+最近确认：a259eacec98420dede9f8509e59e167c6fa8bfd2
+理由：改 `worktree.js create()` 的 worktree add 失败分支（:882-893）：删「可能是沙箱权限限制」的静默降级，改 fail-closed 抛错（原始 stderr + 三条处置指引）；显式同意（`opts.allowInPlace` 或 local.yaml `worktree.fallback: allow`）时才降级，且降级动作重排为「先 checkout 专用分支、成功后落 meta」。选择同意制而非彻底删除 in-place 通道：全历史唯一实锤事故（2026-07-15，长路径，已由 core.longpaths 缓解）证明通道危险，但部分受限环境（沙箱 CI）可能确需直写——同意制把「要不要冒这个险」交还用户，与跨仓 fail-closed（worktree-cross.js:122）+ 主仓分支冲突三选一菜单的既有治理风格一致。 三处配套：① worktree-guard `isInsideRegisteredWorktree` 对无 `explicit` 标记的遗留 in-place meta 停止整树授权（排雷存量：这类 meta 让主仓写入与 git commit 全放行，是事故的放大器）；② `readWorktreePolicy` 加读 `worktree.fallback` 键（flag > policy > fail-closed 缺省，同 adopt_branch 优先级铁律）；③ config-schema 文档化新键。测试策略：`git worktree add` 的确定性失败用「分支名以 .lock 结尾」制造（git 拒绝 .lock 后缀分支，validateChangeName 放行）——跨平台无沙箱技巧；checkout 幸福路径抽 `switchMainToWorktreeBranch` 导出直测（同 inferChangeFromWorktreeCwd 导出先例）。

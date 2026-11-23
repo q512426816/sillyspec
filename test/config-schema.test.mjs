@@ -89,6 +89,23 @@ console.log('\n--- 1b. commands.metrics / metrics_timeout_sec 注册 ---')
   assert(ex.includes('metrics_timeout_sec:'), 'renderExample 输出含 metrics_timeout_sec 键行')
 }
 
+// ── 1b2. worktree.fallback 注册（2026-11-23-worktree-fallback-consent FR-04）──
+console.log('\n--- 1b2. worktree.fallback 注册 ---')
+{
+  const keys = flatKeys()
+  const fb = keys.find((k) => k.path === 'worktree.fallback')
+  assert(Boolean(fb), 'worktree.fallback 已注册')
+  if (fb) {
+    assert(fb.type === 'enum' && fb.status === 'live' && fb.optional === true, 'worktree.fallback 形态：enum/optional/live')
+    assert(Array.isArray(fb.values) && fb.values.includes('block') && fb.values.includes('allow'), '枚举值 block|allow')
+    assert(fb.readers.some((r) => r.includes('readWorktreePolicy')), 'readers 指向 readWorktreePolicy')
+    assert(fb.desc.includes('fail-closed'), 'desc 含缺省 fail-closed 语义')
+    assert(fb.desc.includes('--allow-in-place'), 'desc 含一次性同意出口指引')
+  }
+  const ex2 = renderExample()
+  assert(ex2.includes('fallback:'), 'renderExample 输出含 fallback 键行')
+}
+
 // ── 1c. metrics_routes 路由键注册（2026-10-29-metrics-routes FR-03）──
 console.log('\n--- 1c. metrics_routes.<name>.* 注册 ---')
 {

@@ -105,7 +105,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     // 早建的 worktree / native 复用形态与 execute 首建走同一幂等入口，原 getMeta 短路语义收敛于此。
     let wtResult
     try {
-      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
+      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch), allowInPlace: !!(quickOpts && quickOpts.allowInPlace) })
     } catch (e) {
       console.error(`❌ worktree 创建失败: ${e.message}`)
       // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：

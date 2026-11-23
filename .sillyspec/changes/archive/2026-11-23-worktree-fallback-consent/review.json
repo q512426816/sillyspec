@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-23-worktree-fallback-consent",
+  "reviewer": "subagent(general-purpose)",
+  "verdict": "PASS",
+  "reviewedAgainst": "a259eacec98420dede9f8509e59e167c6fa8bfd2",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-01 绑定测试未断言「原始 stderr 关键词」在场，且绑定用例名与实际测试标题不完全一致",
+      "evidence": "requirements.md FR-01 场景明写「抛错（含不降级语义与原始 stderr 关键词）」且测试绑定名为「fail-closed：add 失败默认抛错不降级（含 stderr 与处置指引）」，但实际测试（test 1）只断言固定文案五处（不降级语义/doctor/branch -D/--allow-in-place/worktree.fallback）与反断言「可能是沙箱权限限制」，未 match 任何 stderr 关键词（如 .lock 分支名的 fatal 文本）；实现侧 worktree.js:921 已插值 `${e.stderr || e.message}`，属测试钉子缺口而非实现缺口——若 e.stderr 为空退化为 e.message 测试仍绿。语义同构、行为已实现，按 P3 文案级接受。",
+      "location": "test/worktree-fallback-consent.test.mjs:57-72"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-02 主路径（同意+checkout 成功+meta 落盘）无 create() 端到端测试，仅失败腿端到端覆盖",
+      "evidence": "确定性失败手法（.lock 后缀分支名）同时打断 worktree add 与降级 checkout，故三个路由测试全走 checkout 失败腿；幸福路径靠 switchMainToWorktreeBranch 直测（三腿+dirty 保留）与 _createInPlaceMeta 直测（explicit/fallbackReason 落盘+旧形态零漂移）拼接覆盖，create() 内部接线（传 branch/baseHash/explicit: true 给两函数）无正向端到端证据。接线错误的失败方向为 fail-closed（explicit 漏落→guard 不授权→写入被拦），风险朝安全侧；跨平台构造「add 失败但 checkout 成功」需权限/沙箱技巧，design.md 已声明取舍。按边界取舍接受。",
+      "location": "test/worktree-fallback-consent.test.mjs:74-101"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-23T03:07:05Z"
+}

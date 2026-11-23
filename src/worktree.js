@@ -497,6 +497,33 @@ function validateChangeName(changeName) {
 }
 
 /**
+ * in-place 降级的主仓分支切换（2026-11-23-worktree-fallback-consent / FR-02）。
+ *
+ * 坑 execute-in-place-windows-pitfalls 坑1（2026-07-15 实锤）：旧降级只落 meta 不切分支，
+ * 主仓停留在用户当前分支（常为 main/master）直写——本函数把「切到专用分支」变成降级的
+ * 机械前置步。仅在 baseHash === 主仓当前 HEAD 时执行（checkout -b 于 HEAD 是内容 no-op，
+ * 工作区 dirty 文件与暂存面原样保留）；--base 显式指定且 ≠ HEAD 时跳过（切走会改变工作区
+ * 内容语义，交人判断，warn 留痕）。导出供测试直测（同 inferChangeFromWorktreeCwd 先例）。
+ *
+ * @param {string} cwd 主仓根
+ * @param {string} branch 专用分支名（sillyspec/<change>）
+ * @param {string} baseHash create 解析出的基线 commit
+ * @returns {{ skipped: boolean, created?: boolean }} skipped=true 表示 baseHash 不匹配已跳过
+ * @throws {Error} checkout 失败（分支名非法/锁冲突/工作区冲突）——调用方 fail-closed 不落 meta
+ */
+export function switchMainToWorktreeBranch(cwd, branch, baseHash) {
+  const head = gitQuiet(cwd, ['rev-parse', 'HEAD']);
+  if (!head || head !== baseHash) return { skipped: true };
+  const branchExists = !!gitQuiet(cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]);
+  if (branchExists) {
+    git(cwd, ['checkout', branch], { timeout: 30000 });
+    return { skipped: false, created: false };
+  }
+  git(cwd, ['checkout', '-b', branch, baseHash], { timeout: 30000 });
+  return { skipped: false, created: true };
+}
+
+/**
  * 检测 git worktree 是否可用
  * @param {string} cwd
  * @returns {{ supported: boolean, version: string|null, reason?: string }}
@@ -714,11 +741,13 @@ export class WorktreeManager {
   /**
    * 创建 worktree
    * @param {string} changeName - 变更名
-   * @param {{ base?: string }} opts - base: 基础分支，默认当前 HEAD
+   * @param {{ base?: string, adoptBranch?: boolean, allowInPlace?: boolean }} opts - base: 基础分支，默认当前 HEAD；
+   *   allowInPlace: worktree add 失败时显式同意降级 in-place（2026-11-23-worktree-fallback-consent；
+   *   与 local.yaml worktree.fallback: allow 同效，flag > policy > fail-closed 缺省）
    * @returns {{ branch: string, worktreePath: string, baseHash: string }}
-   * @throws {Error} worktree 已存在、git 不可用、changeName 为空
+   * @throws {Error} worktree 已存在、git 不可用、changeName 为空、worktree add 失败且未显式同意降级
    */
-  create(changeName, { base, adoptBranch = false } = {}) {
+  create(changeName, { base, adoptBranch = false, allowInPlace = false } = {}) {
     const name = validateChangeName(changeName);
     const worktreePath = this.getWorktreePath(name);
     const branch = BRANCH_PREFIX + name;
@@ -879,15 +908,52 @@ export class WorktreeManager {
       if (existsSync(worktreePath) || (!isAdoptPath && gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]))) {
         throw new Error(`worktree already exists: ${name}（并发创建，另一进程已抢先建成，本进程不降级 in-place）. Run cleanup first.`);
       }
-      // sandbox/permission fallback: 降级为 in-place + baseline protection
-      console.log(`⚠️  git worktree add 失败（可能是沙箱权限限制），降级为 in-place 模式 + baseline protection`);
-      console.log(`   原因: ${e.stderr || e.message}`);
+      // 降级同意门（2026-11-23-worktree-fallback-consent / FR-01）：fail-closed 缺省——worktree
+      // add 失败不再静默降级 in-place。历史实证（2026-07-15 execute-in-place-windows-pitfalls
+      // 坑1，全历史唯一实锤）：降级后主仓停在用户当前分支直写 + worktree-guard 对 in-place meta
+      // 整树放行 = 主分支零拦截污染。同意出口：opts.allowInPlace（run execute --allow-in-place）
+      // 或 local.yaml worktree.fallback: allow（readWorktreePolicy）——flag > policy > 缺省。
+      // 归因不再硬编码猜测（旧文案「可能是沙箱权限限制」从未被任何真实事件证实），一律引用真实 stderr。
+      const fallbackPolicy = readWorktreePolicy(this.cwd);
+      const consent = allowInPlace === true || fallbackPolicy.fallback === 'allow';
+      if (!consent) {
+        throw new Error(
+          `git worktree add 失败（不降级 in-place——主仓直写需显式同意）: ${e.stderr || e.message}\n` +
+          `处置（按实际情况三选一后重跑）：\n` +
+          `  1. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）\n` +
+          `  2. 同名遗留分支：确认作废后 git branch -D ${branch}；用户有意在该分支上做时用 --adopt-branch 收编\n` +
+          `  3. 确认接受主仓直写风险后显式同意降级：sillyspec run execute --change ${name} --allow-in-place` +
+          `（降级将 checkout 专用分支 ${branch} 后在主仓工作区直写），或 local.yaml 配 worktree.fallback: allow 常备同意`
+        );
+      }
+      // 显式同意降级（FR-02）：先 checkout 专用分支、成功后才落 meta——meta 是 guard 的授权
+      // 凭证，凭证不得先于隔离态成立（meta 先落而 checkout 失败会留下「guard 全放行 + 用户
+      // 分支被占」的坑1 最坏组合）。checkout 失败 fail-closed 抛错、meta 未落盘。
+      console.warn(`⚠️  git worktree add 失败，已按显式同意降级为 in-place 模式: ${e.stderr || e.message}`);
+      let switchResult;
+      try {
+        switchResult = switchMainToWorktreeBranch(this.cwd, branch, baseHash);
+      } catch (switchErr) {
+        throw new Error(
+          `in-place 降级 checkout 专用分支 ${branch} 失败（fail-closed，meta 未落盘）: ` +
+          `${String((switchErr && (switchErr.stderr || switchErr.message)) || switchErr).split('\n')[0].trim()}`
+        );
+      }
+      if (switchResult.skipped) {
+        console.warn(`⚠️  baseHash ≠ 主仓当前 HEAD（--base 显式指定），跳过自动 checkout——主仓停留在当前分支，注意交付落点与回滚面`);
+      } else if (switchResult.created) {
+        console.log(`📌 主仓已 checkout 新建专用分支 ${branch}（in-place 显式降级；坑 execute-in-place-windows-pitfalls 坑1：不再停在用户当前分支直写）`);
+      } else {
+        console.log(`📌 主仓已 checkout 既有专用分支 ${branch}（in-place 显式降级）`);
+      }
       return this._createInPlaceMeta(name, {
         worktreePath: this.cwd,
         branch,
         baseBranch,
         baseHash,
         mode: 'in-place-fallback',
+        explicit: true,
+        fallbackReason: String(e.stderr || e.message).split('\n')[0].trim(),
       });
     }
 
@@ -1028,9 +1094,12 @@ export class WorktreeManager {
   /**
    * 创建 in-place 模式的 meta.json（降级路径）
    * 不创建 git worktree，直接在当前目录记录 baseline 并写入 meta
+   * @param {object} [extra] 显式降级留痕字段（2026-11-23-worktree-fallback-consent / FR-02）：
+   *   explicit=true（显式同意标记——worktree-guard 以此区分授权降级与遗留自动降级 meta）与
+   *   fallbackReason（worktree add 的原始错误首行）。旧调用不传则不落字段（meta 形态同旧）。
    * @private
    */
-  _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode } = {}) {
+  _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode, explicit, fallbackReason } = {}) {
     // 幂等守卫：meta 已存在时不重新创建（避免 overlay baseline 和已有改动冲突）
     const existingMeta = this.getMeta(name)
     if (existingMeta) {
@@ -1065,6 +1134,8 @@ export class WorktreeManager {
         createdAt: new Date().toISOString(),
         worktreePath,
         mode: mode || 'in-place-fallback',
+        ...(explicit === true ? { explicit: true } : {}),
+        ...(fallbackReason ? { fallbackReason } : {}),
         baselineFiles: [],
         baselineCommit: null,
         baselineHash: null,
@@ -1102,6 +1173,8 @@ export class WorktreeManager {
       createdAt: new Date().toISOString(),
       worktreePath,
       mode: mode || 'in-place-fallback',
+      ...(explicit === true ? { explicit: true } : {}),
+      ...(fallbackReason ? { fallbackReason } : {}),
       baselineFiles,
       baselineCommit,
       baselineHash,

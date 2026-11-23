@@ -379,7 +379,14 @@ function isInsideRegisteredWorktree(filePath, cwd) {
 
   for (const changeName of changeNames) {
     const meta = readWorktreeMeta(effectiveCwd, changeName)
-    if (meta?.worktreePath && isPathInside(absPath, meta.worktreePath)) return true
+    if (!meta?.worktreePath || !isPathInside(absPath, meta.worktreePath)) continue
+    // 遗留自动降级 meta 不授权（2026-11-23-worktree-fallback-consent / FR-03）：in-place meta 的
+    // worktreePath 即主仓根，照旧放行等于把整个主仓当隔离区——execute 期源码写入与 git commit
+    // 全放行零拦截（2026-07-15 execute-in-place-windows-pitfalls 事故的放大器）。降级通道已改
+    // 显式同意制：新 meta 带 explicit:true 维持授权（wt-commit 等照常）；无标记的历史遗留 meta
+    // 一律不授权，回到阶段门禁——排雷存量直至 cleanup 清除。
+    if (meta.mode === 'in-place-fallback' && meta.explicit !== true) continue
+    return true
   }
 
   return false

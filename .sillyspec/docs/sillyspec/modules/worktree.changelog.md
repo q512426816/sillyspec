@@ -32,3 +32,4 @@ ql-20260911-030-bad4 | hasUnappliedChanges 无 meta 改保守 true（对齐 dir 
 | 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |
 | 2026-11-12 | 2026-11-12-baseline-own-declared-skip | baseline 不收编本变更声明文件、归档只算提交面 |
 | 2026-11-15 | 2026-11-16-cross-exclude-dogfood-guard | 跨仓 exclude 追加补 dogfood 仓豁免 |
+| 2026-11-23 | 2026-11-23-worktree-fallback-consent | 主仓 worktree 降级改显式同意 |

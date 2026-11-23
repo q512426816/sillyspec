@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-23-worktree-fallback-consent",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-fallback-consent.test.mjs「fail-closed：add 失败默认抛错不降级（含 stderr 与处置指引）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-fallback-consent.test.mjs「policy allow 路由到降级 + checkout 失败 fail-closed 不落 meta」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-fallback-consent.test.mjs「switchMainToWorktreeBranch：新建分支 checkout -b / 既有分支 checkout / baseHash 不等跳过（dirty 文件保留）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-policy.test.mjs「worktree.fallback 键：allow / 缺省 block / 非法值 block」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-guard-execute-guard.test.mjs「遗留 in-place meta（无 explicit）不授权：写入拦截 / Bash 走阶段门禁；explicit:true 维持放行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-23-worktree-fallback-consent:flow:测试绑定FR-04",
+      "tests": [
+        "test/config-schema.test.mjs「worktree.fallback 键条目存在且文档化（live/readers/缺省语义）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-23-worktree-fallback-consent"
+    }
+  ]
+}

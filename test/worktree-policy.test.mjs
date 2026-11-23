@@ -28,9 +28,10 @@ const writeYaml = (root, text) => {
   writeFileSync(join(root, '.sillyspec', 'local.yaml'), text, 'utf8')
 }
 
-console.log('\n[worktree-policy] 选择记忆读取：三键 + fail-closed 缺省')
+console.log('\n[worktree-policy] 选择记忆读取：三键 + fallback 键 + fail-closed 缺省')
 
-const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
+// fallback 键随 2026-11-23-worktree-fallback-consent 加入返回值（worktree.fallback，缺省 block）
+const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false, fallback: 'block' }
 
 // Case 1: 无 local.yaml → 全缺省
 {
@@ -89,10 +90,46 @@ const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false
   const root = newDir('wp-scalar-')
   writeYaml(root, 'worktree:\n  policy: true\n')
   const p = readWorktreePolicy(root)
-  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'policy 段标量 → 全缺省')
+  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'policy 段标量 → 全缺省（fallback 也 block）')
+}
+
+// ── worktree.fallback 键（2026-11-23-worktree-fallback-consent FR-02）──
+// 与 policy 段平级独立：policy 缺席不影响本键读取，反之亦然。
+
+// Case 8: fallback: allow → allow（policy 段缺席零影响）
+{
+  const root = newDir('wp-fb-allow-')
+  writeYaml(root, 'worktree:\n  fallback: allow\n')
+  const p = readWorktreePolicy(root)
+  assert(p.fallback === 'allow', 'worktree.fallback: allow → allow')
+  assert(p.adoptBranch === false && p.applyOverlap === 'manual' && p.stashDirty === false, 'policy 段缺席 → 其余键缺省')
+}
+
+// Case 9: fallback 非法值 → block（fail-closed，不透传未知值）
+{
+  const root = newDir('wp-fb-bad-')
+  writeYaml(root, 'worktree:\n  fallback: sometimes\n')
+  const p = readWorktreePolicy(root)
+  assert(p.fallback === 'block', 'fallback 非法值 → block（fail-closed）')
+}
+
+// Case 10: policy 段齐配 + fallback 平级共存 → 各键独立读取
+{
+  const root = newDir('wp-fb-mix-')
+  writeYaml(root, 'worktree:\n  fallback: allow\n  policy:\n    adopt_branch: true\n    apply_overlap: force\n    stash_dirty: true\n')
+  const p = readWorktreePolicy(root)
+  assert(p.fallback === 'allow' && p.adoptBranch === true && p.applyOverlap === 'force' && p.stashDirty === true, '平级共存各键独立读取')
+}
+
+// Case 11: worktree 段整体缺席 → 全缺省（fallback=block 含在 DEFAULTS 内）
+{
+  const root = newDir('wp-fb-none-')
+  writeYaml(root, 'commands:\n  test: "npm test"\n')
+  const p = readWorktreePolicy(root)
+  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'worktree 段缺 → 全缺省（fallback=block）')
 }
 
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${7 - failures}  ❌ 失败: ${failures}`)
+console.log(`✅ 通过: ${11 - failures}  ❌ 失败: ${failures}`)
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 if (failures > 0) throw new Error(`${failures} test(s) failed`)

@@ -1,0 +1,149 @@
+{
+  "change": "2026-11-23-worktree-fallback-consent",
+  "baseline": "9e7184a43195ed0988f6cd964c68b78737a6f260",
+  "head": "a259eacec98420dede9f8509e59e167c6fa8bfd2",
+  "files": [
+    "src/config-schema.js",
+    "src/hooks/worktree-guard.js",
+    "src/run/command.js",
+    "src/run/stage.js",
+    "src/worktree-policy.js",
+    "src/worktree.js",
+    "test/config-schema.test.mjs",
+    "test/worktree-fallback-consent.test.mjs",
+    "test/worktree-guard-execute-guard.test.mjs",
+    "test/worktree-policy.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 358,
+    "deletions": 20
+  },
+  "savedAt": "2026-11-23T03:00:13.588Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "9e7184a43195ed0988f6cd964c68b78737a6f260",
+    "totals": {
+      "files": 10,
+      "additions": 358,
+      "deletions": 20
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 8,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/worktree-policy.js",
+        "additions": 15,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "src/worktree.js",
+        "additions": 80,
+        "deletions": 7,
+        "kind": "modified"
+      },
+      {
+        "path": "test/config-schema.test.mjs",
+        "additions": 17,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/worktree-fallback-consent.test.mjs",
+        "additions": 156,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/worktree-guard-execute-guard.test.mjs",
+        "additions": 34,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/worktree-policy.test.mjs",
+        "additions": 41,
+        "deletions": 4,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "063abc2b6c146911732b9ce52294a8b7be089cdc9548d456b241bd6b75419de2",
+  "patchStatus": "ok"
+}

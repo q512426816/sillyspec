@@ -168,6 +168,40 @@ try {
     assert(blkCorrupt.blocked === true, '3c db 损坏时源码写拦截（fail-closed，不误放行）')
   }
 
+  // ── 4. 遗留 in-place meta 排雷（2026-11-23-worktree-fallback-consent FR-03）──
+  // in-place meta 的 worktreePath 即主仓根：旧判定照旧放行 = execute 期主仓整树写入与
+  // git commit 全放行（2026-07-15 事故放大器）。现仅 explicit:true（显式同意降级）授权，
+  // 无标记的历史遗留 meta 回到阶段门禁。
+  console.log('\n[4] 遗留 in-place meta（无 explicit）不授权；explicit:true 维持授权')
+  {
+    const mkInPlaceMeta = (cwd, change, extra) => {
+      const metaDir = join(cwd, '.sillyspec', '.runtime', 'worktrees', change)
+      mkdirSync(metaDir, { recursive: true })
+      writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({
+        changeName: change, branch: 'sillyspec/' + change, worktreePath: cwd, mode: 'in-place-fallback', ...extra,
+      }))
+    }
+
+    // 4a. 遗留 meta（无 explicit）：主仓源码写拦截（回到 execute 期主工作区默认拦截路径）
+    const cwdA = mkProject('wg-exec-iplegacy')
+    seedDb(cwdA, { name: 'c-iplegacy', stage: 'execute', status: 'active', noWorktree: 0 })
+    mkInPlaceMeta(cwdA, 'c-iplegacy', {})
+    const blkLegacy = shouldBlockWrite(join(cwdA, 'src', 'foo.js'), cwdA)
+    assert(blkLegacy.blocked === true, '4a 遗留 in-place meta：主仓源码写拦截（不再整树放行）')
+    // 4a2. 同形态下主仓 git commit 走危险黑名单（此前被「整仓即 worktree」全放行）
+    const bashLegacy = shouldBlock({ tool: 'Bash', command: 'git commit -m x', cwd: cwdA }, { cwd: cwdA })
+    assert(bashLegacy.blocked === true, '4a2 遗留 in-place meta：主仓 git commit 拦截（危险黑名单恢复生效）')
+
+    // 4b. 显式同意 meta（explicit:true）：维持既有授权（in-place 模式 wt-commit 照常可用）
+    const cwdB = mkProject('wg-exec-ipexplicit')
+    seedDb(cwdB, { name: 'c-ipexplicit', stage: 'execute', status: 'active', noWorktree: 0 })
+    mkInPlaceMeta(cwdB, 'c-ipexplicit', { explicit: true, fallbackReason: 'fatal: boom' })
+    const okExplicit = shouldBlockWrite(join(cwdB, 'src', 'foo.js'), cwdB)
+    assert(okExplicit.blocked === false, '4b explicit meta：主仓源码写维持放行（显式同意降级语义）')
+    const bashExplicit = shouldBlock({ tool: 'Bash', command: 'git commit -m x', cwd: cwdB }, { cwd: cwdB })
+    assert(bashExplicit.blocked === false, '4b2 explicit meta：主仓 git commit 维持放行（cwd 在注册 worktree 内全放行既有行为）')
+  }
+
   // ── 汇总 ──
   console.log(`\n${'='.repeat(60)}`)
   console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)

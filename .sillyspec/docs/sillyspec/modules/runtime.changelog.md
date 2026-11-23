@@ -100,3 +100,5 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed
 - 2026-11-21-shadow-dispatch-form-respect | 免评审形态收口不再自动派影子审查
 - 2026-11-22-recommend-anchor-recorrect | 提问推荐带依据锚与中途纠正协议
+- 2026-11-22-include-param-primitives | prompt include 参数化与首批纪律原语抽取
+- 2026-11-23-worktree-fallback-consent | 主仓 worktree 降级改显式同意

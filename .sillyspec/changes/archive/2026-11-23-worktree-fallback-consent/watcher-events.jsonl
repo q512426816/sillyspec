@@ -1,0 +1,22 @@
+{"ts":1795401444980,"kind":"commit","stage":null,"detail":"b4552773","provisional":true}
+{"ts":1795401634564,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795401671318,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795401757447,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795402553918,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1795402554057,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795402554057,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1795402557827,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1795402561053,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795402561053,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1795402567834,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1795402567978,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795402567978,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1795402571171,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1795402571794,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795402571794,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1795402588555,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1795402605267,"kind":"commit","stage":null,"detail":"70fd589a","provisional":true}
+{"ts":1795402615339,"kind":"commit","stage":null,"detail":"1855b5ac","provisional":true}
+{"ts":1795402671917,"kind":"gate-run","stage":"verify","detail":"门实测 failed（11.4s） · 20261123025751","provisional":true}
+{"ts":1795402777412,"kind":"commit","stage":null,"detail":"a259eace","provisional":true}
+{"ts":1795402808290,"kind":"gate-run","stage":"verify","detail":"门实测 passed（10.2s） · 20261123030007","provisional":true}

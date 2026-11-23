@@ -756,6 +756,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
     '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
+    '--allow-in-place', // execute 显式同意 worktree add 失败时降级 in-place（2026-11-23-worktree-fallback-consent：降级 checkout 专用分支后主仓直写；缺省 fail-closed 报错）
     '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
     '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
     '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
@@ -1870,7 +1871,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), sameSession: flags.includes('--same-session') })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), allowInPlace: stageName === 'execute' && flags.includes('--allow-in-place'), sameSession: flags.includes('--same-session') })
 }
 
 /**

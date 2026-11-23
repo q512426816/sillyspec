@@ -44,3 +44,5 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-11-04 | 2026-11-04-question-typing-subagent-guard | 提问分型与子代理豁免两处提示词修正 |
 | 2026-11-08 | 2026-11-08-flow-askuser-confirm | 轻量变更确认环节改用工具问询 |
 | 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |
+| 2026-11-23 | 2026-11-22-include-param-primitives | prompt include 参数化与首批纪律原语抽取 |
+| 2026-11-23 | 2026-11-23-worktree-fallback-consent | 主仓 worktree 降级改显式同意 |

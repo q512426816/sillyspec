@@ -1,0 +1,569 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 2751a7c8..17c8f363 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -207,6 +207,7 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
+         { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
+         { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
++        { path: 'worktree.fallback', type: 'enum', values: ['block', 'allow'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create worktree add 失败分支 (src/worktree.js)'], desc: '【2026-11-23-worktree-fallback-consent】git worktree add 失败时的降级同意制：block（缺省）= fail-closed 报错（原始 stderr + 三条处置指引），execute 不启动；allow = 显式同意降级 in-place——降级会 checkout 专用分支 sillyspec/<change> 后在主仓工作区直写，meta 记 explicit/fallbackReason 留痕，worktree-guard 对显式 meta 正常授权。与 policy 段平级独立（policy 缺席不影响本键读取）。一次性同意用 run execute --allow-in-place（flag > 本键）。历史依据：2026-07-15 execute-in-place-windows-pitfalls 坑1 实锤静默降级直写主分支（全历史唯一降级事件）。', example: 'allow' },
+       ],
+     },
+     {
+@@ -526,6 +527,9 @@ dispatch:
+ #     # adopt_branch: true    # 分支已存在冲突自动收编（等效常备 --adopt-branch）
+ #     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
+ #     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
++#   # fallback: block         # worktree add 失败降级同意制：block=fail-closed 报错（缺省）|
++#                             #   allow=同意降级 in-place（checkout 专用分支后主仓直写；一次性用
++#                             #   run execute --allow-in-place）
+ #   crossPlacement:          # 跨仓 worktree 按仓落位（坑 cross-wt-toolchain-split：主仓 WSL + 跨仓
+ #     # urgent: /mnt/e/wt    #   Windows 盘时工具链够不着默认落位——配到跨仓工具链可达的目录）
+ #                            #   ↑推荐改用 repos 条目内联（一处声明注册+落位）：
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index fc7f1a1f..4860c54c 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -379,7 +379,14 @@ function isInsideRegisteredWorktree(filePath, cwd) {
+ 
+   for (const changeName of changeNames) {
+     const meta = readWorktreeMeta(effectiveCwd, changeName)
+-    if (meta?.worktreePath && isPathInside(absPath, meta.worktreePath)) return true
++    if (!meta?.worktreePath || !isPathInside(absPath, meta.worktreePath)) continue
++    // 遗留自动降级 meta 不授权（2026-11-23-worktree-fallback-consent / FR-03）：in-place meta 的
++    // worktreePath 即主仓根，照旧放行等于把整个主仓当隔离区——execute 期源码写入与 git commit
++    // 全放行零拦截（2026-07-15 execute-in-place-windows-pitfalls 事故的放大器）。降级通道已改
++    // 显式同意制：新 meta 带 explicit:true 维持授权（wt-commit 等照常）；无标记的历史遗留 meta
++    // 一律不授权，回到阶段门禁——排雷存量直至 cleanup 清除。
++    if (meta.mode === 'in-place-fallback' && meta.explicit !== true) continue
++    return true
+   }
+ 
+   return false
+diff --git a/src/run/command.js b/src/run/command.js
+index d31072b9..fa81e020 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -756,6 +756,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--reopen', '--from-step', '--mode',
+     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+     '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
++    '--allow-in-place', // execute 显式同意 worktree add 失败时降级 in-place（2026-11-23-worktree-fallback-consent：降级 checkout 专用分支后主仓直写；缺省 fail-closed 报错）
+     '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
+     '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
+     '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
+@@ -1870,7 +1871,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   }
+ 
+   // 默认：输出当前步骤
+-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), sameSession: flags.includes('--same-session') })
++  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), allowInPlace: stageName === 'execute' && flags.includes('--allow-in-place'), sameSession: flags.includes('--same-session') })
+ }
+ 
+ /**
+diff --git a/src/run/stage.js b/src/run/stage.js
+index c7a1d431..c420575a 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -105,7 +105,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+     // 早建的 worktree / native 复用形态与 execute 首建走同一幂等入口，原 getMeta 短路语义收敛于此。
+     let wtResult
+     try {
+-      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
++      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch), allowInPlace: !!(quickOpts && quickOpts.allowInPlace) })
+     } catch (e) {
+       console.error(`❌ worktree 创建失败: ${e.message}`)
+       // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
+diff --git a/src/worktree-policy.js b/src/worktree-policy.js
+index af7cc108..aaebaa03 100644
+--- a/src/worktree-policy.js
++++ b/src/worktree-policy.js
+@@ -11,6 +11,11 @@
+  *                          → guard 相交拦截的无人值守处置（force=放行留痕 / skip=软跳过）
+  *   stash_dirty:   true   → 主仓脏树时自动 stash（等效常备 --stash-dirty）
+  *
++ * 另读 worktree 段平级键 `worktree.fallback`（2026-11-23-worktree-fallback-consent）：
++ *   fallback: allow → git worktree add 失败时显式同意降级 in-place（等效常备 --allow-in-place，
++ *   降级会 checkout 专用分支后主仓直写）；缺省/非法值 block = fail-closed 报错不降级
++ *   （全历史唯一实锤事故 2026-07-15 证明静默降级是主分支污染风险，通道改同意制）。
++ *
+  * 优先级铁律：显式 flag > policy > fail-closed 缺省。policy 只消「重复选择」，不开新权限面
+  * ——force/skip 经 policy 触发时同样落 overlapForced/overlapSkipped 留痕（审计可见）。
+  */
+@@ -19,22 +24,26 @@ import { join } from 'path'
+ import jsYaml from 'js-yaml'
+ 
+ /**
+- * 读 worktree.policy 段。
++ * 读 worktree.policy 段 + 平级键 worktree.fallback。
+  * @param {string} repoRoot - 主仓根（local.yaml 在 <repoRoot>/.sillyspec/local.yaml）
+- * @returns {{ adoptBranch: boolean, applyOverlap: 'manual'|'force'|'skip', stashDirty: boolean }}
+- *   文件缺/解析失败/段缺 → 全缺省（adoptBranch=false, applyOverlap='manual', stashDirty=false）。
++ * @returns {{ adoptBranch: boolean, applyOverlap: 'manual'|'force'|'skip', stashDirty: boolean, fallback: 'allow'|'block' }}
++ *   文件缺/解析失败/段缺 → 全缺省（adoptBranch=false, applyOverlap='manual', stashDirty=false,
++ *   fallback='block'）。两键独立：policy 段缺席不影响 worktree.fallback 读取，反之亦然。
+  */
+ export function readWorktreePolicy(repoRoot) {
+-  const fallback = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
++  const fallback = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false, fallback: 'block' }
+   try {
+     const text = readFileSync(join(repoRoot, '.sillyspec', 'local.yaml'), 'utf8')
+     const doc = jsYaml.load(text) || {}
+-    const policy = doc && doc.worktree && doc.worktree.policy
+-    if (!policy || typeof policy !== 'object') return fallback
++    const wt = doc && doc.worktree
++    const fallbackKey = wt && wt.fallback === 'allow' ? 'allow' : 'block'
++    const policy = wt && wt.policy
++    if (!policy || typeof policy !== 'object') return { ...fallback, fallback: fallbackKey }
+     return {
+       adoptBranch: policy.adopt_branch === true,
+       applyOverlap: policy.apply_overlap === 'force' || policy.apply_overlap === 'skip' ? policy.apply_overlap : 'manual',
+       stashDirty: policy.stash_dirty === true,
++      fallback: fallbackKey,
+     }
+   } catch {
+     return fallback
+diff --git a/src/worktree.js b/src/worktree.js
+index acea301e..5bdba4f6 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -496,6 +496,33 @@ function validateChangeName(changeName) {
+   return trimmed;
+ }
+ 
++/**
++ * in-place 降级的主仓分支切换（2026-11-23-worktree-fallback-consent / FR-02）。
++ *
++ * 坑 execute-in-place-windows-pitfalls 坑1（2026-07-15 实锤）：旧降级只落 meta 不切分支，
++ * 主仓停留在用户当前分支（常为 main/master）直写——本函数把「切到专用分支」变成降级的
++ * 机械前置步。仅在 baseHash === 主仓当前 HEAD 时执行（checkout -b 于 HEAD 是内容 no-op，
++ * 工作区 dirty 文件与暂存面原样保留）；--base 显式指定且 ≠ HEAD 时跳过（切走会改变工作区
++ * 内容语义，交人判断，warn 留痕）。导出供测试直测（同 inferChangeFromWorktreeCwd 先例）。
++ *
++ * @param {string} cwd 主仓根
++ * @param {string} branch 专用分支名（sillyspec/<change>）
++ * @param {string} baseHash create 解析出的基线 commit
++ * @returns {{ skipped: boolean, created?: boolean }} skipped=true 表示 baseHash 不匹配已跳过
++ * @throws {Error} checkout 失败（分支名非法/锁冲突/工作区冲突）——调用方 fail-closed 不落 meta
++ */
++export function switchMainToWorktreeBranch(cwd, branch, baseHash) {
++  const head = gitQuiet(cwd, ['rev-parse', 'HEAD']);
++  if (!head || head !== baseHash) return { skipped: true };
++  const branchExists = !!gitQuiet(cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]);
++  if (branchExists) {
++    git(cwd, ['checkout', branch], { timeout: 30000 });
++    return { skipped: false, created: false };
++  }
++  git(cwd, ['checkout', '-b', branch, baseHash], { timeout: 30000 });
++  return { skipped: false, created: true };
++}
++
+ /**
+  * 检测 git worktree 是否可用
+  * @param {string} cwd
+@@ -714,11 +741,13 @@ export class WorktreeManager {
+   /**
+    * 创建 worktree
+    * @param {string} changeName - 变更名
+-   * @param {{ base?: string }} opts - base: 基础分支，默认当前 HEAD
++   * @param {{ base?: string, adoptBranch?: boolean, allowInPlace?: boolean }} opts - base: 基础分支，默认当前 HEAD；
++   *   allowInPlace: worktree add 失败时显式同意降级 in-place（2026-11-23-worktree-fallback-consent；
++   *   与 local.yaml worktree.fallback: allow 同效，flag > policy > fail-closed 缺省）
+    * @returns {{ branch: string, worktreePath: string, baseHash: string }}
+-   * @throws {Error} worktree 已存在、git 不可用、changeName 为空
++   * @throws {Error} worktree 已存在、git 不可用、changeName 为空、worktree add 失败且未显式同意降级
+    */
+-  create(changeName, { base, adoptBranch = false } = {}) {
++  create(changeName, { base, adoptBranch = false, allowInPlace = false } = {}) {
+     const name = validateChangeName(changeName);
+     const worktreePath = this.getWorktreePath(name);
+     const branch = BRANCH_PREFIX + name;
+@@ -879,15 +908,52 @@ export class WorktreeManager {
+       if (existsSync(worktreePath) || (!isAdoptPath && gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]))) {
+         throw new Error(`worktree already exists: ${name}（并发创建，另一进程已抢先建成，本进程不降级 in-place）. Run cleanup first.`);
+       }
+-      // sandbox/permission fallback: 降级为 in-place + baseline protection
+-      console.log(`⚠️  git worktree add 失败（可能是沙箱权限限制），降级为 in-place 模式 + baseline protection`);
+-      console.log(`   原因: ${e.stderr || e.message}`);
++      // 降级同意门（2026-11-23-worktree-fallback-consent / FR-01）：fail-closed 缺省——worktree
++      // add 失败不再静默降级 in-place。历史实证（2026-07-15 execute-in-place-windows-pitfalls
++      // 坑1，全历史唯一实锤）：降级后主仓停在用户当前分支直写 + worktree-guard 对 in-place meta
++      // 整树放行 = 主分支零拦截污染。同意出口：opts.allowInPlace（run execute --allow-in-place）
++      // 或 local.yaml worktree.fallback: allow（readWorktreePolicy）——flag > policy > 缺省。
++      // 归因不再硬编码猜测（旧文案「可能是沙箱权限限制」从未被任何真实事件证实），一律引用真实 stderr。
++      const fallbackPolicy = readWorktreePolicy(this.cwd);
++      const consent = allowInPlace === true || fallbackPolicy.fallback === 'allow';
++      if (!consent) {
++        throw new Error(
++          `git worktree add 失败（不降级 in-place——主仓直写需显式同意）: ${e.stderr || e.message}\n` +
++          `处置（按实际情况三选一后重跑）：\n` +
++          `  1. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）\n` +
++          `  2. 同名遗留分支：确认作废后 git branch -D ${branch}；用户有意在该分支上做时用 --adopt-branch 收编\n` +
++          `  3. 确认接受主仓直写风险后显式同意降级：sillyspec run execute --change ${name} --allow-in-place` +
++          `（降级将 checkout 专用分支 ${branch} 后在主仓工作区直写），或 local.yaml 配 worktree.fallback: allow 常备同意`
++        );
++      }
++      // 显式同意降级（FR-02）：先 checkout 专用分支、成功后才落 meta——meta 是 guard 的授权
++      // 凭证，凭证不得先于隔离态成立（meta 先落而 checkout 失败会留下「guard 全放行 + 用户
++      // 分支被占」的坑1 最坏组合）。checkout 失败 fail-closed 抛错、meta 未落盘。
++      console.warn(`⚠️  git worktree add 失败，已按显式同意降级为 in-place 模式: ${e.stderr || e.message}`);
++      let switchResult;
++      try {
++        switchResult = switchMainToWorktreeBranch(this.cwd, branch, baseHash);
++      } catch (switchErr) {
++        throw new Error(
++          `in-place 降级 checkout 专用分支 ${branch} 失败（fail-closed，meta 未落盘）: ` +
++          `${String((switchErr && (switchErr.stderr || switchErr.message)) || switchErr).split('\n')[0].trim()}`
++        );
++      }
++      if (switchResult.skipped) {
++        console.warn(`⚠️  baseHash ≠ 主仓当前 HEAD（--base 显式指定），跳过自动 checkout——主仓停留在当前分支，注意交付落点与回滚面`);
++      } else if (switchResult.created) {
++        console.log(`📌 主仓已 checkout 新建专用分支 ${branch}（in-place 显式降级；坑 execute-in-place-windows-pitfalls 坑1：不再停在用户当前分支直写）`);
++      } else {
++        console.log(`📌 主仓已 checkout 既有专用分支 ${branch}（in-place 显式降级）`);
++      }
+       return this._createInPlaceMeta(name, {
+         worktreePath: this.cwd,
+         branch,
+         baseBranch,
+         baseHash,
+         mode: 'in-place-fallback',
++        explicit: true,
++        fallbackReason: String(e.stderr || e.message).split('\n')[0].trim(),
+       });
+     }
+ 
+@@ -1028,9 +1094,12 @@ export class WorktreeManager {
+   /**
+    * 创建 in-place 模式的 meta.json（降级路径）
+    * 不创建 git worktree，直接在当前目录记录 baseline 并写入 meta
++   * @param {object} [extra] 显式降级留痕字段（2026-11-23-worktree-fallback-consent / FR-02）：
++   *   explicit=true（显式同意标记——worktree-guard 以此区分授权降级与遗留自动降级 meta）与
++   *   fallbackReason（worktree add 的原始错误首行）。旧调用不传则不落字段（meta 形态同旧）。
+    * @private
+    */
+-  _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode } = {}) {
++  _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode, explicit, fallbackReason } = {}) {
+     // 幂等守卫：meta 已存在时不重新创建（避免 overlay baseline 和已有改动冲突）
+     const existingMeta = this.getMeta(name)
+     if (existingMeta) {
+@@ -1065,6 +1134,8 @@ export class WorktreeManager {
+         createdAt: new Date().toISOString(),
+         worktreePath,
+         mode: mode || 'in-place-fallback',
++        ...(explicit === true ? { explicit: true } : {}),
++        ...(fallbackReason ? { fallbackReason } : {}),
+         baselineFiles: [],
+         baselineCommit: null,
+         baselineHash: null,
+@@ -1102,6 +1173,8 @@ export class WorktreeManager {
+       createdAt: new Date().toISOString(),
+       worktreePath,
+       mode: mode || 'in-place-fallback',
++      ...(explicit === true ? { explicit: true } : {}),
++      ...(fallbackReason ? { fallbackReason } : {}),
+       baselineFiles,
+       baselineCommit,
+       baselineHash,
+diff --git a/test/config-schema.test.mjs b/test/config-schema.test.mjs
+index 40a2a7e0..e45bb8ce 100644
+--- a/test/config-schema.test.mjs
++++ b/test/config-schema.test.mjs
+@@ -89,6 +89,23 @@ console.log('\n--- 1b. commands.metrics / metrics_timeout_sec 注册 ---')
+   assert(ex.includes('metrics_timeout_sec:'), 'renderExample 输出含 metrics_timeout_sec 键行')
+ }
+ 
++// ── 1b2. worktree.fallback 注册（2026-11-23-worktree-fallback-consent FR-04）──
++console.log('\n--- 1b2. worktree.fallback 注册 ---')
++{
++  const keys = flatKeys()
++  const fb = keys.find((k) => k.path === 'worktree.fallback')
++  assert(Boolean(fb), 'worktree.fallback 已注册')
++  if (fb) {
++    assert(fb.type === 'enum' && fb.status === 'live' && fb.optional === true, 'worktree.fallback 形态：enum/optional/live')
++    assert(Array.isArray(fb.values) && fb.values.includes('block') && fb.values.includes('allow'), '枚举值 block|allow')
++    assert(fb.readers.some((r) => r.includes('readWorktreePolicy')), 'readers 指向 readWorktreePolicy')
++    assert(fb.desc.includes('fail-closed'), 'desc 含缺省 fail-closed 语义')
++    assert(fb.desc.includes('--allow-in-place'), 'desc 含一次性同意出口指引')
++  }
++  const ex2 = renderExample()
++  assert(ex2.includes('fallback:'), 'renderExample 输出含 fallback 键行')
++}
++
+ // ── 1c. metrics_routes 路由键注册（2026-10-29-metrics-routes FR-03）──
+ console.log('\n--- 1c. metrics_routes.<name>.* 注册 ---')
+ {
+diff --git a/test/worktree-fallback-consent.test.mjs b/test/worktree-fallback-consent.test.mjs
+new file mode 100644
+index 00000000..29812317
+--- /dev/null
++++ b/test/worktree-fallback-consent.test.mjs
+@@ -0,0 +1,156 @@
++/**
++ * worktree 降级同意制测试（2026-11-23-worktree-fallback-consent）
++ *
++ * 覆盖：
++ * 1. FR-01 fail-closed：git worktree add 失败默认抛错不降级（原始 stderr + 处置指引），
++ *    无 meta 落盘、主仓分支不动。
++ * 2. FR-02 同意路由：local.yaml worktree.fallback: allow / opts.allowInPlace 均路由到降级；
++ *    降级 checkout 失败 fail-closed（meta 未落盘——凭证不先于隔离态成立）。
++ * 3. FR-02 switchMainToWorktreeBranch 直测：新建分支 checkout -b / 既有分支 checkout /
++ *    baseHash≠HEAD 跳过；工作区 dirty 文件保留。
++ * 4. FR-02 meta 留痕：explicit/fallbackReason 落盘；旧调用形态（不传新字段）meta 零漂移。
++ *
++ * 确定性失败手法：changeName 以 `.lock` 结尾——git 拒绝以 .lock 结尾的分支名（refs 命名保留
++ * 段），`git worktree add -b sillyspec/<名>.lock` 必败；validateChangeName 放行该字符。
++ * 跨平台（Windows/Linux/macOS）无需权限/沙箱技巧。若未来 validateChangeName 收紧字符集，
++ * 改用 `~` 类 git 非法字符即可（场景同构）。
++ *
++ * 设计依据：.sillyspec/changes/2026-11-23-worktree-fallback-consent/design.md。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { spawnSync } from 'node:child_process'
++import { WorktreeManager, switchMainToWorktreeBranch } from '../src/worktree.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows 偶发占用 */ } } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++function mkRepo(prefix) {
++  const root = mk(prefix)
++  git(root, ['init', '-q'])
++  git(root, ['config', 'user.name', 't'])
++  git(root, ['config', 'user.email', 't@t'])
++  // .sillyspec/ 忽略是 create 前置门（checkWorktreeDirIgnored：未忽略即阻断）
++  writeFileSync(join(root, '.gitignore'), '.sillyspec/\n')
++  git(root, ['add', '.gitignore'])
++  git(root, ['commit', '-q', '-m', 'init'])
++  return root
++}
++
++const currentBranch = (root) => git(root, ['symbolic-ref', '--short', 'HEAD'])
++
++// ── 1. FR-01：fail-closed 缺省 ──
++test('FR-01 add 失败默认抛错不降级：原始指引在场、无 meta、主仓分支不动', () => {
++  const root = mkRepo('wfc-block-')
++  const wm = new WorktreeManager({ cwd: root })
++  const before = currentBranch(root)
++  assert.throws(
++    () => wm.create('t1-bad.lock'),
++    (e) => {
++      assert.match(e.message, /不降级 in-place——主仓直写需显式同意/, '缺省拒绝语义在场')
++      assert.match(e.message, /worktree doctor --fix/, '处置指引 1：doctor')
++      assert.match(e.message, /git branch -D sillyspec\/t1-bad\.lock/, '处置指引 2：遗留分支')
++      assert.match(e.message, /--allow-in-place/, '处置指引 3：显式同意出口')
++      assert.match(e.message, /worktree\.fallback: allow/, '常备同意配置指引')
++      assert.ok(!/可能是沙箱权限限制/.test(e.message), '不再硬编码归因猜测')
++      return true
++    },
++    'worktree add 失败（.lock 分支名非法）默认 fail-closed'
++  )
++  assert.equal(existsSync(join(wm.worktreeBase, 't1-bad.lock', 'meta.json')), false, '无 in-place meta 落盘')
++  assert.equal(currentBranch(root), before, '主仓分支不动（不切专用分支也不占用户分支）')
++})
++
++// ── 2. FR-02：同意路由（policy / flag 双通道）+ checkout 失败 fail-closed ──
++test('FR-02 policy allow 路由到降级：checkout 失败 fail-closed、meta 未落盘', () => {
++  const root = mkRepo('wfc-allow-')
++  mkdirSync(join(root, '.sillyspec'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'local.yaml'), 'worktree:\n  fallback: allow\n')
++  const wm = new WorktreeManager({ cwd: root })
++  assert.throws(
++    () => wm.create('t2-bad.lock'),
++    (e) => {
++      assert.match(e.message, /in-place 降级 checkout 专用分支 sillyspec\/t2-bad\.lock 失败/, 'checkout 失败语义')
++      assert.match(e.message, /meta 未落盘/, 'fail-closed 留痕')
++      assert.ok(!/不降级 in-place——主仓直写需显式同意/.test(e.message), '已过同意门（非门口拒绝）')
++      return true
++    },
++    '同意降级后 checkout 失败（.lock 非法分支名）fail-closed'
++  )
++  assert.equal(existsSync(join(wm.worktreeBase, 't2-bad.lock', 'meta.json')), false, '授权 meta 未落盘（凭证不先于隔离态成立）')
++})
++
++test('FR-02 opts.allowInPlace 显式 flag 同效路由（无 local.yaml 配置）', () => {
++  const root = mkRepo('wfc-flag-')
++  const wm = new WorktreeManager({ cwd: root })
++  assert.throws(
++    () => wm.create('t3-bad.lock', { allowInPlace: true }),
++    (e) => {
++      assert.match(e.message, /in-place 降级 checkout 专用分支/, 'flag 同意路由到降级 checkout')
++      assert.ok(!/不降级 in-place——主仓直写需显式同意/.test(e.message), 'flag 已过同意门')
++      return true
++    },
++    'opts.allowInPlace 与 policy 同效'
++  )
++  assert.equal(existsSync(join(wm.worktreeBase, 't3-bad.lock', 'meta.json')), false, 'checkout 失败同样不落 meta')
++})
++
++// ── 3. FR-02：switchMainToWorktreeBranch 直测（幸福路径）──
++test('FR-02 switchMainToWorktreeBranch：新建/既有分支切换 + baseHash 不等跳过 + dirty 保留', () => {
++  const root = mkRepo('wfc-sw-')
++  const head = git(root, ['rev-parse', 'HEAD'])
++  writeFileSync(join(root, 'dirty.txt'), 'wip')
++
++  // a) 分支不存在 + HEAD==baseHash → checkout -b；dirty 文件保留
++  const r1 = switchMainToWorktreeBranch(root, 'sillyspec/sw-a', head)
++  assert.deepEqual(r1, { skipped: false, created: true }, '新建专用分支')
++  assert.equal(currentBranch(root), 'sillyspec/sw-a', '主仓已切到专用分支')
++  assert.equal(readFileSync(join(root, 'dirty.txt'), 'utf8'), 'wip', '工作区 dirty 文件保留')
++
++  // b) 分支已存在（adopt 场景）→ checkout 既有分支
++  git(root, ['checkout', '-q', '-b', 'other'])
++  const r2 = switchMainToWorktreeBranch(root, 'sillyspec/sw-a', head)
++  assert.deepEqual(r2, { skipped: false, created: false }, '既有专用分支 checkout')
++  assert.equal(currentBranch(root), 'sillyspec/sw-a', '切回既有专用分支')
++
++  // c) baseHash ≠ 当前 HEAD（--base 显式指定形态）→ 跳过不切
++  writeFileSync(join(root, 'f2.txt'), 'x')
++  git(root, ['add', 'f2.txt'])
++  git(root, ['commit', '-q', '-m', 'second'])
++  const r3 = switchMainToWorktreeBranch(root, 'sillyspec/sw-b', head)
++  assert.deepEqual(r3, { skipped: true }, 'baseHash 不匹配跳过')
++  assert.equal(currentBranch(root), 'sillyspec/sw-a', '分支不动（交人判断）')
++})
++
++// ── 4. FR-02：meta 留痕字段 ──
++test('FR-02 meta 留痕：explicit/fallbackReason 落盘；旧调用形态零漂移', () => {
++  const root = mkRepo('wfc-meta-')
++  const wm = new WorktreeManager({ cwd: root })
++  const head = git(root, ['rev-parse', 'HEAD'])
++  wm._createInPlaceMeta('t5-x', {
++    worktreePath: root, branch: 'sillyspec/t5-x', baseBranch: 'master', baseHash: head,
++    mode: 'in-place-fallback', explicit: true, fallbackReason: 'fatal: boom',
++  })
++  const meta = JSON.parse(readFileSync(join(wm.worktreeBase, 't5-x', 'meta.json'), 'utf8'))
++  assert.equal(meta.mode, 'in-place-fallback')
++  assert.equal(meta.explicit, true, '显式同意标记落盘')
++  assert.equal(meta.fallbackReason, 'fatal: boom', '原始错误留痕')
++
++  // 旧形态（不传新字段）：meta 不出现新键（既有消费方零漂移）
++  wm._createInPlaceMeta('t5-y', {
++    worktreePath: root, branch: 'sillyspec/t5-y', baseHash: head, mode: 'in-place-fallback',
++  })
++  const metaY = JSON.parse(readFileSync(join(wm.worktreeBase, 't5-y', 'meta.json'), 'utf8'))
++  assert.equal('explicit' in metaY, false, '旧形态无 explicit 键')
++  assert.equal('fallbackReason' in metaY, false, '旧形态无 fallbackReason 键')
++})
+diff --git a/test/worktree-guard-execute-guard.test.mjs b/test/worktree-guard-execute-guard.test.mjs
+index cce56a48..f512d8b2 100644
+--- a/test/worktree-guard-execute-guard.test.mjs
++++ b/test/worktree-guard-execute-guard.test.mjs
+@@ -168,6 +168,40 @@ try {
+     assert(blkCorrupt.blocked === true, '3c db 损坏时源码写拦截（fail-closed，不误放行）')
+   }
+ 
++  // ── 4. 遗留 in-place meta 排雷（2026-11-23-worktree-fallback-consent FR-03）──
++  // in-place meta 的 worktreePath 即主仓根：旧判定照旧放行 = execute 期主仓整树写入与
++  // git commit 全放行（2026-07-15 事故放大器）。现仅 explicit:true（显式同意降级）授权，
++  // 无标记的历史遗留 meta 回到阶段门禁。
++  console.log('\n[4] 遗留 in-place meta（无 explicit）不授权；explicit:true 维持授权')
++  {
++    const mkInPlaceMeta = (cwd, change, extra) => {
++      const metaDir = join(cwd, '.sillyspec', '.runtime', 'worktrees', change)
++      mkdirSync(metaDir, { recursive: true })
++      writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({
++        changeName: change, branch: 'sillyspec/' + change, worktreePath: cwd, mode: 'in-place-fallback', ...extra,
++      }))
++    }
++
++    // 4a. 遗留 meta（无 explicit）：主仓源码写拦截（回到 execute 期主工作区默认拦截路径）
++    const cwdA = mkProject('wg-exec-iplegacy')
++    seedDb(cwdA, { name: 'c-iplegacy', stage: 'execute', status: 'active', noWorktree: 0 })
++    mkInPlaceMeta(cwdA, 'c-iplegacy', {})
++    const blkLegacy = shouldBlockWrite(join(cwdA, 'src', 'foo.js'), cwdA)
++    assert(blkLegacy.blocked === true, '4a 遗留 in-place meta：主仓源码写拦截（不再整树放行）')
++    // 4a2. 同形态下主仓 git commit 走危险黑名单（此前被「整仓即 worktree」全放行）
++    const bashLegacy = shouldBlock({ tool: 'Bash', command: 'git commit -m x', cwd: cwdA }, { cwd: cwdA })
++    assert(bashLegacy.blocked === true, '4a2 遗留 in-place meta：主仓 git commit 拦截（危险黑名单恢复生效）')
++
++    // 4b. 显式同意 meta（explicit:true）：维持既有授权（in-place 模式 wt-commit 照常可用）
++    const cwdB = mkProject('wg-exec-ipexplicit')
++    seedDb(cwdB, { name: 'c-ipexplicit', stage: 'execute', status: 'active', noWorktree: 0 })
++    mkInPlaceMeta(cwdB, 'c-ipexplicit', { explicit: true, fallbackReason: 'fatal: boom' })
++    const okExplicit = shouldBlockWrite(join(cwdB, 'src', 'foo.js'), cwdB)
++    assert(okExplicit.blocked === false, '4b explicit meta：主仓源码写维持放行（显式同意降级语义）')
++    const bashExplicit = shouldBlock({ tool: 'Bash', command: 'git commit -m x', cwd: cwdB }, { cwd: cwdB })
++    assert(bashExplicit.blocked === false, '4b2 explicit meta：主仓 git commit 维持放行（cwd 在注册 worktree 内全放行既有行为）')
++  }
++
+   // ── 汇总 ──
+   console.log(`\n${'='.repeat(60)}`)
+   console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
+diff --git a/test/worktree-policy.test.mjs b/test/worktree-policy.test.mjs
+index 0cb37954..7f3ca8c2 100644
+--- a/test/worktree-policy.test.mjs
++++ b/test/worktree-policy.test.mjs
+@@ -28,9 +28,10 @@ const writeYaml = (root, text) => {
+   writeFileSync(join(root, '.sillyspec', 'local.yaml'), text, 'utf8')
+ }
+ 
+-console.log('\n[worktree-policy] 选择记忆读取：三键 + fail-closed 缺省')
++console.log('\n[worktree-policy] 选择记忆读取：三键 + fallback 键 + fail-closed 缺省')
+ 
+-const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
++// fallback 键随 2026-11-23-worktree-fallback-consent 加入返回值（worktree.fallback，缺省 block）
++const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false, fallback: 'block' }
+ 
+ // Case 1: 无 local.yaml → 全缺省
+ {
+@@ -89,10 +90,46 @@ const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false
+   const root = newDir('wp-scalar-')
+   writeYaml(root, 'worktree:\n  policy: true\n')
+   const p = readWorktreePolicy(root)
+-  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'policy 段标量 → 全缺省')
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'policy 段标量 → 全缺省（fallback 也 block）')
++}
++
++// ── worktree.fallback 键（2026-11-23-worktree-fallback-consent FR-02）──
++// 与 policy 段平级独立：policy 缺席不影响本键读取，反之亦然。
++
++// Case 8: fallback: allow → allow（policy 段缺席零影响）
++{
++  const root = newDir('wp-fb-allow-')
++  writeYaml(root, 'worktree:\n  fallback: allow\n')
++  const p = readWorktreePolicy(root)
++  assert(p.fallback === 'allow', 'worktree.fallback: allow → allow')
++  assert(p.adoptBranch === false && p.applyOverlap === 'manual' && p.stashDirty === false, 'policy 段缺席 → 其余键缺省')
++}
++
++// Case 9: fallback 非法值 → block（fail-closed，不透传未知值）
++{
++  const root = newDir('wp-fb-bad-')
++  writeYaml(root, 'worktree:\n  fallback: sometimes\n')
++  const p = readWorktreePolicy(root)
++  assert(p.fallback === 'block', 'fallback 非法值 → block（fail-closed）')
++}
++
++// Case 10: policy 段齐配 + fallback 平级共存 → 各键独立读取
++{
++  const root = newDir('wp-fb-mix-')
++  writeYaml(root, 'worktree:\n  fallback: allow\n  policy:\n    adopt_branch: true\n    apply_overlap: force\n    stash_dirty: true\n')
++  const p = readWorktreePolicy(root)
++  assert(p.fallback === 'allow' && p.adoptBranch === true && p.applyOverlap === 'force' && p.stashDirty === true, '平级共存各键独立读取')
++}
++
++// Case 11: worktree 段整体缺席 → 全缺省（fallback=block 含在 DEFAULTS 内）
++{
++  const root = newDir('wp-fb-none-')
++  writeYaml(root, 'commands:\n  test: "npm test"\n')
++  const p = readWorktreePolicy(root)
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'worktree 段缺 → 全缺省（fallback=block）')
+ }
+ 
+ console.log(`\n${'='.repeat(50)}`)
+-console.log(`✅ 通过: ${7 - failures}  ❌ 失败: ${failures}`)
++console.log(`✅ 通过: ${11 - failures}  ❌ 失败: ${failures}`)
+ for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+ if (failures > 0) throw new Error(`${failures} test(s) failed`)

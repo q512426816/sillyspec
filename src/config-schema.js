@@ -207,6 +207,7 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
         { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
         { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
+        { path: 'worktree.fallback', type: 'enum', values: ['block', 'allow'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create worktree add 失败分支 (src/worktree.js)'], desc: '【2026-11-23-worktree-fallback-consent】git worktree add 失败时的降级同意制：block（缺省）= fail-closed 报错（原始 stderr + 三条处置指引），execute 不启动；allow = 显式同意降级 in-place——降级会 checkout 专用分支 sillyspec/<change> 后在主仓工作区直写，meta 记 explicit/fallbackReason 留痕，worktree-guard 对显式 meta 正常授权。与 policy 段平级独立（policy 缺席不影响本键读取）。一次性同意用 run execute --allow-in-place（flag > 本键）。历史依据：2026-07-15 execute-in-place-windows-pitfalls 坑1 实锤静默降级直写主分支（全历史唯一降级事件）。', example: 'allow' },
       ],
     },
     {
@@ -526,6 +527,9 @@ dispatch:
 #     # adopt_branch: true    # 分支已存在冲突自动收编（等效常备 --adopt-branch）
 #     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
 #     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
+#   # fallback: block         # worktree add 失败降级同意制：block=fail-closed 报错（缺省）|
+#                             #   allow=同意降级 in-place（checkout 专用分支后主仓直写；一次性用
+#                             #   run execute --allow-in-place）
 #   crossPlacement:          # 跨仓 worktree 按仓落位（坑 cross-wt-toolchain-split：主仓 WSL + 跨仓
 #     # urgent: /mnt/e/wt    #   Windows 盘时工具链够不着默认落位——配到跨仓工具链可达的目录）
 #                            #   ↑推荐改用 repos 条目内联（一处声明注册+落位）：

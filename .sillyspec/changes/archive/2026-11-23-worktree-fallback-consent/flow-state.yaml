@@ -1,0 +1,53 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  主仓 worktree 降级改显式同意
+
+
+  动机与背景：2026-07-15 实锤降级事故（Windows 长路径 Filename too long，multi-agent-platform
+  docs/sillyspec/finished/execute-in-place-windows-pitfalls.md 坑1）：git worktree add 失败后静默降级 in-place，且降级后主仓未切专用分支停在 main
+  直写，worktree-guard 又对 in-place meta（worktreePath=主仓根）全放行——主仓整树写入与 git commit 零拦截。全历史取证（腾讯云 postgres agent_run_logs+42
+  工作区、阿里云 15 工作区、zcode sqlite 882 任务、本地归档）四个月仅此一例，诱因已由 core.longpaths 缓解——fail-open 通道零价值纯风险。跨仓已是
+  fail-closed（worktree-cross.js「隔离建不起来就不该开工」），主仓对齐。用户原话（2026-11-23）：「不应该降级」。
+
+
+  成功标准：
+
+  - git worktree add 失败时 wm.create 不再静默降级：默认 throw，错误信息含原始 git stderr 与处置建议（worktree doctor / 清残留分支 / --allow-in-place
+  指引）
+
+  - 显式同意（run execute --allow-in-place 或 local.yaml worktree.fallback: allow）时可降级：meta 记 explicit 标记与 fallbackReason
+  原始错误，且主仓 checkout 专用分支（baseHash 等于当前 HEAD 时），不再停在用户当前分支
+
+  - worktree-guard 的 isInsideRegisteredWorktree 对无 explicit 标记的遗留 in-place meta 不再授权：主仓源码写入与 Bash 命令回到阶段门禁
+
+  - config-schema 文档化 worktree.fallback（block|allow，缺省 block）
+autopilot: false
+prestage_ack: false
+baseline_commit: 9e7184a43195ed0988f6cd964c68b78737a6f260
+updatedAt: '2026-11-23T03:07:49.385Z'
+baseline_sha256: 8d8bc36194dcad140077a76f345bc2cdfe7423ed6509af104def2ce908fbc5b6
+spec_approved: true
+spec_approved_at: '2026-11-23T02:42:43.855Z'
+spec_approved_by: zcode-wt-fallback-consent
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-wt-fallback-consent
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js9)（10.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261123030007\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 11 个
+
