@@ -122,15 +122,44 @@ import { MultiRepoContext } from './multi-repo-context.js'
  * agent 收到的仍是自包含 prompt 字符串，无需自己 Read。单次替换（不递归）；
  * 模板缺失则保留占位符并 warn，便于发现配置错误。
  */
+// 参数化语法扩展（2026-11-22-include-param-primitives，批 3b）：
+//   {{include: name}}                      —— 无参写法，向后兼容
+//   {{include: name|key=value|key2=value2}} —— 参数化：模板内 {{param:key}} 占位被实参替换
+// key 匹配 [\w-]+；value 允许中文/字母/数字/空格/短横线/斜杠（不含 | { }）；无值参数段忽略（fail-soft）。
+// 模板缺失：整占位符（含参数段）保留并 warn；带参但模板内 {{param:key}} 无对应实参：占位原样保留并 warn。
+const INCLUDE_PARAM_RE = /\{\{include:\s*([\w.-]+)((?:\|[^|{}]*)*)\s*\}\}/g
+
+function parseIncludeArgs(seg) {
+  const out = {}
+  if (!seg) return out
+  for (const part of seg.split('|')) {
+    const s = part.trim()
+    if (!s) continue
+    const eq = s.indexOf('=')
+    if (eq <= 0) continue // 无值参数段（裸 key）忽略——fail-soft 不炸
+    out[s.slice(0, eq).trim()] = s.slice(eq + 1).trim()
+  }
+  return out
+}
+
 export function resolvePromptIncludes(text) {
-  return text.replace(/\{\{include:\s*([\w.-]+)\s*\}\}/g, (match, name) => {
+  return text.replace(INCLUDE_PARAM_RE, (match, name, argSeg) => {
     // shared.js 在 src/run/，templates/prompts 在仓库根 → 上两层
     const tplPath = join(__dirname, '..', '..', 'templates', 'prompts', `${name}.md`)
     if (!existsSync(tplPath)) {
       console.warn(`⚠️ prompt include 模板缺失: ${name} (期望: ${tplPath})`)
       return match
     }
-    return readFileSync(tplPath, 'utf8')
+    let tpl = readFileSync(tplPath, 'utf8')
+    const args = parseIncludeArgs(argSeg || '')
+    if (Object.keys(args).length > 0) {
+      tpl = tpl.replace(/\{\{param:\s*([\w-]+)\s*\}\}/g, (pm, key) => {
+        if (key in args) return args[key]
+        console.warn(`⚠️ prompt include 参数缺失: ${name} 的 {{param:${key}}} 无实参——占位原样保留`)
+        return pm
+      })
+    }
+    return tpl
   })
 }
 
