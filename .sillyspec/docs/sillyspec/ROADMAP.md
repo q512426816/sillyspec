@@ -16,7 +16,7 @@
 | 批 1 | 一行级吸收包：seam 约定/三层审查优先级/「是」=推荐/DEBUG 前缀+变异自证/回退门+爆炸半径/out-of-scope 沉淀位 | 2026-11-21-prompt-microdesign-pack | 轻量变更 | 无 | ✅ 已归档（交付 23af3e55／归档 436ef561）；out-of-scope 沉淀位后被 D-002 撤销归 knowledge 通道 |
 | 批 2 | 诊断环 skill：red-capable 复现命令硬前置五阶段 gated（.claude/skills/sillyspec-diagnose/） | 2026-11-22-diagnose-skill | 轻量变更 | 无 | ✅ 已归档（交付 fc09622b／归档 2eebe7de） |
 | 批 3a | 纪律原语盘点（不动码）→ docs/sillyspec/prompt-primitives-survey.md（25 候选/高优 8 条） | 2026-11-22-prompt-primitive-survey | 轻量变更 | 批 1 合入后 | ✅ 已归档（交付 dddf86ff／归档 bf252852） |
-| 批 3b | include 参数化：resolvePromptIncludes 增 {{include:name\|focus=x}}；按 survey 施工顺序抽高优 2+5 直抽、后 4/9 参数化——每批跑金档再生+include 计数测试 | 2026-11-22-include-param-primitives（已立项挂起，spec 面已答，恢复重跑 flow start 同名） | 轻量或小完整流程 | 3a（已就绪） | ⏸ 挂起（2026-11-22 用户改拍 T1 词汇通道优先，本批未动工） |
+| 批 3b | include 参数化：resolvePromptIncludes 增 {{include:name\|focus=x}}；按 survey 施工顺序抽高优 2+5 直抽、后 4/9 参数化——每批跑金档再生+include 计数测试 | 2026-11-22-include-param-primitives | 轻量或小完整流程 | 3a（已就绪） | ✅ 已归档（2026-11-23 恢复续干：参数化管道+高 2/5 直抽 ×5 位+高 4/9 逐字共性段 ×5 位；计数测试 8 族零回归；归档 9c580296。实际抽取面=逐字共性零参模板——三律骨架各阶段形态差异大不强抽、brainstorm 高 9 展开形态同，budget/pack 参数消费面留批 3c） |
 | 批 3c | 指令层/证据层分离：实证引用外移 knowledge，prompt 正文留纯指令（execute.js 1668 行根治） | 待 3b 试点后定名 | 完整流程 | 3b 试点验证 | ⬜ 待立项 |
 | 批 4 | knowledge 词汇通道：常读词汇旁路（glossary 类无条件注入）+ ADR 三条件门 | 2026-11-22-knowledge-vocab-channel | 轻量变更（倒推收口：实现经 mattpocock 链路交付后登记） | 无（实际先于 3b 交付——2026-11-22 用户拍板差距矩阵 T1+T2） | ✅ 已归档（5 票 implement-spec 并行+双轴 code-review 修复；integration/vocab-channel 合回 main；归档 44ba191b；体验复盘见吸收工作树 .scratch/mattpocock-absorb/retro-report.md） |
 | 批 5① | 上架 Claude 插件市场：.claude-plugin/marketplace.json+plugin.json+版本同步 check | 待用户拍板后定名 | 轻量变更 | 用户决策 | ⬜ 待拍板 |
