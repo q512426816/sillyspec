@@ -65,6 +65,32 @@ console.log('--- 1. 无参兼容 / 带参解析 / 缺失保留 / 字符集 ---')
   assertTrue(pipe.includes('{{include: no-such-tpl|k=a|b}}'), '缺失场景整段保留（正则吞全段，禁字符不产生半段匹配）')
 }
 
+// ── 2. 高 2+5 直抽模板（task-02）：模板语义在场 + 5 处引用位改写 ────────────────
+console.log('\n--- 2. 高 2/5 模板与引用位 ---')
+{
+  // 2a. 高 2 模板渲染语义句逐字在场
+  const fs2 = resolvePromptIncludes('{{include: foreground-sync}}')
+  assertTrue(fs2.includes('前台同步执行') && fs2.includes('run_in_background:true / & / nohup / disown') && fs2.includes('后台任务易被会话生命周期回收'),
+    '高 2 模板渲染含四禁令语义句（禁令枚举+理由句）')
+
+  // 2b. 高 5 模板渲染语义句在场
+  const ex5 = resolvePromptIncludes('{{include: review-unsupervised-exempt}}')
+  assertTrue(ex5.includes('评审豁免') && ex5.includes('review-unsupervised.md') && ex5.includes('不做自审表演') && ex5.includes('有派发能力时本豁免不适用'),
+    '高 5 模板渲染含豁免机制语义句（声明文件+不自审表演+适用边界）')
+
+  // 2c. 引用位：源码断言（高 2 ×2、高 5 ×3，指针句保留原文）
+  const srcOf = (f) => readFileSync(join(ROOT, 'src', 'stages', f), 'utf8')
+  const srcExe = srcOf('execute.js'), srcVer = srcOf('verify.js'), srcBr = srcOf('brainstorm.js'), srcPlan = srcOf('plan.js')
+  assertTrue((srcExe.match(/\{\{include: foreground-sync\}\}/g) || []).length === 1
+    && (srcVer.match(/\{\{include: foreground-sync\}\}/g) || []).length === 1, '高 2 引用位：execute/verify 各 1 处 include')
+  assertTrue((srcBr.match(/\{\{include: review-unsupervised-exempt\}\}/g) || []).length === 1
+    && (srcPlan.match(/\{\{include: review-unsupervised-exempt\}\}/g) || []).length === 1
+    && (srcExe.match(/\{\{include: review-unsupervised-exempt\}\}/g) || []).length === 1, '高 5 引用位：brainstorm/plan/execute 各 1 处 include')
+  assertTrue(srcExe.includes('按上方评审豁免处理'), 'execute dispatchExec 指针句保留原文（最小扰动）')
+  assertTrue(!srcExe.includes('长测试/构建/lint 命令必须**前台同步执行**') && !srcVer.includes('长测试/构建/lint 命令必须**前台同步执行**'),
+    '高 2 原文散文段已从源码移除（单一源进模板）')
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${failed === 0 ? 'all' : '部分'}  ❌ 失败断言: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }

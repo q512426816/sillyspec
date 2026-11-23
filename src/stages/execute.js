@@ -506,7 +506,7 @@ const acceptanceSteps = [
 ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役）。有派发能力时本豁免不适用（真独立评审仍优待）。
+{{include: review-unsupervised-exempt}}
 - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
@@ -552,7 +552,7 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 
 ### 铁律
 - **写完不回读**——写出的代码/文档落盘即可，verify 门禁机械校验，回读是纯上下文税
-- 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
+{{include: foreground-sync}}
 - **长输出跑批纪律（token 减负，R9 实证 verify 段 13.8M 输入中 4-6M 是裸输出摄取）**：全量/多文件测试与 lint 的输出重定向落文件（如 \`> .runtime/test-out.log 2>&1\`），上下文只回看尾部摘要与失败段（\`tail -50\` / \`grep -E "FAIL|✗|Error"\`）——长输出全文进上下文是单会话 token 累积大头；CLI 门禁自跑的测试已是摘要输出，不受本条约束
 - **临时调试日志唯一前缀**：插桩排查的临调日志必须带 \`[DEBUG-<id>]\` 前缀（如 \`[DEBUG-a4f2]\`，一次排查一个 id）——收尾按前缀 grep 清零再交付；未带前缀的临调日志无人能系统性清除（带标的日志能死，无标的必残留）
 

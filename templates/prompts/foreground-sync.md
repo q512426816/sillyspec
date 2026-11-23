@@ -1,0 +1,1 @@
+- 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果

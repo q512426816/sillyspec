@@ -1,0 +1,1 @@
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。

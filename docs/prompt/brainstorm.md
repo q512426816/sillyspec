@@ -552,7 +552,7 @@ design.md 文件路径 + 自审结果
 ### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
+{{include: review-unsupervised-exempt}}
 - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
