@@ -91,6 +91,30 @@ console.log('\n--- 2. 高 2/5 模板与引用位 ---')
     '高 2 原文散文段已从源码移除（单一源进模板）')
 }
 
+// ── 3. 高 4+9 逐字共性段抽取（task-03）：写通道降级 ×3 + 基准面句 ×2 ──────────
+console.log('\n--- 3. 高 4/9 共性段模板与引用位 ---')
+{
+  // 3a. 高 4 模板渲染语义句
+  const d4 = resolvePromptIncludes('{{include: review-subagent-discipline}}')
+  assertTrue(d4.includes('session not in running turn') && d4.includes('重试 ≤3 次即停') && d4.includes('代落盘：子代理写通道故障') && d4.includes('禁止长时间空转重试'),
+    '高 4 模板渲染含写通道降级语义句（重试上限+代落盘留痕+禁空转）')
+
+  // 3b. 高 9 模板渲染语义句
+  const b9 = resolvePromptIncludes('{{include: material-pack-baseline}}')
+  assertTrue(b9.includes('checklist 逐条只对包作答') && b9.includes('禁全量扫读') && b9.includes('cannot_verify＋requiredEvidence 列缺件'),
+    '高 9 模板渲染含基准面三连句（只对包作答/禁全量扫读/不足列缺件）')
+
+  // 3c. 引用位计数：写通道 ×3（brainstorm/plan/execute 各 1）、基准面 ×2（plan/execute）
+  const srcOf3 = (f) => readFileSync(join(ROOT, 'src', 'stages', f), 'utf8')
+  const b = srcOf3('brainstorm.js'), p = srcOf3('plan.js'), e = srcOf3('execute.js')
+  assertTrue((b.match(/\{\{include: review-subagent-discipline\}\}/g) || []).length === 1
+    && (p.match(/\{\{include: review-subagent-discipline\}\}/g) || []).length === 1
+    && (e.match(/\{\{include: review-subagent-discipline\}\}/g) || []).length === 1, '高 4 引用位：三阶段各 1 处 include')
+  assertTrue((p.match(/\{\{include: material-pack-baseline\}\}/g) || []).length === 1
+    && (e.match(/\{\{include: material-pack-baseline\}\}/g) || []).length === 1, '高 9 引用位：plan/execute 各 1 处 include')
+  assertTrue(b.includes('逐条只对本包作答'), 'brainstorm 高 9 为展开改写形态，保留原文（不强抽——批 3c 统一，留痕）')
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${failed === 0 ? 'all' : '部分'}  ❌ 失败断言: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }

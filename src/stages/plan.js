@@ -394,14 +394,14 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-cli-wiring）**——CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('plan-review')：design 硬约束，缺「全局硬约束」节时 decisions.md P0/P1 accepted 决策兜底）；「plan 差量」节留位——派发前由你逐约束判定补齐（一致/偏离/未覆盖＋注），留空则评审者按 cannot_verify 列缺件。把补完的整包贴进派发 prompt：
 {REVIEW_MATERIALS}
 prompt 要点：
-1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
+1. **材料包是评审基准面**：{{include: material-pack-baseline}} plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
 {{include: review-unsupervised-exempt}}
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。
-6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+6. 写通道降级：{{include: review-subagent-discipline}}
 7. **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm Grill 步）**：①请求预算硬钳——子代理请求上限 **10 次**（材料包基准面 + plan.md + ≤3 次定向补证），到达即出 verdict 禁「再确认一下」续读，派发 prompt 明示此预算；②FAIL 后增量复审——修复阻断项后 **resume 同一子代理**只发修复说明+diff 验证「阻断项解决否」，不重开全文审（64s vs 322s = 5 倍差实证），review.json checklist 追加增量复核行；原 agent 不可 resume 才新开（prompt 附首轮阻断项仍只验阻断项）；③**并行化**——派发用 run_in_background: true，主代理立即继续 Step 4（生成 TaskCard），回收在即将 --done 本步骤前（pass → 完成 / fail → 增量复审 / 在跑 → 等待），Stage Review Gate 照常硬校验；④**审查只读纪律**——子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（design/plan/四件套/源码），唯一可写 review.json，发现问题写 checklist/blockers 由主代理修（2026-09-20 实证 Grill 越权改 design 15 处；③并行化下同文件双写竞态的前置防线，详见 brainstorm Grill 步全文）。
 
 ### 补充复查（2026-10-15-plan-review-focus）
