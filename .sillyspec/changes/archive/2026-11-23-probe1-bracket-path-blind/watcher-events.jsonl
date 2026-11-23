@@ -1,0 +1,17 @@
+{"ts":1795415452203,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795415452203,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795415493158,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795415493158,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795416696502,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1795417461515,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1795417462553,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1795417463653,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1795417463444,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795417463444,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1795417464716,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1795417467545,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795417467545,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1795418370586,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1795419343993,"kind":"commit","stage":null,"detail":"526c3ada","provisional":true}
+{"ts":1795419356098,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-23-probe1-bracket-path-blind/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795419366339,"kind":"gate-run","stage":"verify","detail":"门实测 skipped · 20261123073606","provisional":true}

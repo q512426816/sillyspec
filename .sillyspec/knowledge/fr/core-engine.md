@@ -5644,3 +5644,89 @@
   confirmed_at: null
   source_change: 2026-11-13-probe7-existing-tests-cap
   status: active
+
+## FR-core-engine-299 方括号字面路径（含 [id] / [...slug]）在主仓或 worktree 真实存在时，按具体文件扫描，TODO/FIXME 可被命中
+变更：2026-11-23-probe1-bracket-path-blind
+状态：active
+摘要：主仓字面路径；worktree 字面路径
+场景正文：
+- 场景：主仓字面路径 — Given design 清单含 `src/app/[id]/page.js`，且主仓该文件存在并含 `// TODO: 接线`；When 运行探针 1；Then `matches` 含该路径的命中项，`globEntries` 不含该路径
+- 场景：worktree 字面路径 — Given 主仓无该文件、worktree 有且含 TODO；When 运行探针 1；Then 命中来自 worktree 版本且 `worktreeHits` 递增
+全文：.sillyspec/changes/archive/2026-11-23-probe1-bracket-path-blind/requirements.md#FR-01
+最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-probe1-bracket-path-blind:flow:测试绑定FR-01
+  tests: test/verify-probes.test.mjs「探针1 方括号字面路径按具体文件扫描并命中 TODO」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-probe1-bracket-path-blind
+  status: active
+
+## FR-core-engine-300 真 glob 路径（含 * 或 ? 通配）仍归入 globEntries，不误扫
+变更：2026-11-23-probe1-bracket-path-blind
+状态：active
+摘要：通配路径
+场景正文：
+- 场景：通配路径 — Given design 清单含 `src/**/*.js`；When 运行探针 1；Then `globEntries` 含 `src/**/*.js`，`matches` 不含该路径
+全文：.sillyspec/changes/archive/2026-11-23-probe1-bracket-path-blind/requirements.md#FR-02
+最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-probe1-bracket-path-blind:flow:测试绑定FR-02
+  tests: test/verify-probes.test.mjs「探针1 真 glob 路径归入 globEntries 不误扫」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-probe1-bracket-path-blind
+  status: active
+
+## FR-core-engine-301 glob 项或跳过项非空且命中为空时，报告不再输出「✅ 无 TODO/FIXME/尚未实现 标记命中」，改为显式 ⚠️ 说明结论不完整
+变更：2026-11-23-probe1-bracket-path-blind
+状态：active
+摘要：有未扫描面；全干净
+场景正文：
+- 场景：有未扫描面 — Given 探针 1 零命中、存在 1 个 glob 项；When 渲染报告；Then 报告不含「✅ 无 TODO/FIXME/尚未实现 标记命中」，含「结论不完整」的 ⚠️ 行
+- 场景：全干净 — Given 零命中且无 glob / 跳过项；When 渲染报告；Then 报告含原 ✅ 全清结论
+全文：.sillyspec/changes/archive/2026-11-23-probe1-bracket-path-blind/requirements.md#FR-03
+最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-probe1-bracket-path-blind:flow:测试绑定FR-03
+  tests: test/verify-probes.test.mjs「探针1 存在未扫描面时报告不输出全清结论」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-probe1-bracket-path-blind
+  status: active
+
+## FR-core-engine-302 新增回归测试覆盖方括号字面路径命中、真 glob 不入扫描、报告措辞三态，相关测试全绿
+变更：2026-11-23-probe1-bracket-path-blind
+状态：active
+摘要：测试面
+场景正文：
+- 场景：测试面 — Given 上述实现完成；When 运行 `node test/verify-probes.test.mjs`；Then 全绿且新增断言覆盖三类路径
+全文：.sillyspec/changes/archive/2026-11-23-probe1-bracket-path-blind/requirements.md#FR-04
+最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-23-probe1-bracket-path-blind:flow:测试绑定FR-04
+  tests: test/verify-probes.test.mjs「探针 1 三态回归整文件全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-23-probe1-bracket-path-blind
+  status: active

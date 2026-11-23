@@ -49,6 +49,9 @@ function makeFixture() {
   mkdirSync(join(proj, 'src'), { recursive: true })
   writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 1\n')
   writeFileSync(join(proj, 'src', 'feature.test.js'), 'test("f", () => {})\n')
+  // 方括号字面目录（Next.js 动态路由形态）：探针 1 必须按具体文件扫描（坑 probe1-bracket-path-blind）
+  mkdirSync(join(proj, 'src', 'app', '[id]'), { recursive: true })
+  writeFileSync(join(proj, 'src', 'app', '[id]', 'page.js'), 'export default 1\n')
   writeFileSync(join(proj, 'router.py'), 'from fastapi import APIRouter\nrouter = APIRouter()\n\n@router.get("/api/users/{uid}")\ndef get_user(uid):\n    return {}\n')
   git(proj, ['add', '.'])
   git(proj, ['commit', '-q', '-m', 'init'])
@@ -72,6 +75,8 @@ function makeFixture() {
     '| 修改 | a.js | 加功能 |',
     '| 删除 | old-declared.js | 清理 |',
     '| 新增 | src/feature.js | 特性 |',
+    '| 修改 | src/app/[id]/page.js | 详情页（方括号字面路径） |',
+    '| 修改 | src/**/*.js | 通配路径（交 agent 展开） |',
     '',
   ].join('\n'))
   writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: 特性\n- [ ] task-02: 无卡任务\n')
@@ -80,8 +85,9 @@ function makeFixture() {
 
   // 工作区改动：a.js 加 TODO 标记 + src 改动 + 删两个文件（一个声明删除、一个未声明）
   // （探针 1/6 消费工作树 vs HEAD；module-impact 消费 base..HEAD —— 测试后段再 commit）
-  writeFileSync(join(proj, 'a.js'), 'console.log(2)\n// TODO: 修这个\n')
-  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2 // FIXME: 待清理\n')
+  writeFileSync(join(proj, 'a.js'), 'console.log(2)\n// TODO: 修这个\n') // probe1-noqa
+  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2 // FIXME: 待清理\n') // probe1-noqa
+  writeFileSync(join(proj, 'src', 'app', '[id]', 'page.js'), 'export default 2\n// TODO: 接线\n') // probe1-noqa
   rmSync(join(proj, 'old-declared.js'))
   rmSync(join(proj, 'old-unlisted.js'))
 
@@ -114,6 +120,10 @@ try {
     assert(r.probe1.matches.some(m => m.file === 'a.js' && m.content.includes('TODO')), '探针1 命中 a.js 的 TODO 标记（含行号）')
     assert(r.probe1.matches.every(m => typeof m.line === 'number'), '探针1 记录行号')
     assert(!r.probe1.matches.some(m => m.file.startsWith('.sillyspec/')), '探针1 不扫 .sillyspec')
+    assert(r.probe1.matches.some(m => m.file === 'src/app/[id]/page.js' && m.content.includes('TODO')), '探针1 方括号字面路径按具体文件扫描并命中 TODO') // probe1-noqa
+    assert(!r.probe1.globEntries.includes('src/app/[id]/page.js'), '探针1 方括号字面路径不进 globEntries')
+    assert(r.probe1.globEntries.includes('src/**/*.js'), '探针1 真 glob 路径归入 globEntries')
+    assert(!r.probe1.matches.some(m => m.file === 'src/**/*.js'), '探针1 真 glob 不误扫')
 
     const t1 = r.probe3.tasks.find(t => t.task === 'task-01')
     assert(t1 && t1.hasTest && t1.testFiles.some(f => f.includes('feature.test.js')), '探针3 task-01 命中 co-located 测试文件')
@@ -129,6 +139,14 @@ try {
     console.log('--- 2. 报告渲染 + verify-result 骨架 ---')
     const report = renderVerifyProbesReport(r)
     assert(report.includes('探针 1') && report.includes('探针 6'), '渲染含各探针段落')
+    assert(!report.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 有命中时不输出全清结论') // probe1-noqa
+    const p1Clean = { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 }
+    const reportStub = { probe3: { tasks: [], note: 'n' }, probe5: {}, probe6: { deletions: [], note: 'n', unavailable: false } }
+    const unscannedReport = renderVerifyProbesReport({ ...reportStub, probe1: { ...p1Clean, globEntries: ['src/**/*.js'] } })
+    assert(!unscannedReport.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 存在未扫描面时报告不输出全清结论') // probe1-noqa
+    assert(unscannedReport.includes('结论不完整'), '探针1 未扫描面以 ⚠️ 结论不完整呈现')
+    const cleanReport = renderVerifyProbesReport({ ...reportStub, probe1: p1Clean })
+    assert(cleanReport.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 全干净时保留全清结论') // probe1-noqa
     const sk = generateVerifyResultSkeleton(r)
     for (const sec of ['结论', '任务完成度', '设计一致性', '探针结果', '测试结果', '风险等级', 'Runtime Evidence']) {
       assert(sk.includes(sec), `骨架含「${sec}」章节`)

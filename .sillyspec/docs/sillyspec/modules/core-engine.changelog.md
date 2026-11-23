@@ -129,3 +129,4 @@
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
 | 2026-11-21 | 2026-11-21-verify-gate-scope-speed | 2026-11-21-verify-gate-scope-speed |
 | 2026-11-22 | 2026-11-22-tasks-blocked-by | 轻量任务清单阻塞依赖行支持 |
+| 2026-11-23 | 2026-11-23-probe1-bracket-path-blind | 探针1方括号路径失明修复 |

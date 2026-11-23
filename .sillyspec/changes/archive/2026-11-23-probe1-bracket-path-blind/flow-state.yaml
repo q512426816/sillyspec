@@ -1,0 +1,49 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  探针1方括号路径失明修复
+
+
+  动机与背景：
+
+  verify-probes.js 探针1用 /[*?[\]]/ 判断 glob，把 Next.js 动态路由 [id]、Vue [...slug] 这类方括号字面路径整文件跳过；报告仍输出「✅ 无 TODO
+  命中」。2026-11-22-workspace-redesign 归档时隐藏的 useWorkspaceActivity 占位 TODO 正是靠这条盲区过关，变更名义完成实则未接线。
+
+
+  成功标准：
+
+  - 方括号字面路径（含 [id] / [...slug]）在主仓或 worktree 真实存在时，按具体文件扫描，TODO/FIXME 可被命中
+
+  - 真 glob 路径（含 * 或 ? 通配）仍归入 globEntries，不误扫
+
+  - glob 项或跳过项非空且命中为空时，报告不再输出「✅ 无 TODO/FIXME/尚未实现 标记命中」，改为显式 ⚠️ 说明结论不完整
+
+  - 新增回归测试覆盖方括号字面路径命中、真 glob 不入扫描、报告措辞三态，相关测试全绿
+autopilot: false
+prestage_ack: false
+baseline_commit: ff2167183e5b29c47e8e2cd325d3840a91e67070
+updatedAt: '2026-11-23T07:36:21.859Z'
+baseline_sha256: 1bd1b32c7d7e788ffd7d47d95c9c7bac6be6e09aeae189dbc986ade0a204b606
+spec_approved: true
+spec_approved_at: '2026-11-23T07:02:10.355Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: skipped 结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261123073606\test-result.json
+  — 跳过原因：变更与测试面零关系（3 个变更文件无自身测试、无 import 依赖测试、FR 关联回归层被 fr_regress_cap 跳过（绑定 14 个未跑，归 pre-push/CI
+  门））——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: skipped — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 3 个
+

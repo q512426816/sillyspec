@@ -1,0 +1,116 @@
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 8f98d9dd..2dbffabe 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -2120,21 +2120,24 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+   const probe1 = { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 }
+   for (const e of detailed) {
+     if (e.path.startsWith('.sillyspec/')) continue
+-    if (/[*?[\]]/.test(e.path)) {
+-      probe1.globEntries.push(e.path)
+-      continue
+-    }
+     // NEW: 待建前缀剥离（坑 probe1-new-prefix-miss，2026-09-12 驾驭第十七批③，用户实证
+     // 「NEW: 前缀文件已合入主仓」时 existsSync(join(cwd,'NEW:src/x')) 恒 miss 落 skippedFiles
+     // 留 ⚠️ 噪声）：design 清单的 NEW: 是「新建意图」标记，文件 apply 后已是无前缀实体——
+     // 探针按目标文件扫（与 pathMatches 比对侧剥除同源）。
+     const probePath = String(e.path).replace(/^NEW:\s*/, '')
++    // 字面路径优先（坑 probe1-bracket-path-blind，2026-11-23 实证）：旧逻辑先判 /[*?[\]]/
++    // 再判文件存在，把 Next.js [id]、Vue [...slug] 这类**字面**路径判成通配符整文件跳过——
++    // 2026-11-22-workspace-redesign 的 useWorkspaceActivity 占位即因此漏扫，报告仍打 ✅。
++    // 现改为：主仓/worktree 真实存在 → 按具体文件扫描；两处都不存在时才判通配入 globEntries。
+     let abs = join(cwd, probePath)
+     if (!existsSync(abs)) {
+       const wtAbs = wtRoot ? join(wtRoot, probePath) : null
+       if (wtAbs && existsSync(wtAbs)) {
+         abs = wtAbs
+         probe1.worktreeHits++
++      } else if (/[*?[\]]/.test(probePath)) {
++        probe1.globEntries.push(e.path)
++        continue
+       } else {
+         probe1.skippedFiles.push(e.path)
+         continue
+@@ -2491,11 +2494,18 @@ export function renderVerifyProbesReport(result) {
+   const { probe1, probe3, probe5, probe6 } = result
+ 
+   L.push('#### 探针 1：未实现标记扫描（design 清单文件）')
+-  if (probe1.matches.length === 0) {
+-    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
+-  } else {
++  if (probe1.matches.length > 0) {
+     for (const m of probe1.matches) L.push(`- ⚠️ \`${m.file}:${m.line}\` ${m.content}`)
+   }
++  // 未扫描面（glob/不存在）非空时不得打全清结论（坑 probe1-bracket-path-blind）：关键词「没扫」
++  // 与「扫了且干净」必须在输出上可区分，否则未执行会伪装成通过。此 ⚠️ 行刻意不用反引号路径:行号
++  // 格式，不撞 PROBE1_HIT_LINE_RE（探针一致性对账锚点）。
++  const unscannedCount = probe1.globEntries.length + probe1.skippedFiles.length
++  if (probe1.matches.length === 0 && unscannedCount === 0) {
++    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
++  } else if (probe1.matches.length === 0) {
++    L.push(`- ⚠️ 已扫描文件无未实现标记，但 ${unscannedCount} 项未扫描——结论不完整（见下方 glob/跳过项，agent 须展开确认）`)
++  }
+   if (probe1.globEntries.length > 0) L.push(`- ℹ️ glob 项未展开（agent 手动展开扫描）：${probe1.globEntries.join('、')}`)
+   if (probe1.worktreeHits > 0) L.push(`- ℹ️ ${probe1.worktreeHits} 个清单文件主仓不存在、已从 worktree 读取（apply 前新文件形态）`)
+   if (probe1.skippedFiles.length > 0) L.push(`- ℹ️ 清单文件不存在（跳过）：${probe1.skippedFiles.join('、')}`)
+diff --git a/test/verify-probes.test.mjs b/test/verify-probes.test.mjs
+index e5afbb24..0b72123d 100644
+--- a/test/verify-probes.test.mjs
++++ b/test/verify-probes.test.mjs
+@@ -49,6 +49,9 @@ function makeFixture() {
+   mkdirSync(join(proj, 'src'), { recursive: true })
+   writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 1\n')
+   writeFileSync(join(proj, 'src', 'feature.test.js'), 'test("f", () => {})\n')
++  // 方括号字面目录（Next.js 动态路由形态）：探针 1 必须按具体文件扫描（坑 probe1-bracket-path-blind）
++  mkdirSync(join(proj, 'src', 'app', '[id]'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'app', '[id]', 'page.js'), 'export default 1\n')
+   writeFileSync(join(proj, 'router.py'), 'from fastapi import APIRouter\nrouter = APIRouter()\n\n@router.get("/api/users/{uid}")\ndef get_user(uid):\n    return {}\n')
+   git(proj, ['add', '.'])
+   git(proj, ['commit', '-q', '-m', 'init'])
+@@ -72,6 +75,8 @@ function makeFixture() {
+     '| 修改 | a.js | 加功能 |',
+     '| 删除 | old-declared.js | 清理 |',
+     '| 新增 | src/feature.js | 特性 |',
++    '| 修改 | src/app/[id]/page.js | 详情页（方括号字面路径） |',
++    '| 修改 | src/**/*.js | 通配路径（交 agent 展开） |',
+     '',
+   ].join('\n'))
+   writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: 特性\n- [ ] task-02: 无卡任务\n')
+@@ -80,8 +85,9 @@ function makeFixture() {
+ 
+   // 工作区改动：a.js 加 TODO 标记 + src 改动 + 删两个文件（一个声明删除、一个未声明）
+   // （探针 1/6 消费工作树 vs HEAD；module-impact 消费 base..HEAD —— 测试后段再 commit）
+-  writeFileSync(join(proj, 'a.js'), 'console.log(2)\n// TODO: 修这个\n')
+-  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2 // FIXME: 待清理\n')
++  writeFileSync(join(proj, 'a.js'), 'console.log(2)\n// TODO: 修这个\n') // probe1-noqa
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2 // FIXME: 待清理\n') // probe1-noqa
++  writeFileSync(join(proj, 'src', 'app', '[id]', 'page.js'), 'export default 2\n// TODO: 接线\n') // probe1-noqa
+   rmSync(join(proj, 'old-declared.js'))
+   rmSync(join(proj, 'old-unlisted.js'))
+ 
+@@ -114,6 +120,10 @@ try {
+     assert(r.probe1.matches.some(m => m.file === 'a.js' && m.content.includes('TODO')), '探针1 命中 a.js 的 TODO 标记（含行号）')
+     assert(r.probe1.matches.every(m => typeof m.line === 'number'), '探针1 记录行号')
+     assert(!r.probe1.matches.some(m => m.file.startsWith('.sillyspec/')), '探针1 不扫 .sillyspec')
++    assert(r.probe1.matches.some(m => m.file === 'src/app/[id]/page.js' && m.content.includes('TODO')), '探针1 方括号字面路径按具体文件扫描并命中 TODO') // probe1-noqa
++    assert(!r.probe1.globEntries.includes('src/app/[id]/page.js'), '探针1 方括号字面路径不进 globEntries')
++    assert(r.probe1.globEntries.includes('src/**/*.js'), '探针1 真 glob 路径归入 globEntries')
++    assert(!r.probe1.matches.some(m => m.file === 'src/**/*.js'), '探针1 真 glob 不误扫')
+ 
+     const t1 = r.probe3.tasks.find(t => t.task === 'task-01')
+     assert(t1 && t1.hasTest && t1.testFiles.some(f => f.includes('feature.test.js')), '探针3 task-01 命中 co-located 测试文件')
+@@ -129,6 +139,14 @@ try {
+     console.log('--- 2. 报告渲染 + verify-result 骨架 ---')
+     const report = renderVerifyProbesReport(r)
+     assert(report.includes('探针 1') && report.includes('探针 6'), '渲染含各探针段落')
++    assert(!report.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 有命中时不输出全清结论') // probe1-noqa
++    const p1Clean = { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 }
++    const reportStub = { probe3: { tasks: [], note: 'n' }, probe5: {}, probe6: { deletions: [], note: 'n', unavailable: false } }
++    const unscannedReport = renderVerifyProbesReport({ ...reportStub, probe1: { ...p1Clean, globEntries: ['src/**/*.js'] } })
++    assert(!unscannedReport.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 存在未扫描面时报告不输出全清结论') // probe1-noqa
++    assert(unscannedReport.includes('结论不完整'), '探针1 未扫描面以 ⚠️ 结论不完整呈现')
++    const cleanReport = renderVerifyProbesReport({ ...reportStub, probe1: p1Clean })
++    assert(cleanReport.includes('✅ 无 TODO/FIXME/尚未实现 标记命中'), '探针1 全干净时保留全清结论') // probe1-noqa
+     const sk = generateVerifyResultSkeleton(r)
+     for (const sec of ['结论', '任务完成度', '设计一致性', '探针结果', '测试结果', '风险等级', 'Runtime Evidence']) {
+       assert(sk.includes(sec), `骨架含「${sec}」章节`)

@@ -2120,21 +2120,24 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
   const probe1 = { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 }
   for (const e of detailed) {
     if (e.path.startsWith('.sillyspec/')) continue
-    if (/[*?[\]]/.test(e.path)) {
-      probe1.globEntries.push(e.path)
-      continue
-    }
     // NEW: 待建前缀剥离（坑 probe1-new-prefix-miss，2026-09-12 驾驭第十七批③，用户实证
     // 「NEW: 前缀文件已合入主仓」时 existsSync(join(cwd,'NEW:src/x')) 恒 miss 落 skippedFiles
     // 留 ⚠️ 噪声）：design 清单的 NEW: 是「新建意图」标记，文件 apply 后已是无前缀实体——
     // 探针按目标文件扫（与 pathMatches 比对侧剥除同源）。
     const probePath = String(e.path).replace(/^NEW:\s*/, '')
+    // 字面路径优先（坑 probe1-bracket-path-blind，2026-11-23 实证）：旧逻辑先判 /[*?[\]]/
+    // 再判文件存在，把 Next.js [id]、Vue [...slug] 这类**字面**路径判成通配符整文件跳过——
+    // 2026-11-22-workspace-redesign 的 useWorkspaceActivity 占位即因此漏扫，报告仍打 ✅。
+    // 现改为：主仓/worktree 真实存在 → 按具体文件扫描；两处都不存在时才判通配入 globEntries。
     let abs = join(cwd, probePath)
     if (!existsSync(abs)) {
       const wtAbs = wtRoot ? join(wtRoot, probePath) : null
       if (wtAbs && existsSync(wtAbs)) {
         abs = wtAbs
         probe1.worktreeHits++
+      } else if (/[*?[\]]/.test(probePath)) {
+        probe1.globEntries.push(e.path)
+        continue
       } else {
         probe1.skippedFiles.push(e.path)
         continue
@@ -2491,10 +2494,17 @@ export function renderVerifyProbesReport(result) {
   const { probe1, probe3, probe5, probe6 } = result
 
   L.push('#### 探针 1：未实现标记扫描（design 清单文件）')
-  if (probe1.matches.length === 0) {
-    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
-  } else {
+  if (probe1.matches.length > 0) {
     for (const m of probe1.matches) L.push(`- ⚠️ \`${m.file}:${m.line}\` ${m.content}`)
+  }
+  // 未扫描面（glob/不存在）非空时不得打全清结论（坑 probe1-bracket-path-blind）：关键词「没扫」
+  // 与「扫了且干净」必须在输出上可区分，否则未执行会伪装成通过。此 ⚠️ 行刻意不用反引号路径:行号
+  // 格式，不撞 PROBE1_HIT_LINE_RE（探针一致性对账锚点）。
+  const unscannedCount = probe1.globEntries.length + probe1.skippedFiles.length
+  if (probe1.matches.length === 0 && unscannedCount === 0) {
+    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
+  } else if (probe1.matches.length === 0) {
+    L.push(`- ⚠️ 已扫描文件无未实现标记，但 ${unscannedCount} 项未扫描——结论不完整（见下方 glob/跳过项，agent 须展开确认）`)
   }
   if (probe1.globEntries.length > 0) L.push(`- ℹ️ glob 项未展开（agent 手动展开扫描）：${probe1.globEntries.join('、')}`)
   if (probe1.worktreeHits > 0) L.push(`- ℹ️ ${probe1.worktreeHits} 个清单文件主仓不存在、已从 worktree 读取（apply 前新文件形态）`)

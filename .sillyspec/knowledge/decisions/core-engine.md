@@ -839,3 +839,12 @@ supersedes：无（L3 从未落地，无可取代物）
 文件：src/verify-probes.js, test/pitfall-probe7-noise.test.mjs
 最近确认：06236b4defccc512597eb3aaf97d8ef97fc0b7e0
 理由：三处小改，全部围绕探针 7（`src/verify-probes.js`）的既有用例候选链路： ① `renderProbe7Lines` 的既有用例候选行改为「前 5 + …共 N 个」展示帽（与同函数既有 `attribCell`/`hintCell` 的 `slice(0,5)` 先例同款）；② 同一渲染批次内按候选集内容签名去重——首卡全量（带帽）渲染，后续卡折叠为「同上（见 task-XX，共 N 个）」；③ `buildVerifyFacts` 在 `result.probe7` 在场时把 existingTests 全量去重后按候选集分组写入 verify-facts.json 顶层 `probe7ExistingTests` 段，兑现原注释「候选全量在 facts/trace」的承诺，md 只留展示帽与计数。 不改收集路径（`collectFrLinkedTests` 的注入条件与顺序全保持），不动矩阵其它列，不动 `verify-postcheck` 的解析口径（该行本就非门禁锚点）。
+
+## D-core-engine-065@v1 2026-11-23-probe1-bracket-path-blind——两处改动，都在 `src/verify-probes.js`。
+状态：implemented
+变更：2026-11-23-probe1-bracket-path-blind
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-23-probe1-bracket-path-blind/design.md
+文件：src/verify-probes.js, test/verify-probes.test.mjs
+最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
+理由：两处改动，都在 `src/verify-probes.js`。其一，探针 1 主循环改为「字面路径优先」：先剥 `NEW:` 前缀，再按字面路径解析（主仓存在→扫描；主仓缺失但 worktree 存在→扫描并计 `worktreeHits`），两处都不存在时才判通配符入 `globEntries`，无通配才入 `skippedFiles`。原逻辑先判 `/[*?[\]]/` 再判存在，导致 `[id]` 这类字面路径永远被跳过。其二，`renderVerifyProbesReport` 收紧结论：`matches` 为空时不再无条件打 ✅，仅当 `globEntries` 与 `skippedFiles` 也全空才输出全清结论，否则输出 ⚠️「结论不完整」。选择「字面存在优先」而非解析方括号内容，是因为 `[id]` 与 `[a-z]` 形态相似、正则判不准；一次 `existsSync` 即可覆盖 Next.js / Vue 动态路由，且对真 glob（字面不存在）零影响。
