@@ -209,3 +209,13 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 - 报告结论收紧：`renderVerifyProbesReport` 在零命中时不再无条件打全清 ✅——仅 `globEntries` 与 `skippedFiles` 全空才输出「无标记命中」，否则输出「⚠️ 已扫描文件无未实现标记，但 N 项未扫描——结论不完整」；该 ⚠️ 行刻意不用反引号路径:行号格式，不撞 `PROBE1_HIT_LINE_RE`（探针一致性对账锚点零改动）。
 - 测试锚 test/verify-probes.test.mjs（方括号字面路径命中 / 真 glob 不误扫 / 报告两态断言）。
 
+## 提交归属按变更目录与作者身份收窄（2026-11-24-token-commit-change-dir-attribution）
+
+- 单一判定 `isOwnCommitForChange`（src/foreign-declared.js），提交级（漂移检测、交付面锚定）与文件级（归属切分、冻结面过滤、hunk 归属）共用。先走目录规则层 `isOwnByFacts`（三值）：标题提及本变更名 → own；提及他变更名 → 非 own（旧漂移条件「提本变更名 或 含 task token」缺「标题未提任何变更名」前提，带 task token 的他变更名提交曾被误判——test/thin-done-dirty-gate「全角括号交付提交判 drifted」自 2026-11-13 起在主干即红）；无名 task 提交触及本变更目录 → own、只触及他变更目录 → 非 own（task tick 的提交指引把该变更的 tasks.md 与侧车随交付同一提交入库，触及哪个变更目录是提交事实）；什么都不触及 → 分不清。
+- 分不清时按作者身份补判：`collectOwnAuthors` 取窗口内本变更自身提交的作者集（姓名加邮箱，现算不落盘），作者不在集内且集合非空 → 非 own；集合为空、作者未知、未提供作者集一律保守 own（2026-11-13-flow-done-patch-refreeze-skip-on-rework 的返工形态不回归）。披露的取舍：同一变更换了 git 身份、又不带变更名、又不触及变更目录的提交会被判他侧，由收口提示点名兜底。
+- 文件级：`buildCommitAttribution` 的 entry 增 `tokenDirs` / `tokenAmbiguous` / `tokenAmbiguousForeign`，`isForeignByCommit` 据此判定；`commitAttributionForChange` 传变更根前缀（`changesDirPrefixFor(cwd, specBase)`，不写死 `.sillyspec`）与当前变更名。无新字段的旧 entry 行为不变。
+- 日志解析统一：`COMMIT_LOG_ARGS`（sha、作者名、邮箱、标题、文件面）+ `parseCommitLog`（兼容仅标题的旧格式，此时作者未知）。
+- 提示：`listAmbiguousTokenCommits` / `formatAmbiguousTokenCommits`——收口时点名「分不清」的无名 task 提交，被作者补判排除的另起一行注明已按他侧处理；纯提示，不改判定。
+- `task tick` 回显的提交命令模板由 `(<task-NN>)` 改为 `(<变更名> <task-NN>)`，照抄即得具名提交。
+- 测试锚 test/commit-attribution-split.test.mjs（④—⑧）、test/flowdone-disposition-drift.test.mjs（⑧—⑫）、test/task-tick.test.mjs ⑧。
+
