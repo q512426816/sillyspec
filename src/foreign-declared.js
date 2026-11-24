@@ -11,7 +11,7 @@
  * postcheck import contract-matrix，parity 侧不能反向 import verify-postcheck）。
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, relative, resolve } from 'path'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { safeGit, unquoteGitPath } from './git-helper.js'
 import { parseAllowedPaths, parseTargetFiles } from './stages/plan-postcheck.js'
@@ -220,30 +220,122 @@ export function parseChangeNamesFromSubject(subject) {
   return out
 }
 
+/** 提交标题的 task token（交付协议证据，thin-tasks-v3 起勾选证据=task token 提交）。 */
+const TASK_TOKEN_RE = /task-\d+/i
+
+/**
+ * 提交触及的变更目录名集合（2026-11-24-token-commit-change-dir-attribution）。
+ * 变更根下的直接子目录名即变更名；归档目录 `archive/<变更名>/…` 同样记为触及该变更名
+ * （归档提交若带 task token 也不落到别的变更头上）。这是提交事实，不是声明——task tick 的
+ * 提交指引把该变更的 tasks.md 与侧车随交付同一提交入库，故「一笔任务提交触及哪个变更的
+ * 目录」可用于区分是谁的 task。2026-11-08-bare-commit-attribution-narrow 当时因「token 无
+ * 变更名限定，区分不了是谁的 task」而保守 own；共享仓并行会话下该保守把所有他侧 task
+ * 提交算成本变更的（multi-agent-platform 2026-11-24 实证：冻结补丁由 7 文件膨胀到 34 文件，
+ * 仅 3 个属于该变更；已通过的评审被隔离作废，重跑即再触发）。
+ * @param {string[]} files 提交触及的文件路径（git 输出，正反斜杠均可）
+ * @param {string} [changesDirPrefix] 变更根在仓内的相对前缀（缺省 `.sillyspec/changes/`；空串=禁用目录归属）
+ * @returns {Set<string>}
+ */
+export function touchedChangeDirs(files, changesDirPrefix) {
+  const out = new Set()
+  const raw = changesDirPrefix === undefined ? '.sillyspec/changes/' : String(changesDirPrefix == null ? '' : changesDirPrefix)
+  const prefix = raw.replace(/\\/g, '/')
+  if (!prefix) return out
+  const p = prefix.endsWith('/') ? prefix : `${prefix}/`
+  for (const f0 of files || []) {
+    const f = String(f0 || '').replace(/\\/g, '/')
+    if (!f.startsWith(p)) continue
+    const rest = f.slice(p.length)
+    // 分支互斥而非可选前缀：`archive/x.md`（归档根下散文件）不得回退成变更名 archive
+    const m = rest.startsWith('archive/') ? /^archive\/([^/]+)\//.exec(rest) : /^([^/]+)\//.exec(rest)
+    if (m) out.add(m[1])
+  }
+  return out
+}
+
+/**
+ * 提交级「本变更提交」判定单一源（2026-11-24-token-commit-change-dir-attribution）。
+ * 判定顺序：
+ *   ① 标题提及本变更名 → own；
+ *   ② 标题提及了变更名但不是本变更 → 非 own（即便同时带 task token——漂移检测旧条件
+ *      「提本变更名 或 含 task token」缺「标题未提任何变更名」前提，把他变更名提交带 token
+ *      的形态误判为本变更：test/thin-done-dirty-gate「全角括号交付提交判 drifted」第 99 行
+ *      自 2026-11-13 起在主干即红）；
+ *   ③ 无名且带 task token → 按触及的变更目录归属（touchedChangeDirs）：触及了他变更目录且
+ *      不含本变更 → 非 own；什么变更目录都没触及 → 分不清，保守 own
+ *      （2026-11-13-flow-done-patch-refreeze-skip-on-rework 的返工提交形态：只带 token、只
+ *      触及源文件，其回归 test ⑦ 不得破）；
+ *   ④ 其余（纯裸提交）→ 非 own。
+ * 提交级（漂移检测 detectPatchDrift / deliveryFaceAnchoredAfter）与文件级
+ * （buildCommitAttribution / isForeignByCommit）必须共用本口径，防两处再漂。
+ * @param {{ subject: string, files: string[] }} commit
+ * @param {string} changeName 当前变更名
+ * @param {string} [changesDirPrefix]
+ * @returns {boolean}
+ */
+export function isOwnCommitForChange({ subject, files }, changeName, changesDirPrefix) {
+  const names = parseChangeNamesFromSubject(subject)
+  if (names.includes(changeName)) return true
+  if (names.length > 0) return false
+  if (!TASK_TOKEN_RE.test(String(subject || ''))) return false
+  const touched = touchedChangeDirs(files, changesDirPrefix)
+  return touched.size === 0 || touched.has(changeName)
+}
+
+/**
+ * 变更根在仓内的相对前缀（带尾斜杠，正斜杠；供 touchedChangeDirs / isOwnCommitForChange）。
+ * 变更根取自 specBase（不写死 `.sillyspec`——规则 00）。不可得——spec 目录在仓外、跨盘符
+ * （Windows 下 path.relative 返回绝对路径）、入参缺失——返回空串：目录归属禁用，无名 task
+ * 提交退回保守 own，不抛错。
+ * @param {string} cwd 仓根
+ * @param {string} specBase spec 目录
+ * @returns {string}
+ */
+export function changesDirPrefixFor(cwd, specBase) {
+  try {
+    if (!cwd || !specBase) return ''
+    const rel = relative(resolve(cwd), resolve(cwd, join(specBase, 'changes'))).replace(/\\/g, '/')
+    if (!rel || rel === '..' || rel.startsWith('../') || rel.startsWith('/') || /^[A-Za-z]:/.test(rel)) return ''
+    return `${rel}/`
+  } catch { return '' }
+}
+
 /**
  * git log 文本（--format=%x00%s --name-only，每提交 NUL+标题+文件行）→ 文件提交归属映射。
  * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过；
  * tokened=无名 touch 中存在带 task-NN token 者（`task-\d+`——交付协议证据，thin-tasks-v3
  * 起勾选证据=task token 提交，收口哨兵按它逐格核）。2026-11-08-bare-commit-attribution-narrow
  * 起细分：纯裸 touch（无名无 token——release 生成器/Merge/归档 chore 形态）不再保守保留
- * （判 foreign，见 isForeignByCommit）；token 裸 touch 仍保守 own（task token 无变更名限定，
+ * （判 foreign，见 isForeignByCommit）；token 裸 touch 原先保守 own（task token 无变更名限定，
  * 无法区分是谁的 task——fail-closed 不误剔交付）。原「unknown 恒 own」的 fail-closed 前提
  * （自己的交付提交可能不带变更名）已随 token 协议过时——坑②（shared-repo multi-session
  * frictions）10-28 实证：release-record 归档 chore 提交穿透冻结面。
+ * token 裸 touch 的归属收窄（2026-11-24-token-commit-change-dir-attribution）：按该提交触及的
+ * 变更目录区分是谁的 task——tokenDirs=这些提交触及的变更名并集；tokenAmbiguous=存在什么都
+ * 不触及的提交（分不清）。判 foreign 的条件见 isForeignByCommit。
+ * @param {string} logText
+ * @param {{ changesDirPrefix?: string }} [opts] changesDirPrefix=变更根在仓内的相对前缀（缺省 .sillyspec/changes/，空串=禁用目录归属）
  */
-export function buildCommitAttribution(logText) {
+export function buildCommitAttribution(logText, opts = {}) {
+  const changesDirPrefix = opts && typeof opts === 'object' && 'changesDirPrefix' in opts ? opts.changesDirPrefix : undefined
   const map = new Map()
   for (const block of String(logText || '').split('\x00')) {
     const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
     if (lines.length === 0) continue
     const names = parseChangeNamesFromSubject(lines[0])
+    // 提交级事实：该无名 task 提交触及的变更目录（对本提交的全部文件同样成立）
+    const touched = names.length === 0 && TASK_TOKEN_RE.test(lines[0]) ? touchedChangeDirs(lines.slice(1), changesDirPrefix) : null
     for (const f of lines.slice(1)) {
       const file = f.replace(/\\/g, '/')
       let e = map.get(file)
-      if (!e) { e = { owners: new Set(), unknown: false, tokened: false }; map.set(file, e) }
+      if (!e) { e = { owners: new Set(), unknown: false, tokened: false, tokenDirs: new Set(), tokenAmbiguous: false }; map.set(file, e) }
       if (names.length === 0) {
         e.unknown = true
-        if (/task-\d+/i.test(lines[0])) e.tokened = true
+        if (touched) {
+          e.tokened = true
+          if (touched.size === 0) e.tokenAmbiguous = true
+          else for (const n of touched) e.tokenDirs.add(n)
+        }
       } else for (const n of names) e.owners.add(n)
     }
   }
@@ -270,19 +362,28 @@ export function commitAttributionForChange(cwd, specBase, currentChangeName, bas
     if (!base) return null
     const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%s', `${base}..HEAD`], { trim: false })
     if (r.value === null) return null
-    return buildCommitAttribution(r.value)
+    // 变更根取自 specBase（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的变更目录归属
+    return buildCommitAttribution(r.value, { changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
   } catch { return null }
 }
 
 /** 纯他侧文件判定（2026-11-08-bare-commit-attribution-narrow 细分）：
  *  own 路径——①记录缺位（窗口外文件）②含本变更名 touch ③无名 touch 带 task-NN token
- *    （交付协议证据，保守不误剔——token 无变更名限定，区分不了是谁的 task）。
+ *    （交付协议证据）且下列 foreign 条件不成立。
  *  foreign 路径——①纯他侧具名（旧语义）②纯裸 touch（无名无 token：release 生成器/
- *    Merge/归档 chore 形态——坑②污染源；误剔由收口「提交面夹带嫌疑 advisory」点名兜底）。 */
+ *    Merge/归档 chore 形态——坑②污染源；误剔由收口「提交面夹带嫌疑 advisory」点名兜底）
+ *    ③无名 task 提交的触碰全部有「触及他变更目录」的提交事实、且没有任何一次「分不清」的
+ *    触碰（2026-11-24-token-commit-change-dir-attribution：token 无变更名限定时，该提交随
+ *    tick 指引同提交其变更目录下的 tasks.md——触及哪个变更目录即是谁的 task；共享仓并行下
+ *    旧的「token 裸恒 own」把他侧任务提交的文件冻进本变更补丁）。
+ *  entry 无 tokenDirs/tokenAmbiguous 字段（旧调用方/手工构造）→ 行为与旧版一致（own）。 */
 export function isForeignByCommit(entry, currentChangeName) {
   if (!entry) return false
   if (entry.owners.has(currentChangeName)) return false
-  if (entry.tokened) return false
+  if (entry.tokened) {
+    if (entry.tokenAmbiguous !== true && entry.tokenDirs && entry.tokenDirs.size > 0 && !entry.tokenDirs.has(currentChangeName)) return true
+    return false
+  }
   return entry.owners.size > 0 || entry.unknown === true
 }
 

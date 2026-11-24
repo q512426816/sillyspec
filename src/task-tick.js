@@ -268,6 +268,9 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
     // 入库，消息占位带 task-NN token），把纪律变成可抄的命令；并当场提醒「此前勾选仍未进
     // git」（已勾 ≥2 格且 tasks.md 零提交）——反馈不再等到 flow done 终点。best-effort：
     // git 不可用（非 git 目录/失败返回 null）只给命令不给提醒，失败不影响翻格与 exit code。
+    // 消息占位带变更名（2026-11-24-token-commit-change-dir-attribution）：括号内先写变更名再写
+    // task token——照抄即得具名提交，收口的提交归属按名字定；只带 token 时共享仓并行会话下
+    // 分不清是谁的 task（他侧任务提交曾被算成本变更的，冻结补丁与漂移检测双双失真）。
     try {
       const { relative } = await import('node:path')
       const rel = (p) => relative(cwd, p).split('\\').join('/')
@@ -275,7 +278,7 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
       const paths = `${rel(tasksPath)}${existsSync(sidecar) ? ` ${rel(sidecar)}` : ''}`
       console.log(`📦 勾选随交付入库（add 与 commit 同一清单——勾选修改随任务交付同一提交）：`)
       console.log(`   git add -- <交付文件…> ${paths}`)
-      console.log(`   git commit -m "<本任务交付概括> (${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${paths}`)
+      console.log(`   git commit -m "<本任务交付概括> (${changeName} ${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${paths}`)
       const { gitQuiet } = await import('./git-helper.js')
       const touched = gitQuiet(cwd, ['log', '-n', '1', '--format=%h', '--', tasksPath])
       if (r.checked >= 2 && touched === '') {

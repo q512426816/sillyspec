@@ -23,7 +23,7 @@ import { modulePathMatches } from './modules.js'
 import { join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
+import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, isOwnCommitForChange } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { computeDocsDebt } from './docs-debt.js'
 import { anchorBackfillCandidate } from './decision-distill.js'
@@ -378,10 +378,12 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
  * 2026-10-05-flowdone-lintfail-output 收编活体复现：评审 P1 处置提交后不带 --refreeze 重跑，
  * 归档件缺处置面）。
  *
- * 判定：freezeHead（change-patch.json.head 冻结锚）..HEAD 窗口内存在「本变更名后缀提交」即
- * 漂移——按提交 message 变更名归属（parseChangeNamesFromSubject，与 filterCommittedFace
- * 同口径的既成事实切分，非声明抢文件）。仅他侧后缀/裸提交不触发（他侧面归属切分另有防线，
- * 裸提交保守不动作）。检测自身失败按无漂移（退现状幂等跳过行为，fail-safe 不新造阻断面）。
+ * 判定：freezeHead（change-patch.json.head 冻结锚）..HEAD 窗口内存在「本变更提交」即
+ * 漂移——归属口径单一源 isOwnCommitForChange（2026-11-24-token-commit-change-dir-attribution；
+ * 与 filterCommittedFace 的文件级归属同口径的既成事实切分，非声明抢文件）：具名按名字定；
+ * 无名 task 提交按触及的变更目录归属，什么变更目录都不触及则保守 own。他变更名提交、触及
+ * 他变更目录的 task 提交、纯裸提交不触发（他侧面归属切分另有防线，裸提交保守不动作）。
+ * 检测自身失败按无漂移（退现状幂等跳过行为，fail-safe 不新造阻断面）。
  *
  * 文件面三字段（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
  * ownCommits 只答「有没有漂移」，不答「评审结论该不该作废」——调用方（flow.js 漂移分支）
@@ -391,8 +393,8 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
  *                       重评，fail-safe 宁可多评）
  *   governanceOnly      own 提交全在 .sillyspec/** 下且文件集非空（治理文件等价漂移）
  *   touchedPromiseFace  含本变更 requirements.md / design.md（承诺面也是评审对象，破豁免）
- * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
- * @returns {{ drifted: boolean, ownCommits: string[], head: string|null, ownFiles: string[], governanceOnly: boolean, touchedPromiseFace: boolean }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
+ * @param {{ cwd: string, change: string, freezeHead: string|null, changesDirPrefix?: string }} opts changesDirPrefix=变更根在仓内的相对前缀（缺省 .sillyspec/changes/，空串=禁用目录归属）
+ * @returns {{ drifted: boolean, ownCommits: string[], head: string|null, ownFiles: string[], governanceOnly: boolean, touchedPromiseFace: boolean }} ownCommits=本变更提交的 subject 列表（截 80 字）
  */
 /**
  * 冻结件完整性探针（2026-10-19-thin-empty-face-cross-repo-freeze）：空面跨仓冻结走
@@ -451,7 +453,7 @@ export function missingFreezeLabels(changeDir) {
   return freezeGapLabels(inspectFreezeArtifacts(changeDir))
 }
 
-export function detectPatchDrift({ cwd, change, freezeHead }) {
+export function detectPatchDrift({ cwd, change, freezeHead, changesDirPrefix }) {
   try {
     if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true }).trim()
@@ -463,10 +465,12 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
       const subject = lines[0]
       if (!subject) continue
-      // token 裸提交补认 own（坑 2026-11-13-flow-done-patch-refreeze-skip-on-rework）：归因口径与
-      // buildCommitAttribution（2026-11-08-bare-commit-attribution-narrow）对齐——具名或带
-      // task-NN token（交付协议证据）均算本变更提交；纯裸提交（无名无 token）不算。
-      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
+      // 归属口径单一源 isOwnCommitForChange（2026-11-24-token-commit-change-dir-attribution）：
+      // 具名按名字定；无名 task 提交按触及的变更目录归属（他变更目录的 task 提交不再算本变更
+      // ——共享仓并行下旧的「含 task token 即 own」把冻结补丁由 7 文件膨胀到 34 文件并隔离
+      // 有效评审）；不触及变更目录的无名 task 提交仍保守 own（坑
+      // 2026-11-13-flow-done-patch-refreeze-skip-on-rework 的返工形态）；纯裸提交不算。
+      if (isOwnCommitForChange({ subject, files: lines.slice(1) }, change, changesDirPrefix)) {
         own.push(subject.slice(0, 80))
         for (const f of lines.slice(1)) ownFileSet.add(f.replace(/\\/g, '/'))
       }
@@ -494,7 +498,7 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
  * fail-safe：锚空/非祖先（rebase 重写）/git 失败 → false（宁可多评）。
  * @returns {{ok: boolean, ownCount: number, files: string[], touchedPromiseFace: boolean}}
  */
-export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
+export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha, changesDirPrefix }) {
   try {
     const a = String(anchorSha || '').trim().toLowerCase()
     if (!/^[0-9a-f]{7,40}$/.test(a)) return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false }
@@ -507,7 +511,8 @@ export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
       const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
       const subject = lines[0]
       if (!subject) continue
-      if (parseChangeNamesFromSubject(subject).includes(change) || /task-\d+/i.test(subject)) {
+      // 归属口径与 detectPatchDrift 同源（isOwnCommitForChange，2026-11-24-token-commit-change-dir-attribution）。
+      if (isOwnCommitForChange({ subject, files: lines.slice(1) }, change, changesDirPrefix)) {
         ownCount++
         for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
       }

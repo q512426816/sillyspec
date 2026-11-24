@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   parseChangeNamesFromSubject, buildCommitAttribution, isForeignByCommit,
-  splitOwnVsForeignDiffFiles,
+  splitOwnVsForeignDiffFiles, touchedChangeDirs, changesDirPrefixFor,
 } from '../src/foreign-declared.js'
 import { filterCommittedFace } from '../src/flow-parity.js'
 
@@ -144,6 +144,148 @@ test('③ 降级现状：非 git 仓 / 无 flow-state → 行为与旧版一致'
     assert.deepEqual(frozen, ['src/a.js', '.sillyspec/docs/x.md'])
     // 非标准 ownPrefix（无变更名可反解）→ 纯现状
     assert.deepEqual(filterCommittedFace(list, 'x/'), ['src/a.js', '.sillyspec/docs/x.md'])
+  } finally {
+    try { rmSync(d, { recursive: true, force: true }) } catch {}
+  }
+})
+
+// ── 2026-11-24-token-commit-change-dir-attribution：无名 task 提交按触及的变更目录归属 ──
+// 坑实证（multi-agent-platform 2026-11-24）：共享仓并行会话都按 task-NN 约定提交，旧口径对
+// 「无名有 token」恒判 own——他侧任务提交的文件冻进本变更补丁（7 文件膨胀到 34 文件）。
+// 他侧任务提交随 tick 指引同时提交其变更目录下的 tasks.md/侧车，「触及哪个变更目录」是
+// 提交事实。不触及任何变更目录的无名 task 提交仍分不清，维持保守 own（① 与 ② 的形态不变）。
+const THIRD = '2026-10-05-third-change'
+const P = '.sillyspec/changes/'
+
+test('④ token 裸提交按触及的变更目录归属（纯函数）', () => {
+  const log = [
+    // 他变更的任务提交：随 tick 指引一并提交其变更目录下的 tasks.md 与侧车
+    '\x00fix: 他侧任务交付 (task-02)', `${P}${OTHER}/tasks.md`, `${P}${OTHER}/task-ticks.jsonl`, 'src/theirs.js', '',
+    // 触及本变更目录的无名 task 提交
+    '\x00feat: 我的任务交付 (task-01)', `${P}${ME}/tasks.md`, 'src/mine-tok.js', '',
+    // 同时触及两个变更目录
+    '\x00fix: 双目录提交 (task-03)', `${P}${ME}/tasks.md`, `${P}${OTHER}/tasks.md`, 'src/both.js', '',
+    // 触及他变更的归档目录
+    '\x00docs: 归档补记 (task-04)', `${P}archive/${OTHER}/tasks.md`, 'src/arch.js', '',
+    // 不触及任何变更目录（分不清，保守）
+    '\x00fix: 返工 (task-05)', 'src/ambiguous.js', '',
+    // 混合：先被「他变更目录」提交触碰，后被「无目录」提交触碰
+    '\x00fix: 他侧 (task-06)', `${P}${OTHER}/tasks.md`, 'src/mixed.js', '',
+    '\x00fix: 无目录 (task-07)', 'src/mixed.js', '',
+    // 反斜杠路径形态
+    '\x00fix: win (task-08)', `${P.replaceAll('/', '\\')}${OTHER}\\tasks.md`, 'src\\win-theirs.js', '',
+  ].join('\n')
+  const attr = buildCommitAttribution(log, { changesDirPrefix: P })
+  // 对本变更 ME：只被「他变更目录的 task 提交」触碰的文件 → foreign
+  assert.equal(isForeignByCommit(attr.get('src/theirs.js'), ME), true, '他变更目录的 task 提交文件 → 对本变更 foreign')
+  assert.equal(isForeignByCommit(attr.get('src/arch.js'), ME), true, '触及他变更归档目录 → foreign')
+  assert.equal(isForeignByCommit(attr.get('src/win-theirs.js'), ME), true, '反斜杠路径同样识别')
+  // 对其所属变更 OTHER：own
+  assert.equal(isForeignByCommit(attr.get('src/theirs.js'), OTHER), false, '对其所属变更 own')
+  assert.equal(isForeignByCommit(attr.get('src/arch.js'), OTHER), false, '归档目录形态对其所属变更 own')
+  // 触及本变更目录 → 对本变更 own；对无关变更 foreign
+  assert.equal(isForeignByCommit(attr.get('src/mine-tok.js'), ME), false, '触及本变更目录 → own')
+  assert.equal(isForeignByCommit(attr.get('src/mine-tok.js'), THIRD), true, '对无关变更 foreign')
+  // 双目录：对双方都 own（保守）
+  assert.equal(isForeignByCommit(attr.get('src/both.js'), ME), false, '双目录提交对本变更 own')
+  assert.equal(isForeignByCommit(attr.get('src/both.js'), OTHER), false, '双目录提交对他变更 own')
+  // 无目录：分不清 → 对任何变更都 own
+  assert.equal(isForeignByCommit(attr.get('src/ambiguous.js'), ME), false, '不触及变更目录 → 保守 own')
+  assert.equal(isForeignByCommit(attr.get('src/ambiguous.js'), THIRD), false, '不触及变更目录 → 对无关变更同样保守 own')
+  // 混合触碰：含「分不清」的触碰 → 保守 own
+  assert.equal(isForeignByCommit(attr.get('src/mixed.js'), ME), false, '混合触碰（含无目录提交）→ 保守 own')
+  // 禁用目录归属（空串）→ 退回保守
+  const attrOff = buildCommitAttribution(log, { changesDirPrefix: '' })
+  assert.equal(isForeignByCommit(attrOff.get('src/theirs.js'), ME), false, '目录归属禁用 → 保守 own')
+  // 自定义变更根
+  const attrCustom = buildCommitAttribution([
+    '\x00fix: 他侧 (task-01)', `docs/spec/changes/${OTHER}/tasks.md`, 'src/custom-theirs.js', '',
+  ].join('\n'), { changesDirPrefix: 'docs/spec/changes/' })
+  assert.equal(isForeignByCommit(attrCustom.get('src/custom-theirs.js'), ME), true, '自定义变更根同样生效')
+  // 缺省变更根
+  const attrDefault = buildCommitAttribution(log)
+  assert.equal(isForeignByCommit(attrDefault.get('src/theirs.js'), ME), true, '未传 opts 走缺省 .sillyspec/changes/')
+  // 旧形态 entry（无新字段）行为不变
+  assert.equal(isForeignByCommit({ owners: new Set(), unknown: true, tokened: true }, ME), false, '旧 entry 形态（无 tokenDirs）→ own 不变')
+  // touchedChangeDirs：变更目录口径
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`, 'src/x.js'])], [OTHER])
+  assert.deepEqual([...touchedChangeDirs([`${P}archive/${OTHER}/tasks.md`])], [OTHER], '归档目录计入该变更名')
+  assert.deepEqual([...touchedChangeDirs([`${P}stray.md`, `${P}${OTHER}`])], [], '变更根下散文件与同名文件不算触及目录')
+  assert.deepEqual([...touchedChangeDirs([`${P}archive/x.md`])], [], '归档根下散文件不算')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`.replaceAll('/', '\\')])], [OTHER], '反斜杠归一')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`], 'docs/spec/changes')], [], '前缀无尾斜杠时按目录边界匹配')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`], '')], [], '空串禁用')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`], null)], [], 'null 禁用')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`], undefined)], [OTHER], 'undefined 走缺省前缀')
+  assert.deepEqual([...touchedChangeDirs([`${P}${OTHER}/tasks.md`], '.sillyspec/changes/')], [OTHER])
+})
+
+/** 并行会话仓（2026-11-24-token-commit-change-dir-attribution）：本变更具名交付 + 他会话的无名
+ *  task 交付（随 tick 指引同提交其变更目录下的 tasks.md 与侧车）+ 不触及变更目录的无名 task 提交。 */
+function mkParallelSessionRepo() {
+  const d = mkdtempSync(join(tmpdir(), 'catr-par-'))
+  const g = (cmd) => execSync(cmd, { cwd: d, encoding: 'utf8', windowsHide: true })
+  g('git init -q')
+  g('git config user.email t@t && git config user.name t')
+  writeFileSync(join(d, 'seed.txt'), 'seed')
+  g('git add seed.txt && git commit -q -m "chore: seed"')
+  const base = g('git rev-parse HEAD').trim()
+  const myDir = join(d, '.sillyspec', 'changes', ME)
+  mkdirSync(myDir, { recursive: true })
+  writeFileSync(join(myDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
+  g('git add .sillyspec && git commit -q -m "chore(wip)"')
+  // 我的具名交付
+  mkdirSync(join(d, 'src'))
+  writeFileSync(join(d, 'src', 'mine.js'), 'mine')
+  g('git add src/mine.js && git commit -q -m "feat(me): 我的交付 (ME)"'.replaceAll('ME', `(${ME})`))
+  // 他会话的任务交付：无变更名、带 task token，随 tick 指引同提交其变更目录下的 tasks.md 与侧车
+  const theirDir = join(d, '.sillyspec', 'changes', OTHER)
+  mkdirSync(theirDir, { recursive: true })
+  writeFileSync(join(theirDir, 'tasks.md'), '# t\n')
+  writeFileSync(join(theirDir, 'task-ticks.jsonl'), '{"task":"task-02"}\n')
+  writeFileSync(join(d, 'src', 'theirs.js'), 'theirs')
+  g('git add .sillyspec/changes src/theirs.js && git commit -q -m "feat(x): 他侧任务交付 (task-02)"')
+  // 不触及变更目录的无名 task 提交（分不清，保守 own）
+  writeFileSync(join(d, 'src', 'ambiguous.js'), 'ambiguous')
+  g('git add src/ambiguous.js && git commit -q -m "fix: 返工 (task-09)"')
+  const windowFiles = ['src/mine.js', 'src/theirs.js', 'src/ambiguous.js']
+  return { d, base, windowFiles }
+}
+
+test('⑥ 并行会话集成：他变更的 token 裸交付出本变更 own 面与冻结面', () => {
+  const { d, base, windowFiles } = mkParallelSessionRepo()
+  try {
+    const r = splitOwnVsForeignDiffFiles(d, ME, windowFiles, {})
+    const ownSet = new Set(r.own)
+    assert.equal(ownSet.has('src/theirs.js'), false, '他变更目录的 task 提交文件出本变更 own 面')
+    assert.ok(r.foreign.some((x) => x.file === 'src/theirs.js'), `foreign 列表点名（实际 ${JSON.stringify(r.foreign)}）`)
+    assert.equal(ownSet.has('src/mine.js'), true, '具名交付保留')
+    assert.equal(ownSet.has('src/ambiguous.js'), true, '无目录无名 task 提交保守保留')
+    const frozen = filterCommittedFace(windowFiles, `.sillyspec/changes/${ME}/`, { cwd: d })
+    assert.deepEqual(frozen, ['src/mine.js', 'src/ambiguous.js'], '本变更冻结面：剔除他变更的 task 提交文件')
+    // 换作该他会话的变更收口：其任务提交文件在其冻结面，我的具名交付被剔除
+    const frozenOther = filterCommittedFace(windowFiles, `.sillyspec/changes/${OTHER}/`, { cwd: d, baselineCommit: base })
+    assert.deepEqual(frozenOther, ['src/theirs.js', 'src/ambiguous.js'], '他会话变更的冻结面：含其任务提交文件')
+  } finally {
+    try { rmSync(d, { recursive: true, force: true }) } catch {}
+  }
+})
+
+test('⑤ changesDirPrefixFor：仓内 spec 目录得相对前缀；仓外得空串', () => {
+  const d = mkdtempSync(join(tmpdir(), 'catr-prefix-'))
+  try {
+    assert.equal(changesDirPrefixFor(d, join(d, '.sillyspec')), '.sillyspec/changes/', '缺省 spec 目录')
+    assert.equal(changesDirPrefixFor(d, join(d, 'docs', 'spec')), 'docs/spec/changes/', '自定义 spec 目录（不写死 .sillyspec）')
+    assert.equal(changesDirPrefixFor(d, '.sillyspec'), '.sillyspec/changes/', '相对 specBase 按仓根解析')
+    assert.equal(changesDirPrefixFor(d, join(d, 'a', '..', '.sillyspec')), '.sillyspec/changes/', '先上溯再回来的等价路径')
+    assert.equal(changesDirPrefixFor(join(d, 'sub'), join(d, '.sillyspec')), '', 'spec 目录在给定仓根之外 → 空串（禁用目录归属）')
+    assert.equal(changesDirPrefixFor(d, join(d, '..', 'elsewhere-spec')), '', '仓外路径 → 空串')
+    assert.equal(changesDirPrefixFor(d, ''), '', 'specBase 缺失 → 空串')
+    assert.equal(changesDirPrefixFor('', join(d, '.sillyspec')), '', '仓根缺失 → 空串')
+    if (process.platform === 'win32') {
+      assert.equal(changesDirPrefixFor('c:\\repo', 'C:\\repo\\.sillyspec'), '.sillyspec/changes/', '盘符大小写不敏感')
+      assert.equal(changesDirPrefixFor('C:\\repo', 'D:\\spec'), '', '跨盘符（path.relative 返回绝对路径）→ 空串')
+    }
   } finally {
     try { rmSync(d, { recursive: true, force: true }) } catch {}
   }

@@ -1939,7 +1939,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       try {
         const patchMeta = JSON.parse(readFileSync(patchJsonPath, 'utf8'))
         const { detectPatchDrift } = await import('./flow-parity.js')
-        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
+        // 变更根前缀（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的变更
+        // 目录归属，目录口径取自 specBase（不写死 .sillyspec）。
+        const { changesDirPrefixFor } = await import('./foreign-declared.js')
+        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
         if (drift.drifted) {
           drifted = true
           console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
@@ -1986,9 +1989,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           try {
             const { extractAnchorSha } = await import('./flow-review.js')
             const { deliveryFaceAnchoredAfter } = await import('./flow-parity.js')
+            const { changesDirPrefixFor } = await import('./foreign-declared.js')
             const _raw = JSON.parse(readFileSync(reviewPath, 'utf8'))
             const _anchor = extractAnchorSha(_raw && _raw.reviewedAgainst)
-            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor }) : null
+            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor, changesDirPrefix: changesDirPrefixFor(cwd, specBase) }) : null
           } catch { /* 锚读取/判定失败 → 走隔离（fail-safe 宁可多评） */ }
           if (_deliveryAnchored && _deliveryAnchored.ok) {
             console.log(`   review.json 保留不隔离——复审锚（reviewedAgainst）之后的本变更提交仅触及治理文件（${_deliveryAnchored.ownCount} 个提交，未触 requirements/design），评审对象（交付面）自锚点起未变，结论有效；change.patch 自动重冻结（治理工件不入冻结面）`)

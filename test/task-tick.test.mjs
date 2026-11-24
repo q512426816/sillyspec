@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { tickTasksMd } from '../src/task-tick.js'
 import { detectBatchCheckCadence } from '../src/sentinel-assertions.js'
 import { readWatcherEvents } from '../src/watcher.js'
+import { parseChangeNamesFromSubject } from '../src/foreign-declared.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
@@ -168,13 +169,17 @@ test('⑧ tick 回显提交命令模板与未入库提醒：命令含 task-NN �
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
   const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
   assert.equal(t1.status, 0, t1.stderr)
-  assert.match(t1.stdout, /git commit -m "<本任务交付概括> \(task-01\)"/, '提交命令模板（消息占位带 token）')
+  // 2026-11-24-token-commit-change-dir-attribution：模板括号内先写变更名再写 task token——照抄即得
+  // 具名提交，提交归属按名字定（共享仓并行下不再依赖「分不清是谁的 task token」的保守判定）。
+  assert.match(t1.stdout, /git commit -m "<本任务交付概括> \(2026-10-01-vtt-8 task-01\)"/, '提交命令模板（消息占位带变更名与 task token）')
+  const tplMessage = /git commit -m "([^"]*)"/.exec(t1.stdout)?.[1] ?? ''
+  assert.deepEqual(parseChangeNamesFromSubject(tplMessage), [change], '模板消息可被提交归属的变更名解析识别')
   assert.match(t1.stdout, /\.sillyspec\/changes\/2026-10-01-vtt-8\/tasks\.md/, 'pathspec 含 tasks.md（相对路径）')
   assert.match(t1.stdout, /task-ticks\.jsonl/, 'pathspec 含侧车')
   assert.doesNotMatch(t1.stdout, /未随交付入库/, '首格勾选零历史——不提醒')
   const t2 = cli(['task', 'tick', '--change', change, '--task', 'task-02'])
   assert.equal(t2.status, 0, t2.stderr)
-  assert.match(t2.stdout, /\(task-02\)/, '模板 token 随任务')
+  assert.match(t2.stdout, /\(2026-10-01-vtt-8 task-02\)/, '模板的变更名与 token 随任务')
   assert.match(t2.stdout, /未随交付入库/, '已勾≥2 且 tasks.md 零 git 提交 → 当场提醒')
   // tasks.md 随交付入库后提醒消失
   execFileSync('git', ['add', '--', join(cwd, '.sillyspec', 'changes', change, 'tasks.md')], { cwd, stdio: 'pipe' })

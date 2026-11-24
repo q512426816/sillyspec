@@ -386,3 +386,124 @@ test('⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍�
   const r2 = detectPatchDrift({ cwd: d2, change: CHG, freezeHead: fh2 })
   assert.equal(r2.drifted, false, '纯裸提交（release 形态）仍不触发')
 })
+
+// ── 2026-11-24-token-commit-change-dir-attribution：无名 task 提交按触及的变更目录归属 ──
+// 坑实证（multi-agent-platform 2026-11-24）：共享仓并行会话都按 task-NN 约定提交，旧口径把
+// 「标题含任意 task token」一律算本变更提交——他侧提交触发假的审计时点漂移，冻结补丁由
+// 7 文件膨胀到 34 文件（仅 3 个属于该变更），已通过的评审被隔离作废。他侧任务提交随 tick
+// 指引同时提交其变更目录下的 tasks.md 与侧车——「触及哪个变更目录」是可用的提交事实。
+// 不触及任何变更目录的无名 task 提交（⑦ 的返工形态）仍分不清，维持保守 own。
+const OTHER_CHG = '2026-10-05-drift-other'
+
+test('⑧ 他变更的 token 裸提交不触发本变更漂移；触及本变更目录的 token 裸提交触发', () => {
+  const d = fx()
+  const run = gitRepo(d)
+  writeFileSync(join(d, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  // 他会话的任务提交：无变更名、带 task token，随 tick 指引一并提交其变更目录下的 tasks.md
+  mkdirSync(join(d, '.sillyspec', 'changes', OTHER_CHG), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'changes', OTHER_CHG, 'tasks.md'), '# o\n')
+  writeFileSync(join(d, 'their.txt'), 't\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 他侧任务交付 (task-02)'])
+  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
+  assert.equal(r.drifted, false, `他变更的 token 裸提交不算本变更提交（ownCommits=${JSON.stringify(r.ownCommits)}）`)
+  // 同一笔提交对其所属变更仍是 own（不误剔他侧自己的漂移检测）
+  r = detectPatchDrift({ cwd: d, change: OTHER_CHG, freezeHead })
+  assert.equal(r.drifted, true, '触及本变更目录的 token 裸提交触发漂移')
+  assert.ok(r.ownCommits.some((s) => s.includes('task-02')), 'ownCommits 含该提交')
+  // 交付面锚定同口径：锚后只有他变更的 token 裸提交 → 本变更评审仍有效
+  r = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: freezeHead })
+  assert.equal(r.ok, true, `锚后仅他变更 token 裸提交 → 交付面自锚点未变（files=${JSON.stringify(r.files)}）`)
+  r = deliveryFaceAnchoredAfter({ cwd: d, change: OTHER_CHG, anchorSha: freezeHead })
+  assert.equal(r.ok, false, '对其所属变更：锚后交付提交 → 不 ok')
+  // 同时触及本变更目录与他变更目录 → 仍算本变更（保守，own 优先）
+  mkdirSync(join(d, '.sillyspec', 'changes', CHG), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'changes', CHG, 'tasks.md'), '# m\n')
+  writeFileSync(join(d, 'both.txt'), 'b\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 双目录提交 (task-04)'])
+  r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
+  assert.equal(r.drifted, true, '同时触及本变更目录的 token 裸提交触发漂移')
+  assert.ok(r.ownCommits.some((s) => s.includes('task-04')), 'ownCommits 含双目录提交')
+  assert.ok(!r.ownCommits.some((s) => s.includes('task-02')), 'ownCommits 仍不含只触及他变更目录的提交')
+  // 触及他变更归档目录的同形态
+  const d2 = fx()
+  const run2 = gitRepo(d2)
+  writeFileSync(join(d2, 'base.txt'), 'base\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
+  const fh2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
+  mkdirSync(join(d2, '.sillyspec', 'changes', 'archive', OTHER_CHG), { recursive: true })
+  writeFileSync(join(d2, '.sillyspec', 'changes', 'archive', OTHER_CHG, 'tasks.md'), '# o\n')
+  writeFileSync(join(d2, 'arch.txt'), 'a\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'docs: 归档补记 (task-03)'])
+  assert.equal(detectPatchDrift({ cwd: d2, change: CHG, freezeHead: fh2 }).drifted, false, '触及他变更归档目录的 token 裸提交不算本变更')
+  // 自定义变更根（spec 目录不在缺省位置）：同规则按传入前缀判定
+  const d3 = fx()
+  const run3 = gitRepo(d3)
+  writeFileSync(join(d3, 'base.txt'), 'base\n')
+  run3(['add', '.']); run3(['commit', '-q', '-m', 'base'])
+  const fh3 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d3, encoding: 'utf8' }).trim()
+  mkdirSync(join(d3, 'docs', 'spec', 'changes', OTHER_CHG), { recursive: true })
+  writeFileSync(join(d3, 'docs', 'spec', 'changes', OTHER_CHG, 'tasks.md'), '# o\n')
+  writeFileSync(join(d3, 'theirs3.txt'), 't\n')
+  run3(['add', '.']); run3(['commit', '-q', '-m', 'fix: 他侧任务交付 (task-01)'])
+  assert.equal(detectPatchDrift({ cwd: d3, change: CHG, freezeHead: fh3, changesDirPrefix: 'docs/spec/changes/' }).drifted, false, '自定义变更根：他变更目录提交不算本变更')
+  // 空串=禁用目录归属 → 退回保守（无名 task 提交算本变更）
+  assert.equal(detectPatchDrift({ cwd: d3, change: CHG, freezeHead: fh3, changesDirPrefix: '' }).drifted, true, '目录归属禁用时维持保守 own')
+})
+
+// ── 2026-11-24-token-commit-change-dir-attribution：并行会话端到端 ──
+// multi-agent-platform 2026-11-24 实证路径：评审 PASS 后别的会话提交了几笔任务交付（标题只带
+// task token、随 tick 指引同提交其变更目录），重跑 flow done 把它们误判为本变更提交——报
+// 「审计时点漂移」、隔离刚通过的评审、把冻结补丁由 7 文件重冻成 34 文件（仅 3 个属于该变更）。
+test('⑨ e2e：评审 PASS 后他变更 token 裸提交落地——不漂移不隔离，补丁不含他侧文件', () => {
+  const cwd = fx()
+  const run = gitRepo(cwd)
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const cn = '2026-11-24-par-e2e'
+  const other = '2026-11-24-par-other'
+  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '并行会话漂移端到端链路验证\n\n成功标准：\n- 他变更的任务提交不触发本变更漂移'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const base = join(cwd, '.sillyspec', 'changes', cn)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：并行会话漂移链路验证，存在时序窗口（评审与他侧提交之间）。'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 在他变更的任务提交落地后不误判漂移（夹具行为句')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「⑨ e2e：评审 PASS 后他变更 token 裸提交落地」'))
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n')
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
+  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
+  // 首轮 done：patch 冻结 → 评审任务书（exit 1）
+  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out2 = s2.stdout + s2.stderr
+  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
+  assert.ok(existsSync(join(base, 'change-patch.json')), '首轮已冻结 patch')
+  // 评审 PASS 锚定当前 HEAD
+  const headAtReview = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
+  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: headAtReview, findings: [], dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
+  // 他会话的任务提交落地：无变更名、带 task token，随 tick 指引同提交其变更目录下的 tasks.md 与侧车
+  mkdirSync(join(cwd, '.sillyspec', 'changes', other), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'changes', other, 'tasks.md'), '# o\n')
+  writeFileSync(join(cwd, '.sillyspec', 'changes', other, 'task-ticks.jsonl'), '{"task":"task-02"}\n')
+  writeFileSync(join(cwd, 'src', 'theirs.js'), 'export const t = 2\n')
+  run(['add', join('.sillyspec', 'changes', other), 'src/theirs.js']); run(['commit', '-q', '-m', 'fix: 他侧任务交付 (task-02)'])
+  // 重跑：不报漂移、不隔离评审、直接归档
+  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out3 = s3.stdout + s3.stderr
+  assert.ok(!out3.includes('审计时点漂移'), `他变更的任务提交不得触发本变更漂移（尾部：${out3.split('\n').slice(-6).join(' | ')}）`)
+  assert.ok(!out3.includes('独立评审任务书'), '不重印评审任务书（评审未被隔离）')
+  assert.equal(s3.status, 0, `直接归档成功（exit 0；尾部：${out3.split('\n').slice(-5).join(' | ')}）`)
+  assert.ok(out3.includes('flow done 完成'), '收口完成（归档注销）')
+  const archivedBase = join(cwd, '.sillyspec', 'changes', 'archive', cn)
+  assert.ok(existsSync(archivedBase), '变更已归档（目录移入 archive/）')
+  assert.ok(!readdirSync(archivedBase).some((f) => f.startsWith('review.json.superseded')), `评审未被隔离（归档目录实况：${readdirSync(archivedBase).join(',')}）`)
+  assert.ok(existsSync(join(archivedBase, 'review.json')), '评审随归档留档')
+  const patch = readFileSync(join(archivedBase, 'change.patch'), 'utf8')
+  assert.ok(patch.includes('+++ b/src/work.js'), '补丁含本变更交付面（按 diff hunk 头判）')
+  assert.ok(!patch.includes('+++ b/src/theirs.js'), '补丁不含他变更任务提交的文件')
+})
