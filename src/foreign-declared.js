@@ -301,6 +301,43 @@ export function changesDirPrefixFor(cwd, specBase) {
 }
 
 /**
+ * 窗口内「分不清」的无名 task 提交清单（2026-11-24-token-commit-change-dir-attribution FR-06，
+ * advisory 用）：标题未提变更名、带 task token、且不触及任何变更目录——按 FR-03 维持保守 own
+ * （算每个变更的提交），但误判时须能直接看出是哪笔所致（落地验证：multi-agent-platform 最近
+ * 300 笔提交里只带 task token 的 59 笔中有 29 笔属此形态）。
+ * @param {{ cwd: string, sinceRef: string, changesDirPrefix?: string }} opts sinceRef=窗口起点（不含）
+ * @returns {Array<{ sha: string, subject: string, files: string[] }>|null} git 新→旧；null=入参缺失/git 失败（调用方静默跳过）
+ */
+export function listAmbiguousTokenCommits({ cwd, sinceRef, changesDirPrefix } = {}) {
+  try {
+    if (!cwd || !sinceRef) return null
+    const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%H%x1f%s', `${sinceRef}..HEAD`], { trim: false })
+    if (r.value === null) return null
+    const out = []
+    for (const block of String(r.value).split('\x00')) {
+      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+      if (lines.length === 0) continue
+      const sep = lines[0].indexOf('\x1f')
+      if (sep === -1) continue
+      const sha = lines[0].slice(0, sep)
+      const subject = lines[0].slice(sep + 1)
+      if (!subject || !TASK_TOKEN_RE.test(subject) || parseChangeNamesFromSubject(subject).length > 0) continue
+      const files = lines.slice(1).map((f) => f.replace(/\\/g, '/'))
+      if (touchedChangeDirs(files, changesDirPrefix).size > 0) continue
+      out.push({ sha, subject, files })
+    }
+    return out
+  } catch { return null }
+}
+
+/** listAmbiguousTokenCommits 结果的提示行格式：`<短 sha> <标题截 60>`，分号连接；空清单得空串。 */
+export function formatAmbiguousTokenCommits(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((c) => `${String((c && c.sha) || '').slice(0, 9)} ${String((c && c.subject) || '').slice(0, 60)}`)
+    .join('；')
+}
+
+/**
  * git log 文本（--format=%x00%s --name-only，每提交 NUL+标题+文件行）→ 文件提交归属映射。
  * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过；
  * tokened=无名 touch 中存在带 task-NN token 者（`task-\d+`——交付协议证据，thin-tasks-v3

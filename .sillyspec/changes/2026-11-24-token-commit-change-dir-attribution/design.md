@@ -25,6 +25,7 @@ created_at: 2026-11-24T04:28:30.659Z
 - `detectPatchDrift`、`deliveryFaceAnchoredAfter`（`src/flow-parity.js`）：新增可选入参 `changesDirPrefix`（缺省 `.sillyspec/changes/`，空串表示禁用目录归属），返回形状不变。
 - `cmdFlowDone`（`src/flow.js`）：两处调用传入变更根前缀。CLI 命令与落盘文件格式无变化。
 - `src/task-tick.js` 勾选成功后回显的提交命令模板由 `(<task-NN>)` 改为 `(<变更名> <task-NN>)`——这是 CLI 输出文案的唯一变化；`git add` 清单、下一任务提示、未入库提醒与幂等分支不变。模板形态与 `parseChangeNamesFromSubject` 的括号解析同形（括号内以日期前缀变更名开头、名字后允许附注），照抄即得具名提交。
+- FR-06（用户在执行断点选定「加一条提示」）：`src/foreign-declared.js` 新增导出 `listAmbiguousTokenCommits({ cwd, sinceRef, changesDirPrefix })`（窗口内「无名、带 task token、不触及任何变更目录」的提交清单，git 失败返回 null）；`cmdFlowDone` 在 patch 子步冻结面算出后、漂移检测触发时各打一条 `[归属分不清·advisory]`。纯提示：不参与任何判定、不改变评审隔离与归档结果、不阻断收口。
 - 对现行规则的影响：收窄 FR-core-engine-275 与 D-core-engine-049 的「他侧 token 提交保守 own」——有变更目录这一提交事实时不再保守；无提交事实时维持。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
@@ -71,3 +72,7 @@ created_at: 2026-11-24T04:28:30.659Z
 | 修改 | test/flowdone-disposition-drift.test.mjs | 新增 ⑧（提交级漂移）⑨（flow done 端到端） |
 | 修改 | src/task-tick.js | 勾选回显的提交命令模板带上变更名 |
 | 修改 | test/task-tick.test.mjs | ⑧ 的模板断言按新形态更新，并补「模板可解析出变更名」断言 |
+| 修改 | src/foreign-declared.js（FR-06） | 新增 listAmbiguousTokenCommits |
+| 修改 | src/flow.js（FR-06） | patch 子步与漂移分支各打一条「归属分不清」advisory |
+| 修改 | test/flowdone-disposition-drift.test.mjs（FR-06） | 新增 ⑩（分不清形态：漂移照旧并点名提示） |
+| 修改 | test/commit-attribution-split.test.mjs（FR-06） | 新增 ⑦（listAmbiguousTokenCommits 纯函数面） |

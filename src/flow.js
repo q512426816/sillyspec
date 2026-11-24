@@ -1946,6 +1946,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (drift.drifted) {
           drifted = true
           console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
+          // 归属分不清提示（2026-11-24-token-commit-change-dir-attribution FR-06，advisory）：漂移若由
+          // 「分不清」形态的无名 task 提交引起，点名它们——判定与评审处置不变，只让误判可见。
+          try {
+            const { listAmbiguousTokenCommits, formatAmbiguousTokenCommits } = await import('./foreign-declared.js')
+            const _ambDrift = listAmbiguousTokenCommits({ cwd, sinceRef: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
+            if (_ambDrift && _ambDrift.length > 0) {
+              console.warn(`   ⚠️ [归属分不清·advisory] 其中 ${_ambDrift.length} 笔带 task token、未写变更名、未触及任何变更目录——无法判断归属，已按本变更提交处理并触发漂移: ${formatAmbiguousTokenCommits(_ambDrift)}`)
+              console.warn('   若属他侧，请其提交标题带上变更名（(<变更名> task-NN)）后重跑；本提示不改变归属与漂移判定')
+            }
+          } catch { /* 提示失败不影响漂移处置 */ }
         }
       } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
     }
@@ -2055,7 +2065,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 提交面过滤抽为 flow-parity.filterCommittedFace（2026-09-27-tool-debt-cleanup：
         // +.sillyspec/docs/ 交付文档保留——模块卡漏出审计 patch 的评审 P2 修复）
         const { filterCommittedFace } = await import('./flow-parity.js')
-        let committed = filterCommittedFace(committedRaw, ownPrefix)
+        // 显式传 cwd/specBase/baseline（2026-11-24-token-commit-change-dir-attribution）：提交归属按仓内
+        // 变更根判定，`--dir <仓>` 从仓外调用时不得落到进程 cwd。
+        let committed = filterCommittedFace(committedRaw, ownPrefix, { cwd, specBase, baselineCommit: st.baseline_commit })
         // 夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit，2026-09-26
         // 实证：daemon 遥测主题提交整体夹带并行会话旧分叉 page.tsx，静默回滚 main 已落地三处
         // 功能——git 无冲突、聚焦测试不覆盖挂载面，绿灯直过）。提交面里未被本变更任何声明面
@@ -2081,6 +2093,19 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.warn(`⚠️ 本变更无任何文件声明面（design 无清单、requirements 无绑定），提交面 ${deliverables.length} 个交付文件无法归因——建议补 design「文件变更清单」自声明（冻结面归属与夹带识别的锚点）`)
           }
         } catch { /* 声明面解析失败不阻断冻结 */ }
+        // 归属分不清提示（2026-11-24-token-commit-change-dir-attribution FR-06，advisory）：窗口内
+        // 「带 task token、未写变更名、未触及任何变更目录」的提交分不清是谁的，按 FR-03 保守算本变更
+        // ——其文件进了冻结面时点名，让误判可见可追。纯提示：不改归属/漂移判定、不阻断收口。
+        try {
+          const { listAmbiguousTokenCommits, formatAmbiguousTokenCommits, changesDirPrefixFor } = await import('./foreign-declared.js')
+          const _ambPrefix = changesDirPrefixFor(cwd, specBase)
+          const _ambInFace = (listAmbiguousTokenCommits({ cwd, sinceRef: st.baseline_commit, changesDirPrefix: _ambPrefix }) || [])
+            .filter((c) => (c.files || []).some((f) => committed.includes(f)))
+          if (_ambInFace.length > 0) {
+            console.warn(`⚠️ [归属分不清·advisory] 窗口内有 ${_ambInFace.length} 笔提交带 task token、未写变更名、未触及任何变更目录——无法判断归属，已按本变更处理（其文件进了冻结面）: ${formatAmbiguousTokenCommits(_ambInFace)}`)
+            console.warn('   若属他侧，请其提交标题带上变更名（(<变更名> task-NN)）后重跑；本提示不改变归属与漂移判定')
+          }
+        } catch { /* 提示失败不阻断冻结 */ }
         // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
         // 本变更的——陈旧声明的旧变更不该抢走 baseline..HEAD 里我实际提交的文件，静默少文件+门禁
         // 静默 skipped 是平台狗粮实证。foreign 声明切分保留给 dirty 面与 attributedChangedFiles

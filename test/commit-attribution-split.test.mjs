@@ -25,6 +25,7 @@ import { join } from 'node:path'
 import {
   parseChangeNamesFromSubject, buildCommitAttribution, isForeignByCommit,
   splitOwnVsForeignDiffFiles, touchedChangeDirs, changesDirPrefixFor,
+  listAmbiguousTokenCommits, formatAmbiguousTokenCommits,
 } from '../src/foreign-declared.js'
 import { filterCommittedFace } from '../src/flow-parity.js'
 
@@ -286,6 +287,53 @@ test('⑤ changesDirPrefixFor：仓内 spec 目录得相对前缀；仓外得空
       assert.equal(changesDirPrefixFor('c:\\repo', 'C:\\repo\\.sillyspec'), '.sillyspec/changes/', '盘符大小写不敏感')
       assert.equal(changesDirPrefixFor('C:\\repo', 'D:\\spec'), '', '跨盘符（path.relative 返回绝对路径）→ 空串')
     }
+  } finally {
+    try { rmSync(d, { recursive: true, force: true }) } catch {}
+  }
+})
+
+// ── FR-06：「分不清」形态点名（advisory） ──
+// 无名、带 task token、不触及任何变更目录的提交分不清是谁的，维持保守 own（FR-03）。落地验证
+// 该形态真实存在（multi-agent-platform 最近 300 笔提交中 29 笔），误判时须能直接看出是哪笔所致。
+test('⑦ listAmbiguousTokenCommits：分不清形态清单（无名有 token 且不触及变更目录）', () => {
+  const d = mkdtempSync(join(tmpdir(), 'catr-amb-'))
+  const g = (cmd) => execSync(cmd, { cwd: d, encoding: 'utf8', windowsHide: true })
+  try {
+    g('git init -q')
+    g('git config user.email t@t && git config user.name t')
+    writeFileSync(join(d, 'seed.txt'), 'seed')
+    g('git add seed.txt && git commit -q -m "chore: seed"')
+    const base = g('git rev-parse HEAD').trim()
+    mkdirSync(join(d, 'src'), { recursive: true })
+    // 具名提交
+    writeFileSync(join(d, 'src', 'named.js'), 'n')
+    g('git add src/named.js && git commit -q -m "feat: 我的交付 (ME)"'.replaceAll('ME', `(${ME})`))
+    // 触及他变更目录的 task 提交（分得清）
+    mkdirSync(join(d, '.sillyspec', 'changes', OTHER), { recursive: true })
+    writeFileSync(join(d, '.sillyspec', 'changes', OTHER, 'tasks.md'), '# o\n')
+    writeFileSync(join(d, 'src', 'theirs.js'), 't')
+    g('git add .sillyspec/changes src/theirs.js && git commit -q -m "fix: 他侧任务交付 (task-02)"')
+    // 分不清：无名有 token、不触及变更目录
+    writeFileSync(join(d, 'src', 'amb1.js'), 'a')
+    g('git add src/amb1.js && git commit -q -m "fix: 无目录提交甲 (task-07)"')
+    const ambSha = g('git rev-parse HEAD').trim()
+    // 纯裸提交
+    writeFileSync(join(d, 'src', 'bare.js'), 'b')
+    g('git add src/bare.js && git commit -q -m "chore(release): v1"')
+    const r = listAmbiguousTokenCommits({ cwd: d, sinceRef: base })
+    assert.ok(Array.isArray(r), '返回数组')
+    assert.deepEqual(r.map((c) => c.subject), ['fix: 无目录提交甲 (task-07)'], `只列分不清形态（实际 ${JSON.stringify(r)}）`)
+    assert.equal(r[0].sha, ambSha, '带完整 sha')
+    assert.deepEqual(r[0].files, ['src/amb1.js'], '带文件面（正斜杠）')
+    assert.match(formatAmbiguousTokenCommits(r), new RegExp(`^${ambSha.slice(0, 9)} fix: 无目录提交甲 \\(task-07\\)$`), '格式化=短 sha + 标题')
+    assert.equal(formatAmbiguousTokenCommits([]), '', '空清单格式化为空串')
+    // 窗口收窄：从分不清提交之后起算 → 空
+    assert.deepEqual(listAmbiguousTokenCommits({ cwd: d, sinceRef: ambSha }), [], '窗口内无此类提交 → 空数组')
+    // 目录归属禁用（空串）→ 触及他变更目录的 task 提交也分不清（git log 新→旧）
+    assert.deepEqual(listAmbiguousTokenCommits({ cwd: d, sinceRef: base, changesDirPrefix: '' }).map((c) => c.subject), ['fix: 无目录提交甲 (task-07)', 'fix: 他侧任务交付 (task-02)'])
+    // 入参缺失 / 非法引用 → null（调用方静默跳过）
+    assert.equal(listAmbiguousTokenCommits({ cwd: d }), null, 'sinceRef 缺失 → null')
+    assert.equal(listAmbiguousTokenCommits({ cwd: d, sinceRef: 'deadbeef' }), null, '非法引用 → null')
   } finally {
     try { rmSync(d, { recursive: true, force: true }) } catch {}
   }

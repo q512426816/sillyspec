@@ -9,3 +9,4 @@ created_at: 2026-11-24T04:28:30.659Z
 - [x] task-03: 变更根前缀解析的边界单测（仓内相对路径 / 仓外与跨盘符得空串）。验证=test/commit-attribution-split.test.mjs 新增 ⑤ 先红后绿
 - [x] task-04: 端到端回归——评审 PASS 后他变更的 token 裸提交落地，重跑 flow done 不报漂移、不隔离评审、归档补丁不含他侧文件；并跑齐本变更测试面（两个测试文件 + hunk-gate-commit-attribution + thin-done-dirty-gate）与 lint。验证=新增 ⑨ 先红后绿，各命令退出码 0
 - [x] task-05: task tick 回显的提交命令模板带上变更名（`(<变更名> task-NN)`），模板消息可被变更名解析识别。验证=test/task-tick.test.mjs ⑧ 断言按新形态更新后先红后绿，该文件全绿
+- [x] task-06: 「归属分不清」advisory（用户在执行断点选定）——src/foreign-declared.js 新增 listAmbiguousTokenCommits；src/flow.js 在 patch 子步（冻结面算出后）与漂移分支各打一条提示，点名窗口内「带 task token、未写变更名、未触及变更目录」的提交；只提示，不改任何判定与流程结果。验证=test/commit-attribution-split.test.mjs 新增 ⑦ 与 test/flowdone-disposition-drift.test.mjs 新增 ⑩ 先红后绿，⑨ 不出现该提示

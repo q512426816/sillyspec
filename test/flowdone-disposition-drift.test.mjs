@@ -496,6 +496,7 @@ test('⑨ e2e：评审 PASS 后他变更 token 裸提交落地——不漂移不
   const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
   const out3 = s3.stdout + s3.stderr
   assert.ok(!out3.includes('审计时点漂移'), `他变更的任务提交不得触发本变更漂移（尾部：${out3.split('\n').slice(-6).join(' | ')}）`)
+  assert.ok(!out3.includes('归属分不清'), '窗口内没有分不清形态的提交 → 不输出归属分不清提示')
   assert.ok(!out3.includes('独立评审任务书'), '不重印评审任务书（评审未被隔离）')
   assert.equal(s3.status, 0, `直接归档成功（exit 0；尾部：${out3.split('\n').slice(-5).join(' | ')}）`)
   assert.ok(out3.includes('flow done 完成'), '收口完成（归档注销）')
@@ -506,4 +507,49 @@ test('⑨ e2e：评审 PASS 后他变更 token 裸提交落地——不漂移不
   const patch = readFileSync(join(archivedBase, 'change.patch'), 'utf8')
   assert.ok(patch.includes('+++ b/src/work.js'), '补丁含本变更交付面（按 diff hunk 头判）')
   assert.ok(!patch.includes('+++ b/src/theirs.js'), '补丁不含他变更任务提交的文件')
+})
+
+// ── FR-06：「分不清」形态点名（advisory） ──
+// 无名、带 task token、不触及任何变更目录的提交分不清是谁的，维持保守 own（漂移与评审处置
+// 不变）；收口必须点名这类提交，让误判可见、可追（落地验证：平台仓最近 300 笔提交中 29 笔）。
+test('⑩ e2e：分不清的无名 task 提交——漂移与隔离照旧，并点名提示（advisory）', () => {
+  const cwd = fx()
+  const run = gitRepo(cwd)
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const cn = '2026-11-24-amb-e2e'
+  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '分不清形态点名提示端到端\n\n成功标准：\n- 分不清的提交被点名且判定不变'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const base = join(cwd, '.sillyspec', 'changes', cn)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：分不清形态点名链路验证，存在时序窗口（评审与分不清提交之间）。'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 点名分不清形态的无名 task 提交且不改变判定（夹具行为句')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「⑩ e2e：分不清的无名 task 提交——漂移与隔离照旧，并点名提示」'))
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n')
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
+  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
+  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out2 = s2.stdout + s2.stderr
+  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
+  const headAtReview = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
+  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: headAtReview, findings: [], dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
+  // 他会话的无目录 task 提交：无名、带 task token、不触及任何变更目录 → 分不清，保守按本变更处理
+  writeFileSync(join(cwd, 'src', 'theirs-amb.js'), 'export const u = 3\n')
+  run(['add', 'src/theirs-amb.js']); run(['commit', '-q', '-m', 'fix: 他侧无目录提交 (task-07)'])
+  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out3 = s3.stdout + s3.stderr
+  // 判定不变：仍触发漂移、评审仍被隔离、重发评审任务书
+  assert.ok(out3.includes('审计时点漂移'), '分不清形态维持保守 own：仍触发漂移（判定不变）')
+  assert.ok(readdirSync(base).some((f) => f.startsWith('review.json.superseded')), `评审处置不变：被隔离（目录实况：${readdirSync(base).join(',')}）`)
+  assert.ok(out3.includes('独立评审任务书'), '评审处置不变：重发评审任务书')
+  assert.notEqual(s3.status, 0, '停在重评（exit ≠ 0）')
+  // 点名提示：漂移分支与冻结面两处都在，且点名该提交
+  assert.match(out3, /归属分不清·advisory/, '点名提示在场')
+  assert.match(out3, /他侧无目录提交 \(task-07\)/, '提示点名该提交（标题）')
+  assert.match(out3, /请其提交标题带上变更名/, '提示给出处置办法')
 })

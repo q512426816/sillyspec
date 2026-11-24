@@ -95,6 +95,27 @@ created_at: 2026-11-24T04:28:30.659Z
 - When task tick 回显提交命令
 - Then 消息占位为 `<本任务交付概括> (2026-10-01-vtt-8 task-01)`，且该占位经变更名解析得到 2026-10-01-vtt-8
 
+### FR-06: 收口时点名「分不清」的无名 task 提交（带 task token、未写变更名、未触及变更目录、已按本变更处理）——只提示不改判定
+
+来源：用户在执行断点选定「加一条提示」。依据：落地验证发现该形态真实存在（multi-agent-platform 最近 300 笔提交中 29 笔），误判时无从直接看出是哪笔提交所致。
+
+- `flow done` 的 patch 子步（冻结或重冻结）必须列出 baseline..HEAD 窗口内「带 task token、标题未写变更名、未触及任何变更目录」且其文件进了冻结面的提交（短 sha 与标题），并提示处置办法：若属他侧，让该提交标题带上变更名。
+- 漂移检测触发时，必须指出其中属于上述形态的提交。
+- 本提示必须是 advisory：禁止改变归属判定、漂移判定、评审隔离与归档流程的任何结果，禁止阻断收口；git 不可用或读取失败时必须静默跳过。
+- 窗口内没有此类提交时禁止输出该提示。
+
+#### 场景：他侧分不清的提交进了冻结面
+
+- Given 窗口内有一笔提交 `fix: 他侧无目录提交 (task-07)`，只触及 `src/theirs-amb.js`
+- When 重跑 flow done
+- Then 输出含「归属分不清」提示并点名该提交（短 sha 与标题）；漂移与评审处置与不加提示时完全一致
+
+#### 场景：窗口内没有此类提交
+
+- Given 窗口内的无名 task 提交都触及了变更目录
+- When 重跑 flow done
+- Then 不输出该提示
+
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/flowdone-disposition-drift.test.mjs「⑧ 他变更的 token 裸提交不触发本变更漂移；触及本变更目录的 token 裸提交触发」/「⑨ e2e：评审 PASS 后他变更 token 裸提交落地——不漂移不隔离，补丁不含他侧文件」+ test/thin-done-dirty-gate.test.mjs「FR-01 detectPatchDrift：全角括号交付提交判 drifted」（既有用例，基线即红，实现后转绿；断言不改）
@@ -102,3 +123,4 @@ FR-02: test/commit-attribution-split.test.mjs「④ token 裸提交按触及的�
 FR-03: test/flowdone-disposition-drift.test.mjs「⑦ token 裸提交（无名有 task-NN）触发漂移；纯裸提交仍不触发；交付面锚定同口径」+ test/commit-attribution-split.test.mjs「① 解析纯函数：标题变更名提取与归属聚合」/「② 混窗集成：他侧提交文件出 own 面与 patch 冻结面」（既有回归，断言不改）
 FR-04: test/commit-attribution-split.test.mjs「⑤ changesDirPrefixFor：仓内 spec 目录得相对前缀；仓外得空串」（其余覆盖面由 FR-01、FR-02 的绑定用例承担）
 FR-05: test/task-tick.test.mjs「⑧ tick 回显提交命令模板与未入库提醒：命令含 task-NN 占位与 tasks.md/侧车 pathspec；已勾≥2 且 tasks.md 零提交 → 提醒；入库后提醒消失；幂等零教学重复」（既有用例，按本条更新模板断言并补「模板可解析出变更名」断言）
+FR-06: test/flowdone-disposition-drift.test.mjs「⑩ e2e：分不清的无名 task 提交——漂移与隔离照旧，并点名提示（advisory）」+ test/commit-attribution-split.test.mjs「⑦ listAmbiguousTokenCommits：分不清形态清单（无名有 token 且不触及变更目录）」
