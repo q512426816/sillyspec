@@ -26,6 +26,7 @@ import {
   parseChangeNamesFromSubject, buildCommitAttribution, isForeignByCommit,
   splitOwnVsForeignDiffFiles, touchedChangeDirs, changesDirPrefixFor,
   listAmbiguousTokenCommits, formatAmbiguousTokenCommits,
+  COMMIT_LOG_ARGS, parseCommitLog, isOwnByFacts, collectOwnAuthors, isOwnCommitForChange,
 } from '../src/foreign-declared.js'
 import { filterCommittedFace } from '../src/flow-parity.js'
 
@@ -337,4 +338,68 @@ test('⑦ listAmbiguousTokenCommits：分不清形态清单（无名有 token �
   } finally {
     try { rmSync(d, { recursive: true, force: true }) } catch {}
   }
+})
+
+// ── FR-07：作者身份补判（文件级与纯函数面） ──
+// 平台仓实证（2026-11-24-voice-meeting-leak-retry-fix）：窗口内 17 笔无名 task 提交不写变更名、
+// 不触及变更目录，冻结补丁 45 文件中仅 12 个属于该变更；这 17 笔的作者都不是该变更自身提交的作者。
+const AUTHOR_A = 'Alice <alice@x>'
+const AUTHOR_B = 'Bob <bob@x>'
+/** 含作者格式的 git log 文本（COMMIT_LOG_ARGS：NUL + sha␟作者名␟邮箱␟标题 + 文件行）。 */
+function commitLog(rows) {
+  return rows.map(([sha, author, subject, files]) => {
+    const m = /^(.*) <(.*)>$/.exec(author)
+    return [`\x00${[sha, m[1], m[2], subject].join('\x1f')}`, ...files, ''].join('\n')
+  }).join('\n')
+}
+
+test('⑧ 作者身份补判（文件级）：他作者的分不清提交文件判 foreign；同作者与无自身提交保守', () => {
+  // 解析：新格式带 sha 与作者；旧格式（仅标题） tolerated
+  const parsed = parseCommitLog(commitLog([['a1', AUTHOR_A, `feat: 我的交付 (${ME})`, ['src\\win.js', 'src/mine.js']]]))
+  assert.deepEqual(parsed, [{ sha: 'a1', author: AUTHOR_A, subject: `feat: 我的交付 (${ME})`, files: ['src/win.js', 'src/mine.js'] }], '含作者格式解析（文件面正斜杠归一）')
+  assert.deepEqual(parseCommitLog('\x00fix: 旧格式\nsrc/a.js\n'), [{ sha: '', author: '', subject: 'fix: 旧格式', files: ['src/a.js'] }], '旧格式（仅标题）解析：sha 与作者为空')
+  assert.ok(COMMIT_LOG_ARGS.includes('--name-only') && COMMIT_LOG_ARGS.some((a) => a.includes('%an') && a.includes('%ae')), 'git log 参数含作者名与邮箱')
+
+  const rows = [
+    ['a1', AUTHOR_A, `feat: 我的交付 (${ME})`, ['src/mine.js']],
+    ['b1', AUTHOR_B, 'fix: 他侧无目录 (task-02)', ['src/theirs-amb.js']],
+    ['a2', AUTHOR_A, 'fix: 我的返工 (task-05)', ['src/own-amb.js']],
+    ['b2', AUTHOR_B, 'fix: 混合乙 (task-06)', ['src/mixed.js']],
+    ['a3', AUTHOR_A, 'fix: 混合甲 (task-07)', ['src/mixed.js']],
+    ['c1', 'Carol <carol@x>', `docs(${ME}): 我的另一身份 (task-08)`, [`${P}${ME}/tasks.md`, 'src/carol.js']],
+  ]
+  const commits = parseCommitLog(commitLog(rows))
+  // 三值事实层
+  assert.equal(isOwnByFacts({ subject: `fix: x (${ME})`, files: ['src/a.js'] }, ME, P), true, '具名本变更 → own')
+  assert.equal(isOwnByFacts({ subject: `fix: x (${OTHER})`, files: ['src/a.js'] }, ME, P), false, '具名他变更 → 非 own')
+  assert.equal(isOwnByFacts({ subject: 'chore: bare', files: ['src/a.js'] }, ME, P), false, '纯裸 → 非 own')
+  assert.equal(isOwnByFacts({ subject: 'fix: x (task-01)', files: [`${P}${ME}/tasks.md`] }, ME, P), true, 'task 提交触及本变更目录 → own')
+  assert.equal(isOwnByFacts({ subject: 'fix: x (task-01)', files: [`${P}${OTHER}/tasks.md`] }, ME, P), false, 'task 提交只触及他变更目录 → 非 own')
+  assert.equal(isOwnByFacts({ subject: 'fix: x (task-01)', files: ['src/a.js'] }, ME, P), null, '无名 task 提交不触及变更目录 → 分不清')
+  // 作者集：具名提交与触及本变更目录的 task 提交的作者（含本变更的另一身份）
+  assert.deepEqual([...collectOwnAuthors(commits, ME, P)].sort(), [AUTHOR_A, 'Carol <carol@x>'].sort(), '本变更作者集')
+  assert.equal(collectOwnAuthors(commits, THIRD, P).size, 0, '无自身提交 → 空集')
+  // 提交级补判
+  const amb = { subject: 'fix: 他侧无目录 (task-09)', files: ['src/theirs.js'] }
+  const ownA = collectOwnAuthors(commits, ME, P)
+  assert.equal(isOwnCommitForChange({ ...amb, author: AUTHOR_B }, ME, P, ownA), false, '他作者的分不清提交 → 非 own')
+  assert.equal(isOwnCommitForChange({ ...amb, author: AUTHOR_A }, ME, P, ownA), true, '同作者的分不清提交 → own')
+  assert.equal(isOwnCommitForChange({ ...amb, author: 'Carol <carol@x>' }, ME, P, ownA), true, '本变更另一身份的分不清提交 → own')
+  assert.equal(isOwnCommitForChange({ ...amb, author: AUTHOR_B }, ME, P, new Set()), true, '作者集为空 → 保守 own')
+  assert.equal(isOwnCommitForChange({ ...amb, author: AUTHOR_B }, ME, P), true, '未提供作者集 → 保守 own（FR-03 行为）')
+  assert.equal(isOwnCommitForChange({ ...amb, author: '' }, ME, P, ownA), true, '作者未知 → 保守 own')
+  // 文件级同口径
+  const attr = buildCommitAttribution(commitLog(rows), { changesDirPrefix: P, changeName: ME })
+  assert.equal(isForeignByCommit(attr.get('src/theirs-amb.js'), ME), true, '他作者的分不清提交文件 → 对本变更 foreign')
+  assert.equal(isForeignByCommit(attr.get('src/own-amb.js'), ME), false, '同作者的分不清提交文件 → own')
+  assert.equal(isForeignByCommit(attr.get('src/mixed.js'), ME), false, '混合触碰（含同作者分不清）→ 保守 own')
+  assert.equal(isForeignByCommit(attr.get('src/mine.js'), ME), false, '具名交付 → own')
+  assert.equal(isForeignByCommit(attr.get('src/carol.js'), ME), false, '本变更另一身份的目录提交 → own')
+  // 未提供 changeName（旧调用）→ 分不清维持保守 own
+  assert.equal(isForeignByCommit(buildCommitAttribution(commitLog(rows), { changesDirPrefix: P }).get('src/theirs-amb.js'), ME), false, '未提供 changeName → 保守 own')
+  // 无自身提交的变更：作者集为空 → 保守 own
+  assert.equal(isForeignByCommit(buildCommitAttribution(commitLog(rows), { changesDirPrefix: P, changeName: THIRD }).get('src/theirs-amb.js'), THIRD), false, '本变更无自身提交 → 保守 own')
+  // 旧格式日志（无作者）+ changeName → 作者未知 → 保守 own
+  const oldLog = [`\x00feat: 我的交付 (${ME})`, 'src/mine.js', '', '\x00fix: 返工 (task-05)', 'src/old-amb.js', ''].join('\n')
+  assert.equal(isForeignByCommit(buildCommitAttribution(oldLog, { changesDirPrefix: P, changeName: ME }).get('src/old-amb.js'), ME), false, '旧格式日志无作者 → 保守 own')
 })

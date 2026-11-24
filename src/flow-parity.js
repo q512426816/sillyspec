@@ -23,7 +23,7 @@ import { modulePathMatches } from './modules.js'
 import { join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, isOwnCommitForChange } from './foreign-declared.js'
+import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, isOwnCommitForChange, COMMIT_LOG_ARGS, parseCommitLog } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { computeDocsDebt } from './docs-debt.js'
 import { anchorBackfillCandidate } from './decision-distill.js'
@@ -453,26 +453,25 @@ export function missingFreezeLabels(changeDir) {
   return freezeGapLabels(inspectFreezeArtifacts(changeDir))
 }
 
-export function detectPatchDrift({ cwd, change, freezeHead, changesDirPrefix }) {
+export function detectPatchDrift({ cwd, change, freezeHead, changesDirPrefix, ownAuthors }) {
   try {
     if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true }).trim()
     if (!head || head === freezeHead) return { drifted: false, ownCommits: [], head, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
-    const log = execFileSync('git', ['log', '--name-only', '--format=%x00%s', `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    const log = execFileSync('git', [...COMMIT_LOG_ARGS, `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
     const own = []
     const ownFileSet = new Set()
-    for (const block of String(log).split('\x00')) {
-      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
-      const subject = lines[0]
-      if (!subject) continue
+    for (const c of parseCommitLog(log)) {
+      if (!c.subject) continue
       // 归属口径单一源 isOwnCommitForChange（2026-11-24-token-commit-change-dir-attribution）：
       // 具名按名字定；无名 task 提交按触及的变更目录归属（他变更目录的 task 提交不再算本变更
       // ——共享仓并行下旧的「含 task token 即 own」把冻结补丁由 7 文件膨胀到 34 文件并隔离
-      // 有效评审）；不触及变更目录的无名 task 提交仍保守 own（坑
+      // 有效评审）；不触及变更目录的无名 task 提交按作者身份补判（FR-07：调用方给出
+      // ownAuthors 且作者不在集内 → 非 own），否则保守 own（坑
       // 2026-11-13-flow-done-patch-refreeze-skip-on-rework 的返工形态）；纯裸提交不算。
-      if (isOwnCommitForChange({ subject, files: lines.slice(1) }, change, changesDirPrefix)) {
-        own.push(subject.slice(0, 80))
-        for (const f of lines.slice(1)) ownFileSet.add(f.replace(/\\/g, '/'))
+      if (isOwnCommitForChange(c, change, changesDirPrefix, ownAuthors)) {
+        own.push(c.subject.slice(0, 80))
+        for (const f of c.files) ownFileSet.add(f)
       }
     }
     const ownFiles = [...ownFileSet]
@@ -498,23 +497,21 @@ export function detectPatchDrift({ cwd, change, freezeHead, changesDirPrefix }) 
  * fail-safe：锚空/非祖先（rebase 重写）/git 失败 → false（宁可多评）。
  * @returns {{ok: boolean, ownCount: number, files: string[], touchedPromiseFace: boolean}}
  */
-export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha, changesDirPrefix }) {
+export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha, changesDirPrefix, ownAuthors }) {
   try {
     const a = String(anchorSha || '').trim().toLowerCase()
     if (!/^[0-9a-f]{7,40}$/.test(a)) return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false }
     // 非零退出码（非祖先/git 失败）由 execFileSync 抛出走 catch fail-safe
     execFileSync('git', ['merge-base', '--is-ancestor', a, 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
-    const log = execFileSync('git', ['log', '--name-only', '--format=%x00%s', `${a}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    const log = execFileSync('git', [...COMMIT_LOG_ARGS, `${a}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
     const files = []
     let ownCount = 0
-    for (const block of String(log).split('\x00')) {
-      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
-      const subject = lines[0]
-      if (!subject) continue
+    for (const c of parseCommitLog(log)) {
+      if (!c.subject) continue
       // 归属口径与 detectPatchDrift 同源（isOwnCommitForChange，2026-11-24-token-commit-change-dir-attribution）。
-      if (isOwnCommitForChange({ subject, files: lines.slice(1) }, change, changesDirPrefix)) {
+      if (isOwnCommitForChange(c, change, changesDirPrefix, ownAuthors)) {
         ownCount++
-        for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
+        for (const f of c.files) files.push(f)
       }
     }
     const promiseFace = [`.sillyspec/changes/${change}/requirements.md`, `.sillyspec/changes/${change}/design.md`]

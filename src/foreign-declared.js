@@ -254,32 +254,100 @@ export function touchedChangeDirs(files, changesDirPrefix) {
 }
 
 /**
- * 提交级「本变更提交」判定单一源（2026-11-24-token-commit-change-dir-attribution）。
- * 判定顺序：
- *   ① 标题提及本变更名 → own；
- *   ② 标题提及了变更名但不是本变更 → 非 own（即便同时带 task token——漂移检测旧条件
- *      「提本变更名 或 含 task token」缺「标题未提任何变更名」前提，把他变更名提交带 token
- *      的形态误判为本变更：test/thin-done-dirty-gate「全角括号交付提交判 drifted」第 99 行
- *      自 2026-11-13 起在主干即红）；
- *   ③ 无名且带 task token → 按触及的变更目录归属（touchedChangeDirs）：触及了他变更目录且
- *      不含本变更 → 非 own；什么变更目录都没触及 → 分不清，保守 own
- *      （2026-11-13-flow-done-patch-refreeze-skip-on-rework 的返工提交形态：只带 token、只
- *      触及源文件，其回归 test ⑦ 不得破）；
- *   ④ 其余（纯裸提交）→ 非 own。
- * 提交级（漂移检测 detectPatchDrift / deliveryFaceAnchoredAfter）与文件级
- * （buildCommitAttribution / isForeignByCommit）必须共用本口径，防两处再漂。
- * @param {{ subject: string, files: string[] }} commit
- * @param {string} changeName 当前变更名
- * @param {string} [changesDirPrefix]
- * @returns {boolean}
+ * 含作者的 git log 参数（2026-11-24-token-commit-change-dir-attribution FR-07）：每提交 =
+ * NUL + sha␟作者名␟邮箱␟标题，随后 `--name-only` 的文件行。提交级归属、文件级归属与提示清单
+ * 共用本参数与 parseCommitLog，防三处解析口径再漂。
  */
-export function isOwnCommitForChange({ subject, files }, changeName, changesDirPrefix) {
+export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1f%ae%x1f%s']
+
+/**
+ * git log 文本 → 提交清单（git 顺序，新→旧）。兼容仅标题的旧格式（NUL + 标题 + 文件行）：
+ * sha 与 author 为空串（作者未知——FR-07 的作者补判对其不生效，维持保守）。
+ * @param {string} logText
+ * @returns {Array<{ sha: string, author: string, subject: string, files: string[] }>} author=`姓名 <邮箱>`；文件面正斜杠归一
+ */
+export function parseCommitLog(logText) {
+  const out = []
+  for (const block of String(logText || '').split('\x00')) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+    if (lines.length === 0) continue
+    const head = lines[0]
+    const files = lines.slice(1).map((f) => f.replace(/\\/g, '/'))
+    if (head.includes('\x1f')) {
+      const [sha, name, email, ...rest] = head.split('\x1f')
+      out.push({ sha, author: `${name} <${email}>`, subject: rest.join('\x1f'), files })
+    } else {
+      out.push({ sha: '', author: '', subject: head, files })
+    }
+  }
+  return out
+}
+
+/**
+ * 目录规则层（2026-11-24-token-commit-change-dir-attribution，三值）：
+ *   true  = own——标题提及本变更名，或无名 task 提交触及本变更目录；
+ *   false = 非 own——标题提及了变更名但不是本变更（即便同时带 task token——漂移检测旧条件
+ *           「提本变更名 或 含 task token」缺「标题未提任何变更名」前提，把他变更名提交带
+ *           token 的形态误判为本变更：test/thin-done-dirty-gate「全角括号交付提交判 drifted」
+ *           第 99 行自 2026-11-13 起在主干即红）；纯裸提交（无名无 token）；无名 task 提交
+ *           只触及他变更目录；
+ *   null  = 分不清——无名、带 task token、什么变更目录都没触及（2026-11-13-flow-done-patch-
+ *           refreeze-skip-on-rework 的返工提交形态：只带 token、只触及源文件，其回归 test ⑦
+ *           不得破）。是否 own 交由上层按作者身份补判（isOwnCommitForChange）或保守 own。
+ * 触及哪个变更目录是提交事实而非声明——task tick 的提交指引把该变更的 tasks.md 与侧车随交付
+ * 同一提交入库。共享仓并行会话下，旧的「含 task token 即 own」把他侧任务提交算成本变更的
+ * （multi-agent-platform 2026-11-24 实证：冻结补丁由 7 文件膨胀到 34 文件）。
+ * @param {{ subject: string, files: string[] }} commit
+ * @param {string} changeName
+ * @param {string} [changesDirPrefix]
+ * @returns {boolean|null}
+ */
+export function isOwnByFacts({ subject, files }, changeName, changesDirPrefix) {
   const names = parseChangeNamesFromSubject(subject)
-  if (names.includes(changeName)) return true
-  if (names.length > 0) return false
+  if (names.length > 0) return names.includes(changeName)
   if (!TASK_TOKEN_RE.test(String(subject || ''))) return false
   const touched = touchedChangeDirs(files, changesDirPrefix)
-  return touched.size === 0 || touched.has(changeName)
+  if (touched.size === 0) return null
+  return touched.has(changeName)
+}
+
+/**
+ * 本变更作者集（FR-07）：窗口内目录规则层判 own 的提交（标题提及本变更名，或无名 task 提交
+ * 触及本变更目录）的作者身份集合。从提交事实现算，不落盘、不依赖配置。空集 = 窗口内没有
+ * 本变更自身提交，无从比较。
+ * @param {Array<{ subject: string, files: string[], author?: string }>} commits
+ * @returns {Set<string>}
+ */
+export function collectOwnAuthors(commits, changeName, changesDirPrefix) {
+  const set = new Set()
+  for (const c of commits || []) {
+    if (c && c.author && isOwnByFacts(c, changeName, changesDirPrefix) === true) set.add(c.author)
+  }
+  return set
+}
+
+/**
+ * 提交级「本变更提交」判定单一源（2026-11-24-token-commit-change-dir-attribution）。
+ * 先走目录规则层 isOwnByFacts；分不清（null）时按作者身份补判（FR-07，用户选定）：
+ * 本变更作者集非空、且本提交作者不在其中 → 非 own；其余（作者集未提供/为空、作者未知、
+ * 作者在集内）→ 保守 own。
+ * 实证（multi-agent-platform 2026-11-24-voice-meeting-leak-retry-fix）：窗口内 17 笔分不清的
+ * 提交作者全部不是该变更自身提交的作者，冻结补丁 45 文件中仅 12 个属于该变更。取舍：本变更
+ * 自身的提交若换了 git 身份、又不带变更名、又不触及变更目录，会被判他侧——由收口提示点名
+ * （listAmbiguousTokenCommits 的 byAuthorExcluded）兜底；提交标题带变更名即免疫。
+ * 提交级（漂移检测 detectPatchDrift / deliveryFaceAnchoredAfter）与文件级
+ * （buildCommitAttribution / isForeignByCommit）必须共用本口径，防两处再漂。
+ * @param {{ subject: string, files: string[], author?: string }} commit
+ * @param {string} changeName 当前变更名
+ * @param {string} [changesDirPrefix]
+ * @param {Set<string>|null} [ownAuthors] 本变更作者集（collectOwnAuthors）；未提供 = 不做作者补判
+ * @returns {boolean}
+ */
+export function isOwnCommitForChange({ subject, files, author }, changeName, changesDirPrefix, ownAuthors) {
+  const facts = isOwnByFacts({ subject, files }, changeName, changesDirPrefix)
+  if (facts !== null) return facts
+  if (ownAuthors && ownAuthors.size > 0 && author && !ownAuthors.has(author)) return false
+  return true
 }
 
 /**
@@ -302,29 +370,24 @@ export function changesDirPrefixFor(cwd, specBase) {
 
 /**
  * 窗口内「分不清」的无名 task 提交清单（2026-11-24-token-commit-change-dir-attribution FR-06，
- * advisory 用）：标题未提变更名、带 task token、且不触及任何变更目录——按 FR-03 维持保守 own
- * （算每个变更的提交），但误判时须能直接看出是哪笔所致（落地验证：multi-agent-platform 最近
- * 300 笔提交里只带 task token 的 59 笔中有 29 笔属此形态）。
- * @param {{ cwd: string, sinceRef: string, changesDirPrefix?: string }} opts sinceRef=窗口起点（不含）
- * @returns {Array<{ sha: string, subject: string, files: string[] }>|null} git 新→旧；null=入参缺失/git 失败（调用方静默跳过）
+ * advisory 用）：标题未提变更名、带 task token、且不触及任何变更目录（目录规则层 isOwnByFacts
+ * 判 null）。落地验证该形态真实存在：multi-agent-platform 最近 300 笔提交里只带 task token 的
+ * 59 笔中有 29 笔属此形态；单个变更窗口内最多见过 17 笔。误判时须能直接看出是哪笔所致。
+ * FR-07：提供 ownAuthors 时每项带 byAuthorExcluded——作者不在本变更作者集（且集合非空）即已按
+ * 他侧处理；未提供时恒为 false。
+ * @param {{ cwd: string, sinceRef: string, changesDirPrefix?: string, ownAuthors?: Set<string>|null }} opts sinceRef=窗口起点（不含）
+ * @returns {Array<{ sha: string, author: string, subject: string, files: string[], byAuthorExcluded: boolean }>|null} git 新→旧；null=入参缺失/git 失败（调用方静默跳过）
  */
-export function listAmbiguousTokenCommits({ cwd, sinceRef, changesDirPrefix } = {}) {
+export function listAmbiguousTokenCommits({ cwd, sinceRef, changesDirPrefix, ownAuthors } = {}) {
   try {
     if (!cwd || !sinceRef) return null
-    const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%H%x1f%s', `${sinceRef}..HEAD`], { trim: false })
+    const r = safeGit(cwd, [...COMMIT_LOG_ARGS, `${sinceRef}..HEAD`], { trim: false })
     if (r.value === null) return null
     const out = []
-    for (const block of String(r.value).split('\x00')) {
-      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
-      if (lines.length === 0) continue
-      const sep = lines[0].indexOf('\x1f')
-      if (sep === -1) continue
-      const sha = lines[0].slice(0, sep)
-      const subject = lines[0].slice(sep + 1)
-      if (!subject || !TASK_TOKEN_RE.test(subject) || parseChangeNamesFromSubject(subject).length > 0) continue
-      const files = lines.slice(1).map((f) => f.replace(/\\/g, '/'))
-      if (touchedChangeDirs(files, changesDirPrefix).size > 0) continue
-      out.push({ sha, subject, files })
+    for (const c of parseCommitLog(r.value)) {
+      if (!c.sha || !c.subject) continue
+      if (isOwnByFacts(c, '', changesDirPrefix) !== null) continue
+      out.push({ ...c, byAuthorExcluded: !!(ownAuthors && ownAuthors.size > 0 && c.author && !ownAuthors.has(c.author)) })
     }
     return out
   } catch { return null }
@@ -349,29 +412,33 @@ export function formatAmbiguousTokenCommits(list) {
  * frictions）10-28 实证：release-record 归档 chore 提交穿透冻结面。
  * token 裸 touch 的归属收窄（2026-11-24-token-commit-change-dir-attribution）：按该提交触及的
  * 变更目录区分是谁的 task——tokenDirs=这些提交触及的变更名并集；tokenAmbiguous=存在什么都
- * 不触及的提交（分不清）。判 foreign 的条件见 isForeignByCommit。
+ * 不触及、且仍算本变更的触碰（分不清：作者未知、作者集为空或作者在集内）；tokenAmbiguousForeign
+ * =存在什么都不触及、但作者不在本变更作者集的触碰（FR-07，已按他侧处理）。判 foreign 的条件见
+ * isForeignByCommit。
  * @param {string} logText
- * @param {{ changesDirPrefix?: string }} [opts] changesDirPrefix=变更根在仓内的相对前缀（缺省 .sillyspec/changes/，空串=禁用目录归属）
+ * @param {{ changesDirPrefix?: string, changeName?: string }} [opts] changesDirPrefix=变更根在仓内的相对前缀（缺省 .sillyspec/changes/，空串=禁用目录归属）；changeName=当前变更名（提供时按其作者集做 FR-07 作者补判，未提供维持保守）
  */
 export function buildCommitAttribution(logText, opts = {}) {
-  const changesDirPrefix = opts && typeof opts === 'object' && 'changesDirPrefix' in opts ? opts.changesDirPrefix : undefined
+  const o = opts && typeof opts === 'object' ? opts : {}
+  const changesDirPrefix = 'changesDirPrefix' in o ? o.changesDirPrefix : undefined
+  const commits = parseCommitLog(logText)
+  // FR-07：仅当调用方给出当前变更名时才做作者补判（需要本变更作者集）；旧调用形态不做。
+  const ownAuthors = o.changeName ? collectOwnAuthors(commits, o.changeName, changesDirPrefix) : new Set()
   const map = new Map()
-  for (const block of String(logText || '').split('\x00')) {
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
-    if (lines.length === 0) continue
-    const names = parseChangeNamesFromSubject(lines[0])
+  for (const c of commits) {
+    const names = parseChangeNamesFromSubject(c.subject)
     // 提交级事实：该无名 task 提交触及的变更目录（对本提交的全部文件同样成立）
-    const touched = names.length === 0 && TASK_TOKEN_RE.test(lines[0]) ? touchedChangeDirs(lines.slice(1), changesDirPrefix) : null
-    for (const f of lines.slice(1)) {
-      const file = f.replace(/\\/g, '/')
+    const touched = names.length === 0 && TASK_TOKEN_RE.test(c.subject) ? touchedChangeDirs(c.files, changesDirPrefix) : null
+    const authorExcluded = touched !== null && touched.size === 0 && ownAuthors.size > 0 && !!c.author && !ownAuthors.has(c.author)
+    for (const file of c.files) {
       let e = map.get(file)
-      if (!e) { e = { owners: new Set(), unknown: false, tokened: false, tokenDirs: new Set(), tokenAmbiguous: false }; map.set(file, e) }
+      if (!e) { e = { owners: new Set(), unknown: false, tokened: false, tokenDirs: new Set(), tokenAmbiguous: false, tokenAmbiguousForeign: false }; map.set(file, e) }
       if (names.length === 0) {
         e.unknown = true
         if (touched) {
           e.tokened = true
-          if (touched.size === 0) e.tokenAmbiguous = true
-          else for (const n of touched) e.tokenDirs.add(n)
+          if (touched.size > 0) { for (const n of touched) e.tokenDirs.add(n) } else if (authorExcluded) e.tokenAmbiguousForeign = true
+          else e.tokenAmbiguous = true
         }
       } else for (const n of names) e.owners.add(n)
     }
@@ -397,10 +464,11 @@ export function commitAttributionForChange(cwd, specBase, currentChangeName, bas
       if (m) base = m[1]
     }
     if (!base) return null
-    const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%s', `${base}..HEAD`], { trim: false })
+    const r = safeGit(cwd, [...COMMIT_LOG_ARGS, `${base}..HEAD`], { trim: false })
     if (r.value === null) return null
-    // 变更根取自 specBase（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的变更目录归属
-    return buildCommitAttribution(r.value, { changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
+    // 变更根取自 specBase（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的
+    // 变更目录归属；给出当前变更名以启用 FR-07 作者补判（与提交级 detectPatchDrift 同口径）。
+    return buildCommitAttribution(r.value, { changesDirPrefix: changesDirPrefixFor(cwd, specBase), changeName: currentChangeName })
   } catch { return null }
 }
 
@@ -412,14 +480,17 @@ export function commitAttributionForChange(cwd, specBase, currentChangeName, bas
  *    ③无名 task 提交的触碰全部有「触及他变更目录」的提交事实、且没有任何一次「分不清」的
  *    触碰（2026-11-24-token-commit-change-dir-attribution：token 无变更名限定时，该提交随
  *    tick 指引同提交其变更目录下的 tasks.md——触及哪个变更目录即是谁的 task；共享仓并行下
- *    旧的「token 裸恒 own」把他侧任务提交的文件冻进本变更补丁）。
+ *    旧的「token 裸恒 own」把他侧任务提交的文件冻进本变更补丁）
+ *    ④无名 task 提交的触碰全部「分不清且作者不在本变更作者集」（FR-07：buildCommitAttribution
+ *    以 changeName 调用时记 tokenAmbiguousForeign），且没有任何一次仍算 own 的分不清触碰。
  *  entry 无 tokenDirs/tokenAmbiguous 字段（旧调用方/手工构造）→ 行为与旧版一致（own）。 */
 export function isForeignByCommit(entry, currentChangeName) {
   if (!entry) return false
   if (entry.owners.has(currentChangeName)) return false
   if (entry.tokened) {
-    if (entry.tokenAmbiguous !== true && entry.tokenDirs && entry.tokenDirs.size > 0 && !entry.tokenDirs.has(currentChangeName)) return true
-    return false
+    if (entry.tokenAmbiguous === true) return false // 仍有「分不清且算 own」的触碰 → 保守 own
+    if (entry.tokenDirs && entry.tokenDirs.size > 0) return !entry.tokenDirs.has(currentChangeName)
+    return entry.tokenAmbiguousForeign === true
   }
   return entry.owners.size > 0 || entry.unknown === true
 }

@@ -116,6 +116,34 @@ created_at: 2026-11-24T04:28:30.659Z
 - When 重跑 flow done
 - Then 不输出该提示
 
+### FR-07: 「分不清」的无名 task 提交按作者身份补判——作者与本变更自身提交的作者不同时不算本变更提交
+
+来源：用户在平台仓变更 2026-11-24-voice-meeting-leak-retry-fix 收口受阻后选定「先加作者判定再收口」。依据：该变更窗口内 17 笔「分不清」的提交作者为 `agent <agent@sillyhub>`（4 笔）与另一位开发者（13 笔），而本变更具名提交的作者全部是同一人；冻结补丁 45 文件中仅 12 个属于该变更。
+
+- 本变更自身提交 = 窗口内「标题提及本变更名」或「无名 task 提交且触及本变更目录」的提交；本变更作者集 = 这些提交的作者身份（姓名加邮箱）的集合，必须由工具从提交事实计算，禁止依赖配置。
+- 无名 task 提交（无变更名、带 task token、未触及任何变更目录）的作者不在本变更作者集内、且作者集非空时，禁止算作本变更提交——提交级（漂移检测、交付面锚定）与文件级（归属切分、冻结面过滤、hunk 归属）必须同口径。
+- 本变更作者集为空（窗口内没有本变更自身提交）时，无名 task 提交必须维持保守 own。
+- 未提供作者集的调用（旧调用方、既有测试夹具）必须维持 FR-03 的行为。
+- 被作者判定排除的提交必须出现在收口提示里（短 sha 与标题，注明「作者与本变更自身提交不同，已按他侧处理」），让漏判可见。
+
+#### 场景：他会话的分不清提交
+
+- Given 本变更自身提交的作者为 A；窗口内另有一笔无名 task 提交，作者为 B，只触及 `src/theirs-amb.js`
+- When 漂移检测与冻结面归属
+- Then 该提交不算本变更提交，`src/theirs-amb.js` 不进冻结面；收口提示点名该提交并注明已按他侧处理
+
+#### 场景：本变更自身的返工提交
+
+- Given 本变更自身提交的作者为 A；评审返工提交作者同为 A，标题只带 task token，只触及新文件
+- When 漂移检测
+- Then 算本变更提交（触发漂移）
+
+#### 场景：本变更尚无自身提交
+
+- Given 窗口内没有标题提及本变更名、也没有触及本变更目录的提交
+- When 归属判定
+- Then 无名 task 提交维持保守 own
+
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/flowdone-disposition-drift.test.mjs「⑧ 他变更的 token 裸提交不触发本变更漂移；触及本变更目录的 token 裸提交触发」/「⑨ e2e：评审 PASS 后他变更 token 裸提交落地——不漂移不隔离，补丁不含他侧文件」+ test/thin-done-dirty-gate.test.mjs「FR-01 detectPatchDrift：全角括号交付提交判 drifted」（既有用例，基线即红，实现后转绿；断言不改）
@@ -124,3 +152,4 @@ FR-03: test/flowdone-disposition-drift.test.mjs「⑦ token 裸提交（无名�
 FR-04: test/commit-attribution-split.test.mjs「⑤ changesDirPrefixFor：仓内 spec 目录得相对前缀；仓外得空串」（其余覆盖面由 FR-01、FR-02 的绑定用例承担）
 FR-05: test/task-tick.test.mjs「⑧ tick 回显提交命令模板与未入库提醒：命令含 task-NN 占位与 tasks.md/侧车 pathspec；已勾≥2 且 tasks.md 零提交 → 提醒；入库后提醒消失；幂等零教学重复」（既有用例，按本条更新模板断言并补「模板可解析出变更名」断言）
 FR-06: test/flowdone-disposition-drift.test.mjs「⑩ e2e：分不清的无名 task 提交——漂移与隔离照旧，并点名提示（advisory）」+ test/commit-attribution-split.test.mjs「⑦ listAmbiguousTokenCommits：分不清形态清单（无名有 token 且不触及变更目录）」
+FR-07: test/flowdone-disposition-drift.test.mjs「⑪ 作者身份补判：他作者的分不清提交不触发漂移；同作者仍触发；无自身提交时保守」/「⑫ e2e：他作者的分不清提交落地——不漂移不隔离，提示注明已按他侧处理」+ test/commit-attribution-split.test.mjs「⑧ 作者身份补判（文件级）：他作者的分不清提交文件判 foreign；同作者与无自身提交保守」

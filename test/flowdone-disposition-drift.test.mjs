@@ -553,3 +553,108 @@ test('⑩ e2e：分不清的无名 task 提交——漂移与隔离照旧，并�
   assert.match(out3, /他侧无目录提交 \(task-07\)/, '提示点名该提交（标题）')
   assert.match(out3, /请其提交标题带上变更名/, '提示给出处置办法')
 })
+
+// ── FR-07：作者身份补判 ──
+// 平台仓实证（2026-11-24-voice-meeting-leak-retry-fix）：窗口内 17 笔无名 task 提交不写变更名、
+// 不触及变更目录，冻结补丁 45 文件中仅 12 个属于该变更——这 17 笔的作者都不是该变更自身提交的
+// 作者。在「分不清」一格内再看一层提交事实：作者不在本变更作者集（且集合非空）→ 判他侧。
+const { COMMIT_LOG_ARGS, parseCommitLog, collectOwnAuthors, listAmbiguousTokenCommits } = await import('../src/foreign-declared.js')
+const OTHER_AUTHOR = 'Other <other@x>'
+
+function gitLogCommits(d, range) {
+  return parseCommitLog(execFileSync('git', [...COMMIT_LOG_ARGS, range], { cwd: d, encoding: 'utf8' }))
+}
+
+test('⑪ 作者身份补判：他作者的分不清提交不触发漂移；同作者仍触发；无自身提交时保守', () => {
+  const d = fx()
+  const run = gitRepo(d)
+  writeFileSync(join(d, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  // 本变更具名提交（作者 = 夹具作者 t <t@t>）
+  writeFileSync(join(d, 'own.js'), 'o\n')
+  run(['add', '.']); run(['commit', '-q', '-m', `fix: 我的交付 (${CHG})`])
+  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  // 他作者的分不清提交（无名有 token、不触及变更目录）
+  writeFileSync(join(d, 'theirs-amb.js'), 't\n')
+  run(['add', '.']); run(['commit', '-q', '--author', OTHER_AUTHOR, '-m', 'fix: 他侧无目录提交 (task-09)'])
+  const ownAuthors = collectOwnAuthors(gitLogCommits(d, 'HEAD'), CHG)
+  assert.deepEqual([...ownAuthors], ['t <t@t>'], '本变更作者集 = 夹具作者')
+  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead, ownAuthors })
+  assert.equal(r.drifted, false, `他作者的分不清提交不触发本变更漂移（ownCommits=${JSON.stringify(r.ownCommits)}）`)
+  assert.equal(detectPatchDrift({ cwd: d, change: CHG, freezeHead }).drifted, true, '未提供作者集（旧调用）维持保守 own')
+  assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: freezeHead, ownAuthors }).ok, true, '交付面锚定同口径：他作者提交不破锚')
+  const amb = listAmbiguousTokenCommits({ cwd: d, sinceRef: freezeHead, ownAuthors })
+  assert.deepEqual(amb.map((c) => [c.subject, c.byAuthorExcluded, c.author]), [['fix: 他侧无目录提交 (task-09)', true, OTHER_AUTHOR]], '提示清单标记为「作者不同，已按他侧处理」')
+  // 同作者的分不清提交（返工形态）→ 仍触发漂移
+  writeFileSync(join(d, 'mine-amb.js'), 'm\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 我的返工 (task-10)'])
+  r = detectPatchDrift({ cwd: d, change: CHG, freezeHead, ownAuthors })
+  assert.equal(r.drifted, true, '同作者的分不清提交仍触发漂移')
+  assert.ok(r.ownCommits.some((s) => s.includes('task-10')), 'ownCommits 含同作者分不清提交')
+  assert.ok(!r.ownCommits.some((s) => s.includes('task-09')), 'ownCommits 不含他作者分不清提交')
+  assert.deepEqual(listAmbiguousTokenCommits({ cwd: d, sinceRef: freezeHead, ownAuthors }).map((c) => c.byAuthorExcluded), [false, true], '同作者未排除、他作者排除（新→旧）')
+  // 无自身提交的变更：作者集为空 → 保守
+  const NOOWN = '2026-10-05-no-own'
+  const none = collectOwnAuthors(gitLogCommits(d, 'HEAD'), NOOWN)
+  assert.equal(none.size, 0, '无自身提交 → 作者集为空')
+  assert.equal(detectPatchDrift({ cwd: d, change: NOOWN, freezeHead, ownAuthors: none }).drifted, true, '本变更无自身提交 → 分不清提交保守算 own')
+  // 本变更自身提交出自两个身份 → 两个作者都算本变更作者
+  const d2 = fx()
+  const run2 = gitRepo(d2)
+  writeFileSync(join(d2, 'base.txt'), 'base\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
+  writeFileSync(join(d2, 'a.js'), 'a\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', `fix: 甲的交付 (${CHG})`])
+  writeFileSync(join(d2, 'c.js'), 'c\n')
+  run2(['add', '.']); run2(['commit', '-q', '--author', 'Carol <carol@x>', '-m', `fix: 乙的交付 (${CHG})`])
+  const fh2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
+  writeFileSync(join(d2, 'c-amb.js'), 'c\n')
+  run2(['add', '.']); run2(['commit', '-q', '--author', 'Carol <carol@x>', '-m', 'fix: 乙的返工 (task-03)'])
+  const two = collectOwnAuthors(gitLogCommits(d2, 'HEAD'), CHG)
+  assert.equal(two.size, 2, '本变更两个身份都在作者集')
+  assert.equal(detectPatchDrift({ cwd: d2, change: CHG, freezeHead: fh2, ownAuthors: two }).drifted, true, '本变更第二身份的分不清提交仍算 own')
+})
+
+test('⑫ e2e：他作者的分不清提交落地——不漂移不隔离，提示注明已按他侧处理', () => {
+  const cwd = fx()
+  const run = gitRepo(cwd)
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const cn = '2026-11-24-author-e2e'
+  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '作者身份补判端到端链路\n\n成功标准：\n- 他作者的分不清提交不触发本变更漂移'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const base = join(cwd, '.sillyspec', 'changes', cn)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：作者身份补判链路验证，存在时序窗口（评审与他作者提交之间）。'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 把作者与本变更自身提交不同的分不清提交判为他侧（夹具行为句')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「⑫ e2e：他作者的分不清提交落地」'))
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n')
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
+  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
+  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out2 = s2.stdout + s2.stderr
+  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
+  const headAtReview = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
+  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: headAtReview, findings: [], dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
+  // 他会话的分不清提交：无名有 token、不触及变更目录，作者是另一身份
+  writeFileSync(join(cwd, 'src', 'theirs-amb.js'), 'export const u = 3\n')
+  run(['add', 'src/theirs-amb.js']); run(['commit', '-q', '--author', OTHER_AUTHOR, '-m', 'fix: 他作者无目录提交 (task-07)'])
+  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out3 = s3.stdout + s3.stderr
+  assert.ok(!out3.includes('审计时点漂移'), `他作者的分不清提交不得触发本变更漂移（尾部：${out3.split('\n').slice(-6).join(' | ')}）`)
+  assert.ok(!out3.includes('独立评审任务书'), '不重印评审任务书（评审未被隔离）')
+  assert.equal(s3.status, 0, `直接归档成功（exit 0；尾部：${out3.split('\n').slice(-5).join(' | ')}）`)
+  assert.match(out3, /归属分不清·advisory/, '提示在场')
+  assert.match(out3, /他作者无目录提交 \(task-07\)/, '提示点名该提交')
+  assert.match(out3, /已按他侧处理/, '提示注明作者不同、已按他侧处理')
+  const archivedBase = join(cwd, '.sillyspec', 'changes', 'archive', cn)
+  assert.ok(existsSync(archivedBase), '变更已归档')
+  const patch = readFileSync(join(archivedBase, 'change.patch'), 'utf8')
+  assert.ok(patch.includes('+++ b/src/work.js'), '补丁含本变更交付面')
+  assert.ok(!patch.includes('+++ b/src/theirs-amb.js'), '补丁不含他作者分不清提交的文件')
+})

@@ -1912,6 +1912,18 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // JSON-only 冻结形态（无主仓 change.patch，跨仓正文在 repos[]）——收口指引文案按它
   // 切换审计锚表述（2026-10-19-thin-empty-face-cross-repo-freeze）。
   let jsonOnlyFreeze = false
+  // 本变更作者集（2026-11-24-token-commit-change-dir-attribution FR-07）：baseline..HEAD 窗口内目录
+  // 规则层判 own 的提交（标题提及本变更名，或 task 提交触及本变更目录）的作者身份。供漂移检测、
+  // 交付面锚定与两处「归属分不清」提示对分不清的无名 task 提交做作者补判——作者不在集内且集合
+  // 非空 → 判他侧。best-effort：无基线/git 不可用/读取失败 → null（调用方维持保守 own）。
+  let ownAuthorSet = null
+  try {
+    if (st.baseline_commit) {
+      const { COMMIT_LOG_ARGS, parseCommitLog, collectOwnAuthors, changesDirPrefixFor } = await import('./foreign-declared.js')
+      const _ownLog = gitQuiet(cwd, [...COMMIT_LOG_ARGS, `${st.baseline_commit}..HEAD`])
+      if (typeof _ownLog === 'string' && _ownLog) ownAuthorSet = collectOwnAuthors(parseCommitLog(_ownLog), change, changesDirPrefixFor(cwd, specBase))
+    }
+  } catch { ownAuthorSet = null }
   if (st.substeps?.patch === 'done') {
     // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
     // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
@@ -1942,21 +1954,28 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 变更根前缀（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的变更
         // 目录归属，目录口径取自 specBase（不写死 .sillyspec）。
         const { changesDirPrefixFor } = await import('./foreign-declared.js')
-        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
+        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase), ownAuthors: ownAuthorSet })
         if (drift.drifted) {
           drifted = true
           console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
-          // 归属分不清提示（2026-11-24-token-commit-change-dir-attribution FR-06，advisory）：漂移若由
-          // 「分不清」形态的无名 task 提交引起，点名它们——判定与评审处置不变，只让误判可见。
-          try {
-            const { listAmbiguousTokenCommits, formatAmbiguousTokenCommits } = await import('./foreign-declared.js')
-            const _ambDrift = listAmbiguousTokenCommits({ cwd, sinceRef: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase) })
-            if (_ambDrift && _ambDrift.length > 0) {
-              console.warn(`   ⚠️ [归属分不清·advisory] 其中 ${_ambDrift.length} 笔带 task token、未写变更名、未触及任何变更目录——无法判断归属，已按本变更提交处理并触发漂移: ${formatAmbiguousTokenCommits(_ambDrift)}`)
-              console.warn('   若属他侧，请其提交标题带上变更名（(<变更名> task-NN)）后重跑；本提示不改变归属与漂移判定')
-            }
-          } catch { /* 提示失败不影响漂移处置 */ }
         }
+        // 归属分不清提示（2026-11-24-token-commit-change-dir-attribution FR-06，advisory）：窗口内
+        // 「分不清」形态的无名 task 提交点名——判定与评审处置不变，只让误判可见。置于漂移判定
+        // 之外：FR-07 下被作者补判排除的提交不触发漂移，仍必须出现在提示里（漏判可见）。
+        try {
+          const { listAmbiguousTokenCommits, formatAmbiguousTokenCommits } = await import('./foreign-declared.js')
+          const _ambAll = listAmbiguousTokenCommits({ cwd, sinceRef: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase), ownAuthors: ownAuthorSet }) || []
+          const _ambDrift = _ambAll.filter((c) => !c.byAuthorExcluded)
+          const _ambExcluded = _ambAll.filter((c) => c.byAuthorExcluded)
+          if (drift.drifted && _ambDrift.length > 0) {
+            console.warn(`   ⚠️ [归属分不清·advisory] 冻结后有 ${_ambDrift.length} 笔带 task token、未写变更名、未触及任何变更目录——无法判断归属，已按本变更提交处理并触发漂移: ${formatAmbiguousTokenCommits(_ambDrift)}`)
+            console.warn('   若属他侧，请其提交标题带上变更名（(<变更名> task-NN)）后重跑；本提示不改变归属与漂移判定')
+          }
+          if (_ambExcluded.length > 0) {
+            console.warn(`   ℹ️ [归属分不清·advisory] 冻结后有 ${_ambExcluded.length} 笔同形态提交因作者与本变更自身提交不同已按他侧处理（不计入漂移）: ${formatAmbiguousTokenCommits(_ambExcluded)}`)
+            console.warn('   若确属本变更（同一变更换了 git 身份提交），请其提交标题带上变更名（(<变更名> task-NN)）后重跑')
+          }
+        } catch { /* 提示失败不影响漂移处置 */ }
       } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
     }
     if (drifted) {
@@ -2002,7 +2021,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             const { changesDirPrefixFor } = await import('./foreign-declared.js')
             const _raw = JSON.parse(readFileSync(reviewPath, 'utf8'))
             const _anchor = extractAnchorSha(_raw && _raw.reviewedAgainst)
-            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor, changesDirPrefix: changesDirPrefixFor(cwd, specBase) }) : null
+            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor, changesDirPrefix: changesDirPrefixFor(cwd, specBase), ownAuthors: ownAuthorSet }) : null
           } catch { /* 锚读取/判定失败 → 走隔离（fail-safe 宁可多评） */ }
           if (_deliveryAnchored && _deliveryAnchored.ok) {
             console.log(`   review.json 保留不隔离——复审锚（reviewedAgainst）之后的本变更提交仅触及治理文件（${_deliveryAnchored.ownCount} 个提交，未触 requirements/design），评审对象（交付面）自锚点起未变，结论有效；change.patch 自动重冻结（治理工件不入冻结面）`)
@@ -2094,16 +2113,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           }
         } catch { /* 声明面解析失败不阻断冻结 */ }
         // 归属分不清提示（2026-11-24-token-commit-change-dir-attribution FR-06，advisory）：窗口内
-        // 「带 task token、未写变更名、未触及任何变更目录」的提交分不清是谁的，按 FR-03 保守算本变更
-        // ——其文件进了冻结面时点名，让误判可见可追。纯提示：不改归属/漂移判定、不阻断收口。
+        // 「带 task token、未写变更名、未触及任何变更目录」的提交分不清是谁的，保守算本变更
+        // ——其文件进了冻结面时点名，让误判可见可追。FR-07：被作者补判排除的另起一行注明已按
+        // 他侧处理（其文件不进冻结面）。纯提示：不改归属/漂移判定、不阻断收口。
         try {
           const { listAmbiguousTokenCommits, formatAmbiguousTokenCommits, changesDirPrefixFor } = await import('./foreign-declared.js')
           const _ambPrefix = changesDirPrefixFor(cwd, specBase)
-          const _ambInFace = (listAmbiguousTokenCommits({ cwd, sinceRef: st.baseline_commit, changesDirPrefix: _ambPrefix }) || [])
-            .filter((c) => (c.files || []).some((f) => committed.includes(f)))
+          const _ambAll = listAmbiguousTokenCommits({ cwd, sinceRef: st.baseline_commit, changesDirPrefix: _ambPrefix, ownAuthors: ownAuthorSet }) || []
+          const _ambInFace = _ambAll.filter((c) => !c.byAuthorExcluded && (c.files || []).some((f) => committed.includes(f)))
           if (_ambInFace.length > 0) {
             console.warn(`⚠️ [归属分不清·advisory] 窗口内有 ${_ambInFace.length} 笔提交带 task token、未写变更名、未触及任何变更目录——无法判断归属，已按本变更处理（其文件进了冻结面）: ${formatAmbiguousTokenCommits(_ambInFace)}`)
             console.warn('   若属他侧，请其提交标题带上变更名（(<变更名> task-NN)）后重跑；本提示不改变归属与漂移判定')
+          }
+          const _ambExcluded = _ambAll.filter((c) => c.byAuthorExcluded)
+          if (_ambExcluded.length > 0) {
+            console.warn(`ℹ️ [归属分不清·advisory] 窗口内有 ${_ambExcluded.length} 笔同形态提交因作者与本变更自身提交不同已按他侧处理: ${formatAmbiguousTokenCommits(_ambExcluded)}`)
+            console.warn('   若确属本变更（同一变更换了 git 身份提交），请其提交标题带上变更名（(<变更名> task-NN)）后重跑')
           }
         } catch { /* 提示失败不阻断冻结 */ }
         // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
