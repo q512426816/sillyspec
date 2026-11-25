@@ -117,5 +117,48 @@ console.log('\n--- 用例5: 跨仓 task（repo≠main）显式拒绝 ---')
   assert(r.status !== 0 && r.combined.includes('跨仓'), `跨仓 task 拒绝并指引 adopt 路径（实际 ${r.status}）`)
 }
 
+console.log('\n--- 用例6: 无 worktree meta → 回退 flow-state baseline 代算 base/head/changedFiles ---')
+{
+  const cn = '2026-09-07-rw-nometa'
+  const { cwd, specBase } = makeRepo('rw-nometa-')
+  const changeDir = join(specBase, 'changes', cn)
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+  mkTaskCard(changeDir, 'task-01', 'src/foo.js')
+  const c1 = git(cwd, ['rev-parse', 'HEAD'])
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'foo.js'), 'export const a = 1\n')
+  git(cwd, ['add', 'src/foo.js'])
+  git(cwd, ['commit', '-q', '-m', 'feat: impl'])
+  const head = git(cwd, ['rev-parse', 'HEAD'])
+  // 无 worktree meta；只留 flow-state baseline（worktree 清理后的形态）
+  writeFileSync(join(changeDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${c1}\n`)
+  const r = runCLI(['--dir', cwd, 'review', 'write', '--change', cn, '--task', 'task-01',
+    '--spec', 'pass', '--quality', 'pass'], { cwd })
+  assert(r.status === 0, `无 meta 回退 baseline 通过（实际 ${r.status}；输出尾：${r.combined.slice(-200)}）`)
+  const runId = r.combined.match(/executeRunId: (exec-[^\s]+)/)?.[1]
+  const review = JSON.parse(readFileSync(join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
+  assert(review.base === c1, `base=flow-state baseline（实际 ${review.base}）`)
+  assert(review.head === head, `head=HEAD（实际 ${review.head}）`)
+  assert(review.changedFiles.includes('src/foo.js'), 'changedFiles 按 base..HEAD 自动推导含交付文件')
+}
+
+console.log('\n--- 用例7: 仅 --changed-files → base/head 回退 HEAD 并警告 ---')
+{
+  const cn = '2026-09-07-rw-onlyfiles'
+  const { cwd, specBase } = makeRepo('rw-onlyfiles-')
+  const changeDir = join(specBase, 'changes', cn)
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+  mkTaskCard(changeDir, 'task-01', 'src/foo.js')
+  // 无 meta、无 flow-state baseline——只给 changedFiles
+  const r = runCLI(['--dir', cwd, 'review', 'write', '--change', cn, '--task', 'task-01',
+    '--spec', 'pass', '--quality', 'pass', '--changed-files', 'src/foo.js'], { cwd })
+  assert(r.status === 0, `仅 --changed-files 通过（实际 ${r.status}；输出尾：${r.combined.slice(-200)}）`)
+  assert(r.combined.includes('回退 HEAD'), '输出 base/head 回退 HEAD 警告')
+  const runId = r.combined.match(/executeRunId: (exec-[^\s]+)/)?.[1]
+  const review = JSON.parse(readFileSync(join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
+  assert(review.base === review.head, 'base=head=HEAD 兜底')
+  assert(review.changedFiles.includes('src/foo.js'), 'changedFiles 采用显式覆盖')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)

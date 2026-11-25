@@ -356,8 +356,8 @@ function commitLog(rows) {
 test('⑧ 作者身份补判（文件级）：他作者的分不清提交文件判 foreign；同作者与无自身提交保守', () => {
   // 解析：新格式带 sha 与作者；旧格式（仅标题） tolerated
   const parsed = parseCommitLog(commitLog([['a1', AUTHOR_A, `feat: 我的交付 (${ME})`, ['src\\win.js', 'src/mine.js']]]))
-  assert.deepEqual(parsed, [{ sha: 'a1', author: AUTHOR_A, subject: `feat: 我的交付 (${ME})`, files: ['src/win.js', 'src/mine.js'] }], '含作者格式解析（文件面正斜杠归一）')
-  assert.deepEqual(parseCommitLog('\x00fix: 旧格式\nsrc/a.js\n'), [{ sha: '', author: '', subject: 'fix: 旧格式', files: ['src/a.js'] }], '旧格式（仅标题）解析：sha 与作者为空')
+  assert.deepEqual(parsed, [{ sha: 'a1', author: AUTHOR_A, subject: `feat: 我的交付 (${ME})`, body: '', files: ['src/win.js', 'src/mine.js'] }], '含作者格式解析（文件面正斜杠归一、旧格式 body 空串）')
+  assert.deepEqual(parseCommitLog('\x00fix: 旧格式\nsrc/a.js\n'), [{ sha: '', author: '', subject: 'fix: 旧格式', body: '', files: ['src/a.js'] }], '旧格式（仅标题）解析：sha 与作者为空、body 空串')
   assert.ok(COMMIT_LOG_ARGS.includes('--name-only') && COMMIT_LOG_ARGS.some((a) => a.includes('%an') && a.includes('%ae')), 'git log 参数含作者名与邮箱')
 
   const rows = [
@@ -402,4 +402,57 @@ test('⑧ 作者身份补判（文件级）：他作者的分不清提交文件�
   // 旧格式日志（无作者）+ changeName → 作者未知 → 保守 own
   const oldLog = [`\x00feat: 我的交付 (${ME})`, 'src/mine.js', '', '\x00fix: 返工 (task-05)', 'src/old-amb.js', ''].join('\n')
   assert.equal(isForeignByCommit(buildCommitAttribution(oldLog, { changesDirPrefix: P, changeName: ME }).get('src/old-amb.js'), ME), false, '旧格式日志无作者 → 保守 own')
+})
+
+// ── 正文 footer 归属（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）──
+// 缺陷复现：提交标题不含变更名、变更名/task token 只在正文 footer 时，旧 COMMIT_LOG_ARGS 只取
+// %s → buildCommitAttribution 判 pure-bare foreign → filterCommittedFace 把已提交交付文件剔出
+// 冻结面（平台仓 2026-11-25-autocommit-stale-index-isolation 的 3 个文件实证）。
+
+test('正文 footer 的变更名/task token 参与归属（parseCommitLog 返回 body）', () => {
+  const name = '2026-11-25-body-footnote-change'
+  const log = [
+    `\x00${'b'.repeat(40)}\x1fT\x1ft@t\x1ffix: 标题里没有名字\x1f(${name} task-01)\x1e`,
+    'sillyhub-daemon/src/x.ts',
+    '',
+  ].join('\n')
+  const parsed = parseCommitLog(log)
+  assert.equal(parsed.length, 1)
+  assert.equal(parsed[0].subject, 'fix: 标题里没有名字')
+  assert.equal(parsed[0].body.includes(`(${name} task-01)`), true)
+  const attr = buildCommitAttribution(log, { changeName: name, changesDirPrefix: '.sillyspec/changes/' })
+  assert.equal(isForeignByCommit(attr.get('sillyhub-daemon/src/x.ts'), name), false, '正文变更名 → own')
+  assert.equal(isOwnByFacts({ subject: parsed[0].subject, body: parsed[0].body, files: [] }, name), true)
+  // 旧格式日志（无正文）向后兼容：标题无名仍判 pure-bare
+  const old = [`\x00fix: 标题里没有名字`, 'sillyhub-daemon/src/y.ts', ''].join('\n')
+  const oldAttr = buildCommitAttribution(old, { changeName: name, changesDirPrefix: '.sillyspec/changes/' })
+  assert.equal(isForeignByCommit(oldAttr.get('sillyhub-daemon/src/y.ts'), name), true, '旧格式无正文 → 维持 foreign')
+})
+
+test('正文 footer 归属贯通 filterCommittedFace（真实 git 仓；旧实现丢文件）', () => {
+  const name = '2026-11-25-body-footnote-change'
+  const d = mkdtempSync(join(tmpdir(), 'catr-body-'))
+  try {
+    const g = (cmd) => execSync(cmd, { cwd: d, encoding: 'utf8', windowsHide: true })
+    g('git init -q')
+    g('git config user.email t@t && git config user.name t')
+    writeFileSync(join(d, 'seed.txt'), 'seed')
+    g('git add seed.txt && git commit -q -m "chore: seed"')
+    const base = g('git rev-parse HEAD').trim()
+    mkdirSync(join(d, '.sillyspec', 'changes', name), { recursive: true })
+    writeFileSync(join(d, '.sillyspec', 'changes', name, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
+    mkdirSync(join(d, 'sillyhub-daemon', 'src'), { recursive: true })
+    writeFileSync(join(d, 'sillyhub-daemon', 'src', 'x.ts'), 'export const x = 1\n')
+    g('git add sillyhub-daemon/src/x.ts')
+    // 标题无名、正文 footer 带变更名 + task token（仓内提交惯例形态）
+    g(`git commit -q -m "fix: no change name" -m "(${name} task-01)"`)
+    const kept = filterCommittedFace(['sillyhub-daemon/src/x.ts'], `.sillyspec/changes/${name}/`, {
+      cwd: d,
+      specBase: join(d, '.sillyspec'),
+      baselineCommit: base,
+    })
+    assert.deepEqual(kept, ['sillyhub-daemon/src/x.ts'], '正文 footer 归属 → 冻结面保留')
+  } finally {
+    rmSync(d, { recursive: true, force: true })
+  }
 })

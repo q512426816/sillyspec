@@ -2005,10 +2005,11 @@ export async function writeTaskReview({
   }
   if (existsSync(reviewPath)) warnings.push(`--force 覆盖已存在 review：${reviewPath}`)
 
-  // ── mechanics 代算：base/head（worktree meta 优先，显式覆盖次之）──
+  // ── mechanics 代算：base/head（worktree meta 优先，显式覆盖次之，flow-state baseline 回退）──
   let base = baseOverride
   let head = headOverride
   let reviewGitDir = cwd
+  let baseFromFlowState = false
   if (!base || !head) {
     try {
       const wm = new WorktreeManager({ cwd })
@@ -2019,13 +2020,32 @@ export async function writeTaskReview({
       }
     } catch { /* meta 读取失败走显式覆盖路径 */ }
   }
+  // worktree 清理后 meta 已删：回退变更目录（活跃/归档）flow-state.yaml 的 baseline_commit
+  //（2026-11-25-freeze-face-body-attribution-and-review-base-fallback FR-03）。
+  if (!base) {
+    for (const dir of [changeDir, join(specBase, 'changes', 'archive', changeName)]) {
+      try {
+        const st = readFileSync(join(dir, 'flow-state.yaml'), 'utf8')
+        const m = /^baseline_commit:\s*(\S+)/m.exec(st)
+        if (m) { base = m[1]; baseFromFlowState = true; break }
+      } catch { /* 无 flow-state → 下一候选 */ }
+    }
+  }
+  if (baseFromFlowState) warnings.push(`base 回退 flow-state.baseline_commit=${String(base).slice(0, 8)}（worktree meta 不可得）`)
   if (!head) {
     try { head = runGit(reviewGitDir, ['rev-parse', 'HEAD']) } catch { head = null }
+  }
+  // 仅 --changed-files（纯验证任务）：base/head 缺省回退 HEAD（FR-04）——用户显式给了改动面，
+  // 不再以「无法确定 base/head」拒绝。
+  if ((!base || !head) && Array.isArray(changedFilesOverride)) {
+    try { if (!head) head = runGit(cwd, ['rev-parse', 'HEAD']) } catch { /* 保持 null */ }
+    if (!base) base = head
+    if (base && head) warnings.push('base/head 未显式提供且无 worktree meta / flow-state baseline——已回退 HEAD（仅 --changed-files 模式）')
   }
   if (!base || !head) {
     return {
       ok: false,
-      errors: [`无法确定 base/head（无 worktree meta 且未显式覆盖）——用 --base <commit> --head <commit> 显式给出（git rev-parse 取值）`],
+      errors: [`无法确定 base/head（无 worktree meta / flow-state baseline 且未显式覆盖）——用 --base <commit> --head <commit> 显式给出（git rev-parse 取值），或仅用 --changed-files 走 HEAD 兜底`],
       warnings,
     }
   }
@@ -2060,6 +2080,24 @@ export async function writeTaskReview({
     }
     for (const note of attribution.notes) warnings.push(`归因注记：${note}`)
     let diffFiles = attribution.diffFiles
+    // worktree 已清理（归因面空）：按 base..HEAD 提交面 + 主仓未提交面回退，后续按 task 卡
+    // allowed_paths 切片（FR-03）。只在无归因面时兜底，不覆盖正常归因结果。
+    if ((!Array.isArray(diffFiles) || diffFiles.length === 0) && base && head) {
+      try {
+        const committed = runGit(reviewGitDir, ['diff', '--name-only', `${base}..${head}`], { trim: false })
+        let fb = String(committed || '').split('\n').map((l) => l.trim().replace(/\\/g, '/')).filter(Boolean)
+        try {
+          const wt = parsePorcelainFiles(runGit(cwd, ['status', '--porcelain', '--untracked-files=all'], { trim: false }))
+            .map((p) => String(p).replace(/\\/g, '/'))
+            .filter((p) => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+          if (wt.length > 0) fb = [...new Set([...fb, ...wt])]
+        } catch { /* 未提交面不可得 → 仅提交面 */ }
+        if (fb.length > 0) {
+          diffFiles = fb
+          warnings.push('归因面为空（worktree 已清理）——回退 base..HEAD 提交面 + 主仓未提交面（按 task 卡 allowed_paths 切片）')
+        }
+      } catch { /* git 不可得 → 保持空面（下方报错引导 --changed-files） */ }
+    }
     // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）。D-004 后仅在
     // 归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——worktree-branch/
     // cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
@@ -2103,6 +2141,11 @@ export async function writeTaskReview({
   const review = {
     schemaVersion: REVIEW_SCHEMA_VERSION,
     task: taskId,
+    // 变更归属戳（坑 execute-runs-orphan-review-false-check 建议②，2026-11-23 实证）：
+    // review 件与其变更结构性绑定——autoCheckPlanFromReviews 消费侧校验 change 不匹配即
+    // 拒用（runId 目录若被跨变更复用/遗物混入，认领在字段面不可能）。schema 对额外字段
+    // 容忍（存量件无此字段 → 消费侧按缺失放行，向后兼容）。
+    change: changeName,
     base,
     head,
     changedFiles,

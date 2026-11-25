@@ -258,7 +258,7 @@ export function touchedChangeDirs(files, changesDirPrefix) {
  * NUL + sha␟作者名␟邮箱␟标题，随后 `--name-only` 的文件行。提交级归属、文件级归属与提示清单
  * 共用本参数与 parseCommitLog，防三处解析口径再漂。
  */
-export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1f%ae%x1f%s']
+export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1f%ae%x1f%s%x1f%b%x1e']
 
 /**
  * git log 文本 → 提交清单（git 顺序，新→旧）。兼容仅标题的旧格式（NUL + 标题 + 文件行）：
@@ -269,15 +269,28 @@ export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1
 export function parseCommitLog(logText) {
   const out = []
   for (const block of String(logText || '').split('\x00')) {
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
-    if (lines.length === 0) continue
-    const head = lines[0]
-    const files = lines.slice(1).map((f) => f.replace(/\\/g, '/'))
+    if (!block.trim()) continue
+    // 新格式（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）：格式串尾部
+    // %b（正文）后跟 %x1e 记录分隔，再跟 --name-only 文件行——正文可含换行，不能用行切。
+    // 旧格式（无 %x1e）保持原解析：首行标题、其余行文件。
+    const recSep = block.lastIndexOf('\x1e')
+    const metaText = recSep >= 0 ? block.slice(0, recSep) : block
+    const firstNl = metaText.indexOf('\n')
+    const head = (firstNl >= 0 ? metaText.slice(0, firstNl) : metaText).trim()
+    if (!head) continue
+    const tail = firstNl >= 0 ? metaText.slice(firstNl + 1) : ''
+    const filesRaw = recSep >= 0 ? block.slice(recSep + 1) : tail
+    const files = filesRaw.split('\n').map((f) => f.trim()).filter(Boolean).map((f) => f.replace(/\\/g, '/'))
     if (head.includes('\x1f')) {
       const [sha, name, email, ...rest] = head.split('\x1f')
-      out.push({ sha, author: `${name} <${email}>`, subject: rest.join('\x1f'), files })
+      const subject = rest[0] ?? ''
+      // 正文 = 格式行内 %b 首行（rest[1..]）+ %x1e 之前的续行（tail）；旧格式恒空串。
+      const body = recSep >= 0
+        ? [rest.slice(1).join('\x1f'), tail].filter(Boolean).join('\n').trim()
+        : ''
+      out.push({ sha, author: `${name} <${email}>`, subject, body, files })
     } else {
-      out.push({ sha: '', author: '', subject: head, files })
+      out.push({ sha: '', author: '', subject: head, body: '', files })
     }
   }
   return out
@@ -302,10 +315,13 @@ export function parseCommitLog(logText) {
  * @param {string} [changesDirPrefix]
  * @returns {boolean|null}
  */
-export function isOwnByFacts({ subject, files }, changeName, changesDirPrefix) {
-  const names = parseChangeNamesFromSubject(subject)
+export function isOwnByFacts({ subject, body, files }, changeName, changesDirPrefix) {
+  // 标题 ∪ 正文（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）：仓内提交
+  // 惯例把 `(<变更名> task-NN)` 写在正文 footer，只读标题会把本变更提交误判 pure-bare。
+  const text = body ? `${String(subject || '')}\n${String(body)}` : String(subject || '')
+  const names = parseChangeNamesFromSubject(text)
   if (names.length > 0) return names.includes(changeName)
-  if (!TASK_TOKEN_RE.test(String(subject || ''))) return false
+  if (!TASK_TOKEN_RE.test(text)) return false
   const touched = touchedChangeDirs(files, changesDirPrefix)
   if (touched.size === 0) return null
   return touched.has(changeName)
@@ -343,8 +359,8 @@ export function collectOwnAuthors(commits, changeName, changesDirPrefix) {
  * @param {Set<string>|null} [ownAuthors] 本变更作者集（collectOwnAuthors）；未提供 = 不做作者补判
  * @returns {boolean}
  */
-export function isOwnCommitForChange({ subject, files, author }, changeName, changesDirPrefix, ownAuthors) {
-  const facts = isOwnByFacts({ subject, files }, changeName, changesDirPrefix)
+export function isOwnCommitForChange({ subject, body, files, author }, changeName, changesDirPrefix, ownAuthors) {
+  const facts = isOwnByFacts({ subject, body, files }, changeName, changesDirPrefix)
   if (facts !== null) return facts
   if (ownAuthors && ownAuthors.size > 0 && author && !ownAuthors.has(author)) return false
   return true
@@ -426,9 +442,12 @@ export function buildCommitAttribution(logText, opts = {}) {
   const ownAuthors = o.changeName ? collectOwnAuthors(commits, o.changeName, changesDirPrefix) : new Set()
   const map = new Map()
   for (const c of commits) {
-    const names = parseChangeNamesFromSubject(c.subject)
+    // 标题 ∪ 正文：变更名/task token 写在 footer 的提交同样可归属
+    // （2026-11-25-freeze-face-body-attribution-and-review-base-fallback）。
+    const text = c.body ? `${String(c.subject || '')}\n${String(c.body)}` : String(c.subject || '')
+    const names = parseChangeNamesFromSubject(text)
     // 提交级事实：该无名 task 提交触及的变更目录（对本提交的全部文件同样成立）
-    const touched = names.length === 0 && TASK_TOKEN_RE.test(c.subject) ? touchedChangeDirs(c.files, changesDirPrefix) : null
+    const touched = names.length === 0 && TASK_TOKEN_RE.test(text) ? touchedChangeDirs(c.files, changesDirPrefix) : null
     const authorExcluded = touched !== null && touched.size === 0 && ownAuthors.size > 0 && !!c.author && !ownAuthors.has(c.author)
     for (const file of c.files) {
       let e = map.get(file)
