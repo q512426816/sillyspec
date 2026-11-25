@@ -1,0 +1,322 @@
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index f83d800d..05599ed6 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -258,7 +258,7 @@ export function touchedChangeDirs(files, changesDirPrefix) {
+  * NUL + sha␟作者名␟邮箱␟标题，随后 `--name-only` 的文件行。提交级归属、文件级归属与提示清单
+  * 共用本参数与 parseCommitLog，防三处解析口径再漂。
+  */
+-export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1f%ae%x1f%s']
++export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1f%ae%x1f%s%x1f%b%x1e']
+ 
+ /**
+  * git log 文本 → 提交清单（git 顺序，新→旧）。兼容仅标题的旧格式（NUL + 标题 + 文件行）：
+@@ -269,15 +269,28 @@ export const COMMIT_LOG_ARGS = ['log', '--name-only', '--format=%x00%H%x1f%an%x1
+ export function parseCommitLog(logText) {
+   const out = []
+   for (const block of String(logText || '').split('\x00')) {
+-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+-    if (lines.length === 0) continue
+-    const head = lines[0]
+-    const files = lines.slice(1).map((f) => f.replace(/\\/g, '/'))
++    if (!block.trim()) continue
++    // 新格式（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）：格式串尾部
++    // %b（正文）后跟 %x1e 记录分隔，再跟 --name-only 文件行——正文可含换行，不能用行切。
++    // 旧格式（无 %x1e）保持原解析：首行标题、其余行文件。
++    const recSep = block.lastIndexOf('\x1e')
++    const metaText = recSep >= 0 ? block.slice(0, recSep) : block
++    const firstNl = metaText.indexOf('\n')
++    const head = (firstNl >= 0 ? metaText.slice(0, firstNl) : metaText).trim()
++    if (!head) continue
++    const tail = firstNl >= 0 ? metaText.slice(firstNl + 1) : ''
++    const filesRaw = recSep >= 0 ? block.slice(recSep + 1) : tail
++    const files = filesRaw.split('\n').map((f) => f.trim()).filter(Boolean).map((f) => f.replace(/\\/g, '/'))
+     if (head.includes('\x1f')) {
+       const [sha, name, email, ...rest] = head.split('\x1f')
+-      out.push({ sha, author: `${name} <${email}>`, subject: rest.join('\x1f'), files })
++      const subject = rest[0] ?? ''
++      // 正文 = 格式行内 %b 首行（rest[1..]）+ %x1e 之前的续行（tail）；旧格式恒空串。
++      const body = recSep >= 0
++        ? [rest.slice(1).join('\x1f'), tail].filter(Boolean).join('\n').trim()
++        : ''
++      out.push({ sha, author: `${name} <${email}>`, subject, body, files })
+     } else {
+-      out.push({ sha: '', author: '', subject: head, files })
++      out.push({ sha: '', author: '', subject: head, body: '', files })
+     }
+   }
+   return out
+@@ -302,10 +315,13 @@ export function parseCommitLog(logText) {
+  * @param {string} [changesDirPrefix]
+  * @returns {boolean|null}
+  */
+-export function isOwnByFacts({ subject, files }, changeName, changesDirPrefix) {
+-  const names = parseChangeNamesFromSubject(subject)
++export function isOwnByFacts({ subject, body, files }, changeName, changesDirPrefix) {
++  // 标题 ∪ 正文（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）：仓内提交
++  // 惯例把 `(<变更名> task-NN)` 写在正文 footer，只读标题会把本变更提交误判 pure-bare。
++  const text = body ? `${String(subject || '')}\n${String(body)}` : String(subject || '')
++  const names = parseChangeNamesFromSubject(text)
+   if (names.length > 0) return names.includes(changeName)
+-  if (!TASK_TOKEN_RE.test(String(subject || ''))) return false
++  if (!TASK_TOKEN_RE.test(text)) return false
+   const touched = touchedChangeDirs(files, changesDirPrefix)
+   if (touched.size === 0) return null
+   return touched.has(changeName)
+@@ -343,8 +359,8 @@ export function collectOwnAuthors(commits, changeName, changesDirPrefix) {
+  * @param {Set<string>|null} [ownAuthors] 本变更作者集（collectOwnAuthors）；未提供 = 不做作者补判
+  * @returns {boolean}
+  */
+-export function isOwnCommitForChange({ subject, files, author }, changeName, changesDirPrefix, ownAuthors) {
+-  const facts = isOwnByFacts({ subject, files }, changeName, changesDirPrefix)
++export function isOwnCommitForChange({ subject, body, files, author }, changeName, changesDirPrefix, ownAuthors) {
++  const facts = isOwnByFacts({ subject, body, files }, changeName, changesDirPrefix)
+   if (facts !== null) return facts
+   if (ownAuthors && ownAuthors.size > 0 && author && !ownAuthors.has(author)) return false
+   return true
+@@ -426,9 +442,12 @@ export function buildCommitAttribution(logText, opts = {}) {
+   const ownAuthors = o.changeName ? collectOwnAuthors(commits, o.changeName, changesDirPrefix) : new Set()
+   const map = new Map()
+   for (const c of commits) {
+-    const names = parseChangeNamesFromSubject(c.subject)
++    // 标题 ∪ 正文：变更名/task token 写在 footer 的提交同样可归属
++    // （2026-11-25-freeze-face-body-attribution-and-review-base-fallback）。
++    const text = c.body ? `${String(c.subject || '')}\n${String(c.body)}` : String(c.subject || '')
++    const names = parseChangeNamesFromSubject(text)
+     // 提交级事实：该无名 task 提交触及的变更目录（对本提交的全部文件同样成立）
+-    const touched = names.length === 0 && TASK_TOKEN_RE.test(c.subject) ? touchedChangeDirs(c.files, changesDirPrefix) : null
++    const touched = names.length === 0 && TASK_TOKEN_RE.test(text) ? touchedChangeDirs(c.files, changesDirPrefix) : null
+     const authorExcluded = touched !== null && touched.size === 0 && ownAuthors.size > 0 && !!c.author && !ownAuthors.has(c.author)
+     for (const file of c.files) {
+       let e = map.get(file)
+diff --git a/src/task-review.js b/src/task-review.js
+index a6b30951..4d729ca8 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -2005,10 +2005,11 @@ export async function writeTaskReview({
+   }
+   if (existsSync(reviewPath)) warnings.push(`--force 覆盖已存在 review：${reviewPath}`)
+ 
+-  // ── mechanics 代算：base/head（worktree meta 优先，显式覆盖次之）──
++  // ── mechanics 代算：base/head（worktree meta 优先，显式覆盖次之，flow-state baseline 回退）──
+   let base = baseOverride
+   let head = headOverride
+   let reviewGitDir = cwd
++  let baseFromFlowState = false
+   if (!base || !head) {
+     try {
+       const wm = new WorktreeManager({ cwd })
+@@ -2019,13 +2020,32 @@ export async function writeTaskReview({
+       }
+     } catch { /* meta 读取失败走显式覆盖路径 */ }
+   }
++  // worktree 清理后 meta 已删：回退变更目录（活跃/归档）flow-state.yaml 的 baseline_commit
++  //（2026-11-25-freeze-face-body-attribution-and-review-base-fallback FR-03）。
++  if (!base) {
++    for (const dir of [changeDir, join(specBase, 'changes', 'archive', changeName)]) {
++      try {
++        const st = readFileSync(join(dir, 'flow-state.yaml'), 'utf8')
++        const m = /^baseline_commit:\s*(\S+)/m.exec(st)
++        if (m) { base = m[1]; baseFromFlowState = true; break }
++      } catch { /* 无 flow-state → 下一候选 */ }
++    }
++  }
++  if (baseFromFlowState) warnings.push(`base 回退 flow-state.baseline_commit=${String(base).slice(0, 8)}（worktree meta 不可得）`)
+   if (!head) {
+     try { head = runGit(reviewGitDir, ['rev-parse', 'HEAD']) } catch { head = null }
+   }
++  // 仅 --changed-files（纯验证任务）：base/head 缺省回退 HEAD（FR-04）——用户显式给了改动面，
++  // 不再以「无法确定 base/head」拒绝。
++  if ((!base || !head) && Array.isArray(changedFilesOverride)) {
++    try { if (!head) head = runGit(cwd, ['rev-parse', 'HEAD']) } catch { /* 保持 null */ }
++    if (!base) base = head
++    if (base && head) warnings.push('base/head 未显式提供且无 worktree meta / flow-state baseline——已回退 HEAD（仅 --changed-files 模式）')
++  }
+   if (!base || !head) {
+     return {
+       ok: false,
+-      errors: [`无法确定 base/head（无 worktree meta 且未显式覆盖）——用 --base <commit> --head <commit> 显式给出（git rev-parse 取值）`],
++      errors: [`无法确定 base/head（无 worktree meta / flow-state baseline 且未显式覆盖）——用 --base <commit> --head <commit> 显式给出（git rev-parse 取值），或仅用 --changed-files 走 HEAD 兜底`],
+       warnings,
+     }
+   }
+@@ -2060,6 +2080,24 @@ export async function writeTaskReview({
+     }
+     for (const note of attribution.notes) warnings.push(`归因注记：${note}`)
+     let diffFiles = attribution.diffFiles
++    // worktree 已清理（归因面空）：按 base..HEAD 提交面 + 主仓未提交面回退，后续按 task 卡
++    // allowed_paths 切片（FR-03）。只在无归因面时兜底，不覆盖正常归因结果。
++    if ((!Array.isArray(diffFiles) || diffFiles.length === 0) && base && head) {
++      try {
++        const committed = runGit(reviewGitDir, ['diff', '--name-only', `${base}..${head}`], { trim: false })
++        let fb = String(committed || '').split('\n').map((l) => l.trim().replace(/\\/g, '/')).filter(Boolean)
++        try {
++          const wt = parsePorcelainFiles(runGit(cwd, ['status', '--porcelain', '--untracked-files=all'], { trim: false }))
++            .map((p) => String(p).replace(/\\/g, '/'))
++            .filter((p) => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
++          if (wt.length > 0) fb = [...new Set([...fb, ...wt])]
++        } catch { /* 未提交面不可得 → 仅提交面 */ }
++        if (fb.length > 0) {
++          diffFiles = fb
++          warnings.push('归因面为空（worktree 已清理）——回退 base..HEAD 提交面 + 主仓未提交面（按 task 卡 allowed_paths 切片）')
++        }
++      } catch { /* git 不可得 → 保持空面（下方报错引导 --changed-files） */ }
++    }
+     // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）。D-004 后仅在
+     // 归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——worktree-branch/
+     // cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
+@@ -2103,6 +2141,11 @@ export async function writeTaskReview({
+   const review = {
+     schemaVersion: REVIEW_SCHEMA_VERSION,
+     task: taskId,
++    // 变更归属戳（坑 execute-runs-orphan-review-false-check 建议②，2026-11-23 实证）：
++    // review 件与其变更结构性绑定——autoCheckPlanFromReviews 消费侧校验 change 不匹配即
++    // 拒用（runId 目录若被跨变更复用/遗物混入，认领在字段面不可能）。schema 对额外字段
++    // 容忍（存量件无此字段 → 消费侧按缺失放行，向后兼容）。
++    change: changeName,
+     base,
+     head,
+     changedFiles,
+diff --git a/test/commit-attribution-split.test.mjs b/test/commit-attribution-split.test.mjs
+index d2de0830..d96725c1 100644
+--- a/test/commit-attribution-split.test.mjs
++++ b/test/commit-attribution-split.test.mjs
+@@ -356,8 +356,8 @@ function commitLog(rows) {
+ test('⑧ 作者身份补判（文件级）：他作者的分不清提交文件判 foreign；同作者与无自身提交保守', () => {
+   // 解析：新格式带 sha 与作者；旧格式（仅标题） tolerated
+   const parsed = parseCommitLog(commitLog([['a1', AUTHOR_A, `feat: 我的交付 (${ME})`, ['src\\win.js', 'src/mine.js']]]))
+-  assert.deepEqual(parsed, [{ sha: 'a1', author: AUTHOR_A, subject: `feat: 我的交付 (${ME})`, files: ['src/win.js', 'src/mine.js'] }], '含作者格式解析（文件面正斜杠归一）')
+-  assert.deepEqual(parseCommitLog('\x00fix: 旧格式\nsrc/a.js\n'), [{ sha: '', author: '', subject: 'fix: 旧格式', files: ['src/a.js'] }], '旧格式（仅标题）解析：sha 与作者为空')
++  assert.deepEqual(parsed, [{ sha: 'a1', author: AUTHOR_A, subject: `feat: 我的交付 (${ME})`, body: '', files: ['src/win.js', 'src/mine.js'] }], '含作者格式解析（文件面正斜杠归一、旧格式 body 空串）')
++  assert.deepEqual(parseCommitLog('\x00fix: 旧格式\nsrc/a.js\n'), [{ sha: '', author: '', subject: 'fix: 旧格式', body: '', files: ['src/a.js'] }], '旧格式（仅标题）解析：sha 与作者为空、body 空串')
+   assert.ok(COMMIT_LOG_ARGS.includes('--name-only') && COMMIT_LOG_ARGS.some((a) => a.includes('%an') && a.includes('%ae')), 'git log 参数含作者名与邮箱')
+ 
+   const rows = [
+@@ -403,3 +403,56 @@ test('⑧ 作者身份补判（文件级）：他作者的分不清提交文件
+   const oldLog = [`\x00feat: 我的交付 (${ME})`, 'src/mine.js', '', '\x00fix: 返工 (task-05)', 'src/old-amb.js', ''].join('\n')
+   assert.equal(isForeignByCommit(buildCommitAttribution(oldLog, { changesDirPrefix: P, changeName: ME }).get('src/old-amb.js'), ME), false, '旧格式日志无作者 → 保守 own')
+ })
++
++// ── 正文 footer 归属（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）──
++// 缺陷复现：提交标题不含变更名、变更名/task token 只在正文 footer 时，旧 COMMIT_LOG_ARGS 只取
++// %s → buildCommitAttribution 判 pure-bare foreign → filterCommittedFace 把已提交交付文件剔出
++// 冻结面（平台仓 2026-11-25-autocommit-stale-index-isolation 的 3 个文件实证）。
++
++test('正文 footer 的变更名/task token 参与归属（parseCommitLog 返回 body）', () => {
++  const name = '2026-11-25-body-footnote-change'
++  const log = [
++    `\x00${'b'.repeat(40)}\x1fT\x1ft@t\x1ffix: 标题里没有名字\x1f(${name} task-01)\x1e`,
++    'sillyhub-daemon/src/x.ts',
++    '',
++  ].join('\n')
++  const parsed = parseCommitLog(log)
++  assert.equal(parsed.length, 1)
++  assert.equal(parsed[0].subject, 'fix: 标题里没有名字')
++  assert.equal(parsed[0].body.includes(`(${name} task-01)`), true)
++  const attr = buildCommitAttribution(log, { changeName: name, changesDirPrefix: '.sillyspec/changes/' })
++  assert.equal(isForeignByCommit(attr.get('sillyhub-daemon/src/x.ts'), name), false, '正文变更名 → own')
++  assert.equal(isOwnByFacts({ subject: parsed[0].subject, body: parsed[0].body, files: [] }, name), true)
++  // 旧格式日志（无正文）向后兼容：标题无名仍判 pure-bare
++  const old = [`\x00fix: 标题里没有名字`, 'sillyhub-daemon/src/y.ts', ''].join('\n')
++  const oldAttr = buildCommitAttribution(old, { changeName: name, changesDirPrefix: '.sillyspec/changes/' })
++  assert.equal(isForeignByCommit(oldAttr.get('sillyhub-daemon/src/y.ts'), name), true, '旧格式无正文 → 维持 foreign')
++})
++
++test('正文 footer 归属贯通 filterCommittedFace（真实 git 仓；旧实现丢文件）', () => {
++  const name = '2026-11-25-body-footnote-change'
++  const d = mkdtempSync(join(tmpdir(), 'catr-body-'))
++  try {
++    const g = (cmd) => execSync(cmd, { cwd: d, encoding: 'utf8', windowsHide: true })
++    g('git init -q')
++    g('git config user.email t@t && git config user.name t')
++    writeFileSync(join(d, 'seed.txt'), 'seed')
++    g('git add seed.txt && git commit -q -m "chore: seed"')
++    const base = g('git rev-parse HEAD').trim()
++    mkdirSync(join(d, '.sillyspec', 'changes', name), { recursive: true })
++    writeFileSync(join(d, '.sillyspec', 'changes', name, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
++    mkdirSync(join(d, 'sillyhub-daemon', 'src'), { recursive: true })
++    writeFileSync(join(d, 'sillyhub-daemon', 'src', 'x.ts'), 'export const x = 1\n')
++    g('git add sillyhub-daemon/src/x.ts')
++    // 标题无名、正文 footer 带变更名 + task token（仓内提交惯例形态）
++    g(`git commit -q -m "fix: no change name" -m "(${name} task-01)"`)
++    const kept = filterCommittedFace(['sillyhub-daemon/src/x.ts'], `.sillyspec/changes/${name}/`, {
++      cwd: d,
++      specBase: join(d, '.sillyspec'),
++      baselineCommit: base,
++    })
++    assert.deepEqual(kept, ['sillyhub-daemon/src/x.ts'], '正文 footer 归属 → 冻结面保留')
++  } finally {
++    rmSync(d, { recursive: true, force: true })
++  }
++})
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+index c4c066ae..c62f47c3 100644
+--- a/test/flowdone-disposition-drift.test.mjs
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -33,7 +33,12 @@ test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, f
+ const CHG = '2026-10-05-drift-x'
+ 
+ function gitRepo(dir) {
+-  const run = (args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
++  // 平台会话会注入 GIT_AUTHOR_NAME（daemon 代提交身份），会覆盖仓库 user.name，使夹具作者
++  // 断言失效（实测 actual=管理员 / expected=t）。夹具剥离身份类 env，保证 author 只由仓库
++  // config 决定（2026-11-25-freeze-face-body-attribution-and-review-base-fallback 收口实证）。
++  const env = { ...process.env }
++  for (const k of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) delete env[k]
++  const run = (args) => execFileSync('git', args, { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
+   run(['init', '-q', '-b', 'main']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
+   return run
+ }
+diff --git a/test/review-write.test.mjs b/test/review-write.test.mjs
+index 2928d80e..59028cf3 100644
+--- a/test/review-write.test.mjs
++++ b/test/review-write.test.mjs
+@@ -117,5 +117,48 @@ console.log('\n--- 用例5: 跨仓 task（repo≠main）显式拒绝 ---')
+   assert(r.status !== 0 && r.combined.includes('跨仓'), `跨仓 task 拒绝并指引 adopt 路径（实际 ${r.status}）`)
+ }
+ 
++console.log('\n--- 用例6: 无 worktree meta → 回退 flow-state baseline 代算 base/head/changedFiles ---')
++{
++  const cn = '2026-09-07-rw-nometa'
++  const { cwd, specBase } = makeRepo('rw-nometa-')
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  mkTaskCard(changeDir, 'task-01', 'src/foo.js')
++  const c1 = git(cwd, ['rev-parse', 'HEAD'])
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'foo.js'), 'export const a = 1\n')
++  git(cwd, ['add', 'src/foo.js'])
++  git(cwd, ['commit', '-q', '-m', 'feat: impl'])
++  const head = git(cwd, ['rev-parse', 'HEAD'])
++  // 无 worktree meta；只留 flow-state baseline（worktree 清理后的形态）
++  writeFileSync(join(changeDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${c1}\n`)
++  const r = runCLI(['--dir', cwd, 'review', 'write', '--change', cn, '--task', 'task-01',
++    '--spec', 'pass', '--quality', 'pass'], { cwd })
++  assert(r.status === 0, `无 meta 回退 baseline 通过（实际 ${r.status}；输出尾：${r.combined.slice(-200)}）`)
++  const runId = r.combined.match(/executeRunId: (exec-[^\s]+)/)?.[1]
++  const review = JSON.parse(readFileSync(join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
++  assert(review.base === c1, `base=flow-state baseline（实际 ${review.base}）`)
++  assert(review.head === head, `head=HEAD（实际 ${review.head}）`)
++  assert(review.changedFiles.includes('src/foo.js'), 'changedFiles 按 base..HEAD 自动推导含交付文件')
++}
++
++console.log('\n--- 用例7: 仅 --changed-files → base/head 回退 HEAD 并警告 ---')
++{
++  const cn = '2026-09-07-rw-onlyfiles'
++  const { cwd, specBase } = makeRepo('rw-onlyfiles-')
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  mkTaskCard(changeDir, 'task-01', 'src/foo.js')
++  // 无 meta、无 flow-state baseline——只给 changedFiles
++  const r = runCLI(['--dir', cwd, 'review', 'write', '--change', cn, '--task', 'task-01',
++    '--spec', 'pass', '--quality', 'pass', '--changed-files', 'src/foo.js'], { cwd })
++  assert(r.status === 0, `仅 --changed-files 通过（实际 ${r.status}；输出尾：${r.combined.slice(-200)}）`)
++  assert(r.combined.includes('回退 HEAD'), '输出 base/head 回退 HEAD 警告')
++  const runId = r.combined.match(/executeRunId: (exec-[^\s]+)/)?.[1]
++  const review = JSON.parse(readFileSync(join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
++  assert(review.base === review.head, 'base=head=HEAD 兜底')
++  assert(review.changedFiles.includes('src/foo.js'), 'changedFiles 采用显式覆盖')
++}
++
+ cleanup()
+ report(count.passed, count.failed, count.failures)

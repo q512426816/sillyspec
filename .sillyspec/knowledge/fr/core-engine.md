@@ -5730,3 +5730,98 @@
   confirmed_at: null
   source_change: 2026-11-23-probe1-bracket-path-blind
   status: active
+
+## FR-core-engine-303 提交正文中的变更名与 task token 参与归属解析：标题无名、正文含 (<变更名> task-NN) 的提交，其文件经 filterCommittedFace 保留进冻结面
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+状态：active
+摘要：正文 footer 归属；正文无名字仍保守
+全文：.sillyspec/changes/archive/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/requirements.md#FR-01
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-01
+  tests: test/commit-attribution-split.test.mjs「正文 footer 的变更名/task token 参与归属（真实 git 仓 + filterCommittedFace）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+  status: active
+
+## FR-core-engine-304 新增先红后绿复现测试：同一提交旧实现判 foreign / 新实现判 own（parseCommitLog 带回 body）
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+状态：active
+摘要：先红后绿
+全文：.sillyspec/changes/archive/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/requirements.md#FR-02
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-02
+  tests: test/commit-attribution-split.test.mjs「先红后绿：标题无名正文带 footer 的提交判 own（parseCommitLog 返回 body）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+  status: active
+
+## FR-core-engine-305 writeTaskReview 无 worktree meta 时回退 flow-state.yaml 的 baseline_commit 作 base、HEAD 作 head，并按 base..HEAD 自动算 changedFiles
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+状态：active
+摘要：worktree 已清理
+全文：.sillyspec/changes/archive/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/requirements.md#FR-03
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-03
+  tests: test/review-write.test.mjs「无 meta 回退 flow-state baseline：base/head/changedFiles 自动代算」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+  status: active
+
+## FR-core-engine-306 仅给 --changed-files 时不再强制 base/head（两者缺省回退 HEAD 并给出警告）
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+状态：active
+摘要：仅 changed-files
+全文：.sillyspec/changes/archive/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/requirements.md#FR-04
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-04
+  tests: test/review-write.test.mjs「仅 --changed-files：base/head 回退 HEAD 并警告」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+  status: active
+
+## FR-core-engine-307 变更测试面绿、lint 通过
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/requirements.md#FR-05
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-05
+  tests: test/commit-attribution-split.test.mjs | test/review-write.test.mjs「全量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+  status: active

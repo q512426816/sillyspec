@@ -219,3 +219,10 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 - `task tick` 回显的提交命令模板由 `(<task-NN>)` 改为 `(<变更名> <task-NN>)`，照抄即得具名提交。
 - 测试锚 test/commit-attribution-split.test.mjs（④—⑧）、test/flowdone-disposition-drift.test.mjs（⑧—⑫）、test/task-tick.test.mjs ⑧。
 
+## 冻结面读提交正文与 review 基线回退（2026-11-25-freeze-face-body-attribution-and-review-base-fallback）
+
+- 归属解析读标题 ∪ 正文：`COMMIT_LOG_ARGS` 追加 `%b`（正文）并以 `%x1e` 分隔文件列表，`parseCommitLog` 返回 `body`；`isOwnByFacts` / `buildCommitAttribution` / `isOwnCommitForChange` 在「标题 + 正文」文本上解析变更名与 task token。变更名只写在正文 footer（`(<变更名> task-NN)`）的提交不再被判 pure-bare foreign，`filterCommittedFace` 保留其已提交交付文件——2026-11-25-autocommit-stale-index-isolation 的 3 个 sillyhub-daemon 文件曾被误剔出冻结面（change.patch 缺件 + scopeAudit 误判 untouched）。
+- `writeTaskReview` 的 base 解析链补一级回退：无 worktree meta 时读变更目录（活跃/归档）`flow-state.yaml` 的 `baseline_commit`，head 取 HEAD；归因面为空时按 `base..HEAD` 提交面 + 主仓未提交面推导 changedFiles（再按 task 卡 allowed_paths 切片）。仅给 `--changed-files` 时 base/head 回退 HEAD 并 warning，不再以「无法确定 base/head」拒绝。
+- 兼容：旧格式 commit log（无 `%x1e`/正文）行为不变；review 写入签名与 schema 不变。
+- 测试锚：test/commit-attribution-split.test.mjs「正文 footer 的变更名/task token 参与归属」「正文 footer 归属贯通 filterCommittedFace」；test/review-write.test.mjs 用例 6/7；test/flowdone-disposition-drift.test.mjs 夹具剥离 `GIT_AUTHOR_*` 环境。
+

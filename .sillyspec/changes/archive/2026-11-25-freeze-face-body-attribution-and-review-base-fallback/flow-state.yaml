@@ -1,6 +1,14 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: false
@@ -29,11 +37,26 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: 4f21bb302d19b2666185e7ac6f5b375cd600f22e
-updatedAt: '2026-11-25T08:50:05.005Z'
+updatedAt: '2026-11-25T09:12:12.452Z'
 baseline_sha256: a75f74707f3509b65374e7c1f3594012b62f10cdf73b0fddc31d5b05c18145ff
 spec_approved: true
 spec_approved_at: '2026-11-25T08:50:05.005Z'
 spec_approved_by: agent-freeze-base
 spec_approved_channel: agent-self
 spec_attested_by: agent-freeze-base
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js9)（63.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261125091153\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 11 个
+accept_dirty_gap:
+  at: '2026-11-25T09:12:08.782Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/run/complete.js
+    - src/stages/plan-postcheck.js
+    - test/taskcard-frontmatter-hardgate.test.mjs
+    - test/autocheck-review-change-stamp.test.mjs
+  by: agent-freeze-base
 

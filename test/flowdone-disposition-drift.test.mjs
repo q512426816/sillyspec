@@ -33,7 +33,12 @@ test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, f
 const CHG = '2026-10-05-drift-x'
 
 function gitRepo(dir) {
-  const run = (args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
+  // 平台会话会注入 GIT_AUTHOR_NAME（daemon 代提交身份），会覆盖仓库 user.name，使夹具作者
+  // 断言失效（实测 actual=管理员 / expected=t）。夹具剥离身份类 env，保证 author 只由仓库
+  // config 决定（2026-11-25-freeze-face-body-attribution-and-review-base-fallback 收口实证）。
+  const env = { ...process.env }
+  for (const k of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) delete env[k]
+  const run = (args) => execFileSync('git', args, { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
   run(['init', '-q', '-b', 'main']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
   return run
 }

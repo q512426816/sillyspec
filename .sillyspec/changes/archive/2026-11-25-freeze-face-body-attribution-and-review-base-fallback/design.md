@@ -57,3 +57,4 @@ created_at: 2026-11-25T08:44:29.189Z
 | 修改 | src/task-review.js | base 回退 flow-state baseline；changedFiles 自动推导；仅 --changed-files 时 base/head 回退 HEAD |
 | 修改 | test/commit-attribution-split.test.mjs | 先红后绿：正文 footer 归属（真实 git 仓 + filterCommittedFace） |
 | 修改 | test/review-write.test.mjs | 无 meta 回退 baseline / 仅 changed-files 两用例 |
+| 修改 | test/flowdone-disposition-drift.test.mjs | 夹具剥离平台注入的 GIT_AUTHOR_* 环境，保证作者断言确定性（收口实测发现） |

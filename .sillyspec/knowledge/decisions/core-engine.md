@@ -848,3 +848,12 @@ supersedes：无（L3 从未落地，无可取代物）
 文件：src/verify-probes.js, test/verify-probes.test.mjs
 最近确认：526c3adae96fd8de73804c7b83eae41a633d5ab4
 理由：两处改动，都在 `src/verify-probes.js`。其一，探针 1 主循环改为「字面路径优先」：先剥 `NEW:` 前缀，再按字面路径解析（主仓存在→扫描；主仓缺失但 worktree 存在→扫描并计 `worktreeHits`），两处都不存在时才判通配符入 `globEntries`，无通配才入 `skippedFiles`。原逻辑先判 `/[*?[\]]/` 再判存在，导致 `[id]` 这类字面路径永远被跳过。其二，`renderVerifyProbesReport` 收紧结论：`matches` 为空时不再无条件打 ✅，仅当 `globEntries` 与 `skippedFiles` 也全空才输出全清结论，否则输出 ⚠️「结论不完整」。选择「字面存在优先」而非解析方括号内容，是因为 `[id]` 与 `[a-z]` 形态相似、正则判不准；一次 `existsSync` 即可覆盖 Next.js / Vue 动态路由，且对真 glob（字面不存在）零影响。
+
+## D-core-engine-066@v1 2026-11-25-freeze-face-body-attribution-and-review-base-fallback——缺陷一在 `src/foreign-declared.js`：`COMMIT_LOG_ARGS` 只取 `%s`（标题），`parseCommitLog` 因此
+状态：implemented
+变更：2026-11-25-freeze-face-body-attribution-and-review-base-fallback
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-25-freeze-face-body-attribution-and-review-base-fallback/design.md
+文件：src/foreign-declared.js, src/task-review.js, test/commit-attribution-split.test.mjs, test/flowdone-disposition-drift.test.mjs, test/review-write.test.mjs
+最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
+理由：缺陷一在 `src/foreign-declared.js`：`COMMIT_LOG_ARGS` 只取 `%s`（标题），`parseCommitLog` 因此看不到正文；而仓内提交惯例把 `(<变更名> task-NN)` 写在正文 footer，导致标题无名的本变更提交被 `buildCommitAttribution` 判为 pure-bare → `isForeignByCommit` 判 foreign → `filterCommittedFace` 把已提交交付文件剔出冻结面。做法：git log 格式追加 `%b`（正文）并以 `%x1e` 分隔文件列表，`parseCommitLog` 返回 `body`；归属判定（`isOwnByFacts` / `buildCommitAttribution` / `isOwnCommitForChange` 链路）改为在「标题 ∪ 正文」文本上解析变更名与 task token，标题优先、正文兜底。 缺陷二在 `src/task-review.js`：`writeTaskReview` 的 base 只从 worktree meta 取，meta 清理后即报「无法确定 base/head」。做法：base 解析链补一级回退——读变更目录（活跃或归档）`flow-state.yaml` 的 `baseline_commit`；该回退生效且未显式覆盖 changedFiles 时，用 `git diff base..HEAD`（∩ task 卡 allowed_paths）补出改动面，并保留主仓未提交改动并入。若调用方只给 `--changed-files`，base/head 双双回退 HEAD 并给 warning。

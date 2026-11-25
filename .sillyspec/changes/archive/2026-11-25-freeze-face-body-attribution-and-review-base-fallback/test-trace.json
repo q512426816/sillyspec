@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-01",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「正文 footer 的变更名/task token 参与归属（真实 git 仓 + filterCommittedFace）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-02",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「先红后绿：标题无名正文带 footer 的提交判 own（parseCommitLog 返回 body）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-write.test.mjs「无 meta 回退 flow-state baseline：base/head/changedFiles 自动代算」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-04",
+      "tests": [
+        "test/review-write.test.mjs「仅 --changed-files：base/head 回退 HEAD 并警告」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback:flow:测试绑定FR-05",
+      "tests": [
+        "test/commit-attribution-split.test.mjs",
+        "test/review-write.test.mjs「全量」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-25-freeze-face-body-attribution-and-review-base-fallback"
+    }
+  ]
+}
