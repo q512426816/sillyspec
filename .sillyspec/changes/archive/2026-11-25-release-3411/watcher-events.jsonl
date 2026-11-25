@@ -1,0 +1,21 @@
+{"ts":1795601131171,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795601131171,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795601152979,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795601299083,"kind":"commit","stage":null,"detail":"e6ab6b69","provisional":true}
+{"ts":1795601667879,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1795601670449,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795601670449,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1795601677096,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1795601677632,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795601677632,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1795601682472,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1795601684989,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795601684989,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1795601695831,"kind":"commit","stage":null,"detail":"12b3035f","provisional":true}
+{"ts":1795602400779,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1795602400924,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-25-release-3411/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795602404208,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795602404208,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1795602422237,"kind":"commit","stage":null,"detail":"c38bf2c5","provisional":true}
+{"ts":1795602437105,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-25-release-3411/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795602468874,"kind":"gate-run","stage":"verify","detail":"门实测 passed（14.4s） · 20261125102746","provisional":true}

@@ -479,3 +479,67 @@ created_at: 2026-10-15T01:33:02.911Z
 - 场景：发布验证 — Given 发版提交完成；When npm publish + npm view sillyspec version；Then 输出 3.34.10
 全文：.sillyspec/changes/archive/2026-11-23-release-33410/requirements.md#FR-05
 最近确认：ee95d2ab0148ee08a3bf65a4a119e5b67e73cede
+
+## FR-release-020 package.json 与 package-lock.json 版本升至 3.34.11
+变更：2026-11-25-release-3411
+状态：active
+摘要：版本面升级
+全文：.sillyspec/changes/archive/2026-11-25-release-3411/requirements.md#FR-01
+最近确认：c38bf2c50d889ec02f40b302f6ffba0f7d6c44d3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-release-3411:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-release-3411
+  status: active
+
+## FR-release-021 test/quick-retired.test.mjs 的 R5 版本锚同步为 3.34.11
+变更：2026-11-25-release-3411
+状态：active
+摘要：版本锚同步
+全文：.sillyspec/changes/archive/2026-11-25-release-3411/requirements.md#FR-02
+最近确认：c38bf2c50d889ec02f40b302f6ffba0f7d6c44d3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-release-3411:flow:测试绑定FR-02
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-release-3411
+  status: active
+
+## FR-release-022 变更测试面（quick-retired）绿、lint 通过
+变更：2026-11-25-release-3411
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-11-25-release-3411/requirements.md#FR-03
+最近确认：c38bf2c50d889ec02f40b302f6ffba0f7d6c44d3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-25-release-3411:flow:测试绑定FR-03
+  tests: test/quick-retired.test.mjs「全量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-25-release-3411
+  status: active
+
+## FR-release-023 npm publish 后 npm view sillyspec version 返回 3.34.11
+变更：2026-11-25-release-3411
+状态：active
+摘要：发布核验
+全文：.sillyspec/changes/archive/2026-11-25-release-3411/requirements.md#FR-04
+最近确认：c38bf2c50d889ec02f40b302f6ffba0f7d6c44d3

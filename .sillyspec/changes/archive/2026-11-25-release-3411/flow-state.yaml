@@ -1,0 +1,57 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  发版 3.34.11：版本号最小升级与 npm 发布
+
+
+  动机与背景：2026-11-24-token-commit-change-dir-attribution 与
+  2026-11-25-freeze-face-body-attribution-and-review-base-fallback 已合入 main（未推送 16 笔），按用户指令发布 npm
+  新版：3.34.10→3.34.11（patch 最小升级）。代码面均已经各自变更实测门验证，本单只做版本号变更+发布。
+
+
+  成功标准：
+
+  - package.json 与 package-lock.json 版本升至 3.34.11
+
+  - test/quick-retired.test.mjs 的 R5 版本锚同步为 3.34.11
+
+  - 变更测试面（quick-retired）绿、lint 通过
+
+  - npm publish 后 npm view sillyspec version 返回 3.34.11
+autopilot: false
+prestage_ack: false
+baseline_commit: 40e1f965228fc96c87cfb22b848cb77ce18e122f
+updatedAt: '2026-11-25T10:27:59.730Z'
+baseline_sha256: 0c30c59d023c976cdd4fbd3dc6f1483e938260d93b14bc61df2a653303c0ee34
+spec_approved: true
+spec_approved_at: '2026-11-25T10:05:42.596Z'
+spec_approved_by: agent-release-3411
+spec_approved_channel: agent-self
+spec_attested_by: agent-release-3411
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js2)（14.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261125102746\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 9 个
+accept_dirty_gap:
+  at: '2026-11-25T10:27:56.002Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/run/complete.js
+    - src/stages/plan-postcheck.js
+    - test/taskcard-frontmatter-hardgate.test.mjs
+    - test/autocheck-review-change-stamp.test.mjs
+  by: agent-release-3411
+
