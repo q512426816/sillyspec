@@ -36,6 +36,17 @@ sillyspec run verify --reopen --from-step N    # 重新打开已完成阶段修�
 | `--non-interactive` | CI/脚本下禁用交互式 prompt |
 | `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
 
+## verify.mode=skip 仓级关停
+
+仓内 `.sillyspec/local.yaml`（gitignored）配置：
+
+```yaml
+verify:
+  mode: skip
+```
+
+之后 `run verify` 会在阶段入口直接短路：打印跳过留痕、不渲染七步、不产 `verify-result.md`/`verify-facts.json`，阶段标记 completed；archive 不因 facts 缺失被 fail-closed 拦下。缺省不配置 = `full`，行为与现状逐字一致。恢复：删除该键或改回 `full`，再 `run verify --reopen`。
+
 ## verify 特有：完成门控（重要）
 
 verify 是只读阶段（**禁止改代码/改 git 状态**，只检查 + 写报告）。

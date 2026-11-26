@@ -21,6 +21,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { resolveSpecDir } from './shared.js'
+import { readVerifyMode } from '../verify-mode.js'
 
 /**
  * 数 tasks.md checkbox：返回 { checked, total }（无文件 → {checked:0,total:0}）
@@ -81,6 +82,10 @@ function inferChange(changeDir, name, specBase) {
     }
   }
   if (!has('verify-result.md')) {
+    // verify.mode=skip 仓级关停（2026-11-26-verify-skip-switch）：不再指向一个会被跳过的阶段
+    if (readVerifyMode(specBase) === 'skip') {
+      return { state: `${name}：task 全勾（verify 已按配置跳过），待归档`, next: `sillyspec run archive --change ${name}`, evidence: [ev('tasks.md'), ev('plan.md')] }
+    }
     return { state: `${name}：task 全勾，待验证`, next: `sillyspec run verify --change ${name}`, evidence: [ev('tasks.md'), ev('plan.md')] }
   }
   return { state: `${name}：已验证，待归档`, next: `sillyspec run archive --change ${name}`, evidence: [ev('verify-result.md')] }

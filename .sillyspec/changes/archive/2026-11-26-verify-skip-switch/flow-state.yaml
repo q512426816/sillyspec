@@ -1,0 +1,56 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  验证阶段加跳过开关先止血
+
+
+  动机：verify 阶段历史归档 787 份报告、约 4.4MB 产物，结论几乎全为 PASS WITH NOTES 且零 FAIL，friction-ledger 无拦截账；轮均成本约为 brainstorm 段 3-4
+  倍。用户判定其无实际拦截价值，要求先关停。本变更只加配置开关与跳过留痕，不改阶段壳、不动 26 个消费面，删壳另案。
+
+
+  成功标准：
+
+  - local.yaml 配置 verify.mode: skip 时，run verify 不渲染 7 步提示词、不产出 verify-result.md 与 verify-facts.json，并打印跳过留痕
+
+  - 缺省未配置时，run verify 行为与现状逐字一致
+
+  - skip 模式下 archive 不因 verify-facts.json 缺失被 fail-closed 拦下
+
+  - 新增开关的单元测试覆盖 skip/full 两态
+autopilot: false
+prestage_ack: false
+baseline_commit: 5416ef71585038c982a01bfcbfdcd271d2ec81c1
+updatedAt: '2026-11-26T01:04:55.585Z'
+baseline_sha256: b14530403c22e41e41f040cd5433923efec11aa17f341db38668e8897576a664
+spec_approved: true
+spec_approved_at: '2026-11-26T00:35:21.497Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js10)（39.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261126010413\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 14 个
+accept_dirty_gap:
+  at: '2026-11-26T01:04:48.003Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/run/complete.js
+    - src/stages/plan-postcheck.js
+    - test/taskcard-frontmatter-hardgate.test.mjs
+    - test/autocheck-review-change-stamp.test.mjs
+  by: null
+

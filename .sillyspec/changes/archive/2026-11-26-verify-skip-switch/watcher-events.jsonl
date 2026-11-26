@@ -1,0 +1,21 @@
+{"ts":1795652282690,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795652296733,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795652303778,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795652321065,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1795652328124,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1795653529201,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1795653717007,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1795653718532,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1795653718564,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795653718564,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1795653720289,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1795653721966,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1795653723871,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795653723871,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1795653766270,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1795653768113,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1795653768113,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1795654153184,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1795654212523,"kind":"commit","stage":null,"detail":"9401af14","provisional":true}
+{"ts":1795654959840,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-26-verify-skip-switch/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1795655053128,"kind":"gate-run","stage":"verify","detail":"门实测 passed（39.4s） · 20261126010413","provisional":true}

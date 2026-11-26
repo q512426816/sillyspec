@@ -136,6 +136,8 @@ modules:
       - test/verify-probes-probe3-java-layout.test.mjs
       - test/verify-probes-refresh-backup.test.mjs
       - src/verify-facts-schema.js
+      - src/verify-mode.js
+      - test/verify-skip-mode.test.mjs
       - src/foreign-declared.js
       - src/overlap-detect.js
       - src/cross-repo-reconcile.js

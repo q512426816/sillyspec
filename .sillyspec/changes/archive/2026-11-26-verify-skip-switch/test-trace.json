@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-verify-skip-switch",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-26-verify-skip-switch:flow:测试绑定FR-01",
+      "tests": [
+        "test/verify-skip-mode.test.mjs「shouldSkipVerify skip 档为 true 并渲染留痕」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-verify-skip-switch"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-26-verify-skip-switch:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-skip-mode.test.mjs「缺省/非 skip 值为 false」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-verify-skip-switch"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-26-verify-skip-switch:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-skip-mode.test.mjs「resolveFactsExpected skip 档为 false」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-verify-skip-switch"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-26-verify-skip-switch:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-skip-mode.test.mjs「skip/full 两态与 next 推断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-verify-skip-switch"
+    }
+  ]
+}

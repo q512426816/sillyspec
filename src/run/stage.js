@@ -287,6 +287,38 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     process.exit(1)
   }
 
+  // ── verify.mode=skip 仓级关停（2026-11-26-verify-skip-switch）──
+  // 入口短路：不渲染七步、不产 verify-result.md/verify-facts.json，全步与阶段直接 completed。
+  // 语义核验按仓主显式配置关闭；每次跳过打印留痕，恢复走 run verify --reopen。
+  // 重复进入：阶段已 completed 时走下方 currentIdx===-1 的既有补盖分支，不重复打印。
+  if (stageName === 'verify' && stageData.status !== 'completed') {
+    const skipChange = changeName || progress.currentChange
+    try {
+      const { shouldSkipVerify, renderVerifySkipNotice } = await import('../verify-mode.js')
+      if (shouldSkipVerify({ specBase, stageName })) {
+        const now = new Date().toLocaleString('zh-CN', { hour12: false })
+        for (const s of steps) {
+          if (s.status !== 'completed' && s.status !== 'skipped') {
+            s.status = 'completed'
+            s.completedAt = now
+          }
+        }
+        stageData.status = 'completed'
+        stageData.completedAt = now
+        stageData.skip_reason = 'verify.mode=skip'
+        progress.currentStage = stageName
+        progress.lastActive = now
+        pm._write(cwd, progress, skipChange)
+        console.log(`\n${renderVerifySkipNotice()}`)
+        triggerSync(cwd, skipChange, platformOpts)
+        return
+      }
+    } catch (e) {
+      // fail-open：开关读取异常不阻断现行验证流程（按缺省 full 继续）
+      console.warn(`⚠️ verify.mode 开关读取失败（按 full 继续）：${(e && e.message) || e}`)
+    }
+  }
+
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   // stale/blocked 步骤视为可执行（等同于 pending）：

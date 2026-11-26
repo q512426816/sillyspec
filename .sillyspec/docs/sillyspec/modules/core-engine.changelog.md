@@ -132,3 +132,4 @@
 | 2026-11-23 | 2026-11-23-probe1-bracket-path-blind | 探针1方括号路径失明修复 |
 | 2026-11-24 | 2026-11-24-token-commit-change-dir-attribution | 提交归属单一判定（目录规则层 + 作者身份补判）与含作者的日志解析；task tick 提交命令模板带变更名 |
 | 2026-11-25 | 2026-11-25-freeze-face-body-attribution-and-review-base-fallback | 冻结面读提交正文并补 review 基线回退 |
+| 2026-11-26 | 2026-11-26-verify-skip-switch | 验证阶段加跳过开关先止血 |

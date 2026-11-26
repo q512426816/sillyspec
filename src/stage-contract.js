@@ -6,7 +6,8 @@
  */
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, basename } from 'path'
+import { join, basename, dirname } from 'path'
+import { readVerifyMode } from './verify-mode.js'
 import { safeGit } from './git-helper.js'
 import { nowWallClock } from './datetime.js'
 import { resolveChangeRisk, extractExplicitRiskLevel, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
@@ -1545,6 +1546,10 @@ function readFactsForEligibility(changeDir) {
  * @returns {boolean}
  */
 export function resolveFactsExpected(changeDir) {
+  // verify.mode=skip 仓级关停（2026-11-26-verify-skip-switch）：按「无事实面」放行——
+  // skip 档不产 verify-facts.json，factsExpected 若仍为 true 会让 verify/archive 完成门
+  // 按 fail-closed 拦下。skip 优先于 facts 在场（半程切换 full→skip 时也按关停语义走）。
+  if (readVerifyMode(dirname(dirname(changeDir))) === 'skip') return false
   return isIrStrictVerifyChange(changeDir) || readFactsForEligibility(changeDir) !== null
 }
 

@@ -1558,3 +1558,79 @@ created_at: 2026-10-15T01:21:44.811Z
 - 场景：审读验收 — Given 两份 SKILL.md 改后文本 / When 逐条对照 FR-01/02/03 审读 / Then 探测三查/分型问询/已定跳过/规范保留全部在场。
 全文：.sillyspec/changes/archive/2026-11-22-init-config-three-phase/requirements.md#FR-04
 最近确认：7cadccfd7c7cad7b486168061a81cc94cc93b4d9
+
+## FR-skills-docs-087 local.yaml 配置 verify.mode: skip 时，run verify 不渲染 7 步提示词、不产出 verify-result.md 与 verify-facts.json，并打印跳过留痕
+变更：2026-11-26-verify-skip-switch
+状态：active
+摘要：skip 档进入 verify；skip 档重复进入
+全文：.sillyspec/changes/archive/2026-11-26-verify-skip-switch/requirements.md#FR-01
+最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-verify-skip-switch:flow:测试绑定FR-01
+  tests: test/verify-skip-mode.test.mjs「shouldSkipVerify skip 档为 true 并渲染留痕」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-verify-skip-switch
+  status: active
+
+## FR-skills-docs-088 缺省未配置时，run verify 行为与现状逐字一致
+变更：2026-11-26-verify-skip-switch
+状态：active
+摘要：缺省 full
+全文：.sillyspec/changes/archive/2026-11-26-verify-skip-switch/requirements.md#FR-02
+最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-verify-skip-switch:flow:测试绑定FR-02
+  tests: test/verify-skip-mode.test.mjs「缺省/非 skip 值为 false」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-verify-skip-switch
+  status: active
+
+## FR-skills-docs-089 skip 模式下 archive 不因 verify-facts.json 缺失被 fail-closed 拦下
+变更：2026-11-26-verify-skip-switch
+状态：active
+摘要：skip 后归档
+全文：.sillyspec/changes/archive/2026-11-26-verify-skip-switch/requirements.md#FR-03
+最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-verify-skip-switch:flow:测试绑定FR-03
+  tests: test/verify-skip-mode.test.mjs「resolveFactsExpected skip 档为 false」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-verify-skip-switch
+  status: active
+
+## FR-skills-docs-090 新增开关的单元测试覆盖 skip/full 两态
+变更：2026-11-26-verify-skip-switch
+状态：active
+摘要：两态测试
+全文：.sillyspec/changes/archive/2026-11-26-verify-skip-switch/requirements.md#FR-04
+最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-verify-skip-switch:flow:测试绑定FR-04
+  tests: test/verify-skip-mode.test.mjs「skip/full 两态与 next 推断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-verify-skip-switch
+  status: active

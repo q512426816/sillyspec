@@ -857,3 +857,12 @@ supersedes：无（L3 从未落地，无可取代物）
 文件：src/foreign-declared.js, src/task-review.js, test/commit-attribution-split.test.mjs, test/flowdone-disposition-drift.test.mjs, test/review-write.test.mjs
 最近确认：5c6285ea105e36cbb48dca14e405c6c9703ddd7d
 理由：缺陷一在 `src/foreign-declared.js`：`COMMIT_LOG_ARGS` 只取 `%s`（标题），`parseCommitLog` 因此看不到正文；而仓内提交惯例把 `(<变更名> task-NN)` 写在正文 footer，导致标题无名的本变更提交被 `buildCommitAttribution` 判为 pure-bare → `isForeignByCommit` 判 foreign → `filterCommittedFace` 把已提交交付文件剔出冻结面。做法：git log 格式追加 `%b`（正文）并以 `%x1e` 分隔文件列表，`parseCommitLog` 返回 `body`；归属判定（`isOwnByFacts` / `buildCommitAttribution` / `isOwnCommitForChange` 链路）改为在「标题 ∪ 正文」文本上解析变更名与 task token，标题优先、正文兜底。 缺陷二在 `src/task-review.js`：`writeTaskReview` 的 base 只从 worktree meta 取，meta 清理后即报「无法确定 base/head」。做法：base 解析链补一级回退——读变更目录（活跃或归档）`flow-state.yaml` 的 `baseline_commit`；该回退生效且未显式覆盖 changedFiles 时，用 `git diff base..HEAD`（∩ task 卡 allowed_paths）补出改动面，并保留主仓未提交改动并入。若调用方只给 `--changed-files`，base/head 双双回退 HEAD 并给 warning。
+
+## D-core-engine-067@v1 2026-11-26-verify-skip-switch——只加一个仓级开关，不改阶段壳、不删 26 个消费面。
+状态：implemented
+变更：2026-11-26-verify-skip-switch
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-26-verify-skip-switch/design.md
+文件：docs/sillyspec/file-lifecycle.md, src/config-schema.js, src/run/next.js, src/run/stage.js, src/stage-contract.js, src/verify-mode.js, test/verify-skip-mode.test.mjs
+最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
+理由：只加一个仓级开关，不改阶段壳、不删 26 个消费面。开关键 `verify.mode`（枚举 `full` | `skip`，缺省 `full`），落在 local.yaml 既有 `verify.*` 配置区。 - 读取：新增叶子模块 `src/verify-mode.js`，导出 `readVerifyMode(specBase)` 与纯判定 `shouldSkipVerify({ specBase, stageName })`，复用仓内既有 local.yaml 解析工具，fail-soft：读不到/值非法一律按 `full`。 - 跳过：`src/run/stage.js` 的 `runStage` 在阶段转换校验通过后、渲染步骤前判断——`verify` 阶段且开关为 `skip` 时，打印一行留痕（跳过原因 + 如何恢复），把 verify 全部步骤与阶段标记 completed 后返回，不渲染任何 prompt，不写任何产物。 - 放行：`src/stage-contract.js` 的 `resolveFactsExpected(changeDir)` 在 skip 档直接返回 `false`（由 changeDir 推导 specBase），使 verify/archive 完成门的 factsExpected fail-closed 按存量兼容口径跳过。 - 路由：`src/run/next.js` 的 `inferChange` 在 skip 档且无 `verify-result.md` 时直接提示 `run archive`，避免状态机一直停在「待验证」。

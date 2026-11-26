@@ -51,3 +51,4 @@
 | 2026-11-21 | 2026-11-22-roadmap-loop-closure | 吸收路线闭环化入工具工作区 |
 | 2026-11-22 | 2026-11-22-recommend-anchor-recorrect | 提问推荐带依据锚与中途纠正协议 |
 | 2026-11-23 | 2026-11-22-include-param-primitives | prompt include 参数化与首批纪律原语抽取 |
+| 2026-11-26 | 2026-11-26-verify-skip-switch | 验证阶段加跳过开关先止血 |
