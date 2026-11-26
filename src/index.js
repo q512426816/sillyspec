@@ -494,12 +494,23 @@ async function main() {
   //    判定与豁免清单收敛在 run/shared.js resolveUninitCwdGate（单一真相源，测试直测）；
   //    平台 pointer/接管声明/显式 --spec-dir/平台 flag 由其判 skip（平台项目不受本门误拦）。
   //    未初始化目录无 ground truth——文案只给锚点（git root）与三条出路，不断言唯一正确 cwd。
+  // flow 帮助请求（2026-11-26-flow-help-flag-shortcircuit）：flow 族的帮助请求（子命令带 --help/-h、
+  // flow 自身带、裸词 help）在 cmdFlow 入口零副作用短路（先于平台指针解析与任何落盘），未初始化
+  // 目录下也放行到命令层打印用法。判定复用 flow.js 的 isFlowHelpInvocation——与命令层短路同一
+  // 谓词（评审 P2：此前此处另写一份只认旗标，漏了裸词 help 形态）。只对已具备该短路的命令族
+  // 声明——其余命令的帮助分支按子命令位判定，在此放行会让它们在未初始化目录走进真实执行路径。
+  let flowHelpRequest = false;
+  if (command === 'flow') {
+    const { isFlowHelpInvocation } = await import('./flow.js');
+    flowHelpRequest = isFlowHelpInvocation(filteredArgs[1] || '', filteredArgs.slice(2));
+  }
   const uninitGate = resolveUninitCwdGate(command, {
     dir,
     specDir,
     // --spec-root 同为平台显式意图（平台模式首扫 run scan --spec-root 在无 pointer 的新目录
     // 合法运行，spec 恒在仓外）——与 --workspace-id/--runtime-root 一并越过本门
     platformFlags: platformWorkspaceId || platformRuntimeRoot || filteredArgs.includes('--spec-root'),
+    helpRequest: flowHelpRequest,
   });
   if (uninitGate.verdict === 'block') {
     console.error(`\n❌ 当前目录未初始化（${dir}）：${uninitGate.gitRoot

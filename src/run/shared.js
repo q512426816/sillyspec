@@ -448,13 +448,16 @@ export const UNINIT_CWD_GATE_EXEMPT = new Set([
  *                                    （未初始化目录无 ground truth，只能给锚点不能断言唯一 cwd）
  *
  * @param {string} command 顶层命令名
- * @param {{ dir?: string, specDir?: string, platformFlags?: unknown }} opts
+ * @param {{ dir?: string, specDir?: string, platformFlags?: unknown, helpRequest?: boolean }} opts
  *   dir=目标目录（cwd 或 --dir）；specDir=显式 --spec-dir；platformFlags=--workspace-id/
- *   --runtime-root/--spec-root 任一显式给出即为真值（平台模式显式意图）
+ *   --runtime-root/--spec-root 任一显式给出即为真值（平台模式显式意图）；helpRequest=帮助请求
+ *   （2026-11-26-flow-help-flag-shortcircuit）——命令层对帮助旗标零副作用短路打印用法，未初始化
+ *   目录下同样放行到命令层（帮助零写入，不该被本门拦成「未初始化」报错）；是否为帮助请求由
+ *   调用方按命令判定（只有具备该短路的命令族才可声明，其余命令的帮助分支按子命令位判定）
  */
-export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = {}) {
+export function resolveUninitCwdGate(command, { dir, specDir, platformFlags, helpRequest = false } = {}) {
   if (!command || UNINIT_CWD_GATE_EXEMPT.has(command)) return { verdict: 'exempt' }
-  if (specDir || platformFlags) return { verdict: 'skip' }
+  if (helpRequest || specDir || platformFlags) return { verdict: 'skip' }
   const resolvedDir = resolve(dir || process.cwd())
   if (existsSync(join(resolvedDir, '.sillyspec-platform.json')) || existsSync(join(resolvedDir, PLATFORM_MANAGED_FILENAME))) {
     return { verdict: 'skip' }

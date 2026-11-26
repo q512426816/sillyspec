@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-flow-help-flag-shortcircuit",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-help-flag.test.mjs「进程内调用 flow start 帮助旗标：打印用法并正常返回且零落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-01",
+      "tests": [
+        "test/uninit-cwd-gate.test.mjs「flow 帮助旗标在未初始化目录放行到命令层，零落盘，无帮助旗标照旧硬拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-help-flag.test.mjs「短路先于平台 spec 根解析：指针损坏的 cwd 下仍打印用法」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-help-flag.test.mjs「用法内容：八个子命令与代码内实际消费旗标齐备，含 --input 照抄形态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-help-flag.test.mjs「未知子命令兜底不变：stderr 用法并 exit 2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-help-flag.test.mjs「帮助旗标形态判定：子命令带帮助旗标与 flow help 均判为帮助，正常调用不误判」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-help-status.test.mjs「用法行列出 flow status 子命令」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-flow-help-flag-shortcircuit"
+    }
+  ]
+}

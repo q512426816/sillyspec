@@ -13,7 +13,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -55,6 +55,15 @@ describe('resolveUninitCwdGate（判定单元）', () => {
     mkdirSync(d, { recursive: true })
     assert.equal(resolveUninitCwdGate('flow', { dir: d, specDir: join(base, 'x', '.sillyspec') }).verdict, 'skip')
     assert.equal(resolveUninitCwdGate('flow', { dir: d, platformFlags: 'ws-1' }).verdict, 'skip')
+  })
+
+  it('帮助请求（helpRequest）→ skip：帮助零副作用，不被未初始化门拦成报错（2026-11-26-flow-help-flag-shortcircuit）', () => {
+    const d = join(base, 'empty')
+    mkdirSync(d, { recursive: true })
+    assert.equal(resolveUninitCwdGate('flow', { dir: d, helpRequest: true }).verdict, 'skip')
+    // 缺省不变：非帮助请求照旧 block（本门的原始职责——未初始化目录跑非 init 命令）
+    assert.equal(resolveUninitCwdGate('flow', { dir: d }).verdict, 'block')
+    assert.equal(resolveUninitCwdGate('flow', { dir: d, helpRequest: false }).verdict, 'block')
   })
 
   it('平台 pointer / 接管声明在 dir → skip（平台模式 spec 解析与 fail-closed 错误归专门文案）', () => {
@@ -141,6 +150,32 @@ describe('CLI 入口未初始化目录硬拦（e2e）', () => {
     assert.ok(combined.includes(GATE_MARKER), `应含守卫判定说明：\n${combined}`)
     assert.ok(combined.includes('sillyspec init'), `应指引 init：\n${combined}`)
     assert.ok(combined.includes('--spec-dir'), `应指引 --spec-dir：\n${combined}`)
+  })
+
+  it('flow 帮助旗标在未初始化目录放行到命令层，零落盘，无帮助旗标照旧硬拦', () => {
+    // 全部帮助形态同一口径（评审 P2：裸词 help 形态此前被本门漏拦——判定须与命令层短路同源）
+    const helpForms = [
+      ['flow', '--help'], ['flow', '-h'],
+      ['flow', 'start', '--help'], ['flow', 'done', '-h'], ['flow', 'status', '--change', 'x', '--help'],
+      ['flow', 'help'], ['flow', 'help', 'done'], ['flow', 'help', 'no-such-sub'],
+    ]
+    for (const form of helpForms) {
+      const helped = runCli(work, form)
+      assert.equal(helped.status, 0, `sillyspec ${form.join(' ')} 期望 exit 0，实际 ${helped.status}\n${helped.stderr}`)
+      assert.ok(helped.stdout.includes('sillyspec flow start --change'), `sillyspec ${form.join(' ')} stdout 应为用法：\n${helped.stdout}`)
+      assert.equal(helped.stderr, '', `sillyspec ${form.join(' ')} 帮助路径不写 stderr`)
+    }
+    // help <子命令> 定位：done 目标不输出 start 的照抄详注
+    const doneHelp = runCli(work, ['flow', 'help', 'done'])
+    assert.ok(!doneHelp.stdout.includes('--input 可照抄形态'), 'help done 不输出 start 照抄详注')
+    assert.deepEqual(readdirSync(work), [], '未初始化目录零落盘')
+    // 同一命令不带帮助形态：硬拦契约不变
+    for (const form of [['flow', 'start'], ['flow', 'done'], ['flow', 'status', '--change', '2026-01-01-x']]) {
+      const blocked = runCli(work, form)
+      const combined = (blocked.stdout || '') + (blocked.stderr || '')
+      assert.equal(blocked.status, 2, `sillyspec ${form.join(' ')} 期望 exit 2，实际 ${blocked.status}\n${combined}`)
+      assert.ok(combined.includes(GATE_MARKER), `sillyspec ${form.join(' ')} 应含守卫判定说明：\n${combined}`)
+    }
   })
 
   it('git 仓未初始化 → 文案给出 git root 锚点', () => {

@@ -1,0 +1,55 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  flow 帮助旗标短路不再误立项
+
+  sillyspec flow start --help 不被识别为帮助旗标：按「缺 --input 的 flow
+  start」走需求清晰度提示，提示里还给出一个按日期加随机后缀生成的临时变更名（看似真实却从未落盘），照着提示去跑会把一个从未立项的名字带进头脑风暴预段；其余子命令带 --help 则报「需 --change <名>」。根因是
+  cmdFlow 只按 args[0] 分发，--help 留在 rest 里无人消费（坑档 docs/sillyspec/2026-11-25-flow-start-help-as-start-call，2026-11-25 实证）。
+
+
+  成功标准：
+
+  - sillyspec flow start --help 及任一 flow 子命令带 --help / -h 打印用法并正常返回，不再生成临时变更名、不再走需求清晰度提示
+
+  - 帮助短路先于平台 spec 根解析与任何立项落盘逻辑，零文件系统副作用
+
+  - 用法列出全部八个子命令与代码内实际消费的旗标；未知子命令与空子命令的兜底行为不变
+
+  - 新增测试全绿，既有测试零回归
+autopilot: false
+prestage_ack: false
+baseline_commit: 0b2ccda8dfb44d98731667fae01976119b871b07
+updatedAt: '2026-11-26T03:02:17.906Z'
+baseline_sha256: 7cca2d90aeae86ec4c4e80167a99af4fb305da84b2693cd8bffda5fa99919d7a
+spec_approved: true
+spec_approved_at: '2026-11-26T01:37:22.746Z'
+spec_approved_by: zcode-fix-20261126
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-fix-20261126
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（19.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261126020927\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+accept_dirty_gap:
+  at: '2026-11-26T02:09:44.225Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/stages/plan-postcheck.js
+    - test/taskcard-frontmatter-hardgate.test.mjs
+    - test/autocheck-review-change-stamp.test.mjs
+  by: zcode-fix-20261126
+

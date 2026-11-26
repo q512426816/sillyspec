@@ -12563,3 +12563,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-22-tasks-blocked-by
   status: active
+
+## FR-cli-entry-663 sillyspec flow start --help 及任一 flow 子命令带 --help / -h 打印用法并正常返回，不再生成临时变更名、不再走需求清晰度提示
+变更：2026-11-26-flow-help-flag-shortcircuit
+状态：active
+摘要：flow start --help；flow done --help
+全文：.sillyspec/changes/archive/2026-11-26-flow-help-flag-shortcircuit/requirements.md#FR-01
+最近确认：bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-01
+  tests: test/uninit-cwd-gate.test.mjs「flow 帮助旗标在未初始化目录放行到命令层，零落盘，无帮助旗标照旧硬拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-flow-help-flag-shortcircuit
+  status: active
+
+## FR-cli-entry-664 帮助短路先于平台 spec 根解析与任何立项落盘逻辑，零文件系统副作用
+变更：2026-11-26-flow-help-flag-shortcircuit
+状态：active
+摘要：平台指针损坏的工作目录
+全文：.sillyspec/changes/archive/2026-11-26-flow-help-flag-shortcircuit/requirements.md#FR-02
+最近确认：bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-02
+  tests: test/flow-help-flag.test.mjs「短路先于平台 spec 根解析：指针损坏的 cwd 下仍打印用法」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-flow-help-flag-shortcircuit
+  status: active
+
+## FR-cli-entry-665 用法列出全部八个子命令与代码内实际消费的旗标；未知子命令与空子命令的兜底行为不变
+变更：2026-11-26-flow-help-flag-shortcircuit
+状态：active
+摘要：未知子命令；参数值恰为 help
+全文：.sillyspec/changes/archive/2026-11-26-flow-help-flag-shortcircuit/requirements.md#FR-03
+最近确认：bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-03
+  tests: test/flow-help-flag.test.mjs「未知子命令兜底不变：stderr 用法并 exit 2」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-flow-help-flag-shortcircuit
+  status: active
+
+## FR-cli-entry-666 新增测试全绿，既有测试零回归
+变更：2026-11-26-flow-help-flag-shortcircuit
+状态：active
+摘要：帮助旗标形态判定
+全文：.sillyspec/changes/archive/2026-11-26-flow-help-flag-shortcircuit/requirements.md#FR-04
+最近确认：bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-flow-help-flag-shortcircuit:flow:测试绑定FR-04
+  tests: test/flow-help-status.test.mjs「用法行列出 flow status 子命令」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-flow-help-flag-shortcircuit
+  status: active

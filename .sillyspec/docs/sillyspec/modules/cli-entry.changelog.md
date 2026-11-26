@@ -123,3 +123,4 @@
 | 2026-11-21 | 2026-11-21-prompt-microdesign-pack | 阶段提示词吸收微设计技巧包 |
 | 2026-11-22 | 2026-11-22-tasks-blocked-by | 轻量任务清单阻塞依赖行支持 |
 | 2026-11-24 | 2026-11-24-token-commit-change-dir-attribution | flow done 收口提交归属收窄：无名 task 提交按触及的变更目录与作者身份判定——他侧提交不再触发假的审计时点漂移、不进冻结补丁（实证：补丁由 34 文件回到 14）；修正「提他变更名又带 task token」被误判的回归；新增「归属分不清」提示点名分不清的提交；`detectPatchDrift` / `deliveryFaceAnchoredAfter` / `filterCommittedFace` 增可选入参 |
+| 2026-11-26 | 2026-11-26-flow-help-flag-shortcircuit | flow 帮助旗标短路不再误立项 |

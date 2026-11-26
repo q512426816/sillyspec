@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-flow-help-flag-shortcircuit",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "flow help [<子命令>] 形态未被未初始化目录门的 helpRequest 判定覆盖：未初始化目录下 exit 2，与同族 --help/-h 形态及帮助文案「同效」不一致",
+      "evidence": "复审：已修复。修复锚点——src/index.js:502-506 删掉入口自写的只认旗标判定，改为 command==='flow' 时 await import('./flow.js') 取 isFlowHelpInvocation(filteredArgs[1] || '', filteredArgs.slice(2))，与命令层短路（src/flow.js:3366-3372：sub=args[0]、rest=args.slice(1)；分发点 src/index.js:5167 传 filteredArgs.slice(1)）是同一谓词、同一参数切片，前轮双源漂移的根因消除；门侧 src/run/shared.js:458-460 在 resolve(dir) 之前即返回 skip。返工新增的提前导入核实无副作用：仅 command==='flow' 才执行，非 flow 路径零变化；flow.js 静态导入闭包 51 个模块不含 src/index.js（无循环依赖），闭包顶层无文件写入/建库调用，fresh 进程在未初始化目录裸 import 后目录树仍为空；代价仅是被拦的 flow 调用多付约 0.1s 模块加载。用例锚点——test/uninit-cwd-gate.test.mjs:155-179 真实入口端到端扩到 8 种帮助形态（含 ['flow','help']、['flow','help','done']、['flow','help','no-such-sub']，逐一断言 exit 0 + stdout 含用法 + stderr 全空）+ readdirSync(work) 为空 + 3 种无帮助形态仍 exit 2 且含「已上溯祖先链」。判别力复核（加载器钩子在内存里改写源码，不动仓内文件）：把入口判定还原成返工前写法后该用例即红（两文件 24 例 1 败，唯一失败项正是本用例）。评审实跑（bin/sillyspec.js 与 PATH 上的 sillyspec，后者是指向本仓的符号链接；系统临时目录）——未初始化非 git 目录与未初始化 git 仓：flow help → exit 0、stdout 28 行、stderr 0 字节、零落盘；flow help done → exit 0、stdout 21 行、不含 start 照抄详注；八个子命令的 flow help X / flow X --help / flow X -h 三形态 stdout 逐字相等；对照 flow start、flow done、flow status --change x、裸 flow、flow no-such-sub → exit 2 + 门文案、零落盘；非 flow 命令（task/run/review 的 --help 与 help 形态）照旧 exit 2，无回归。",
+      "location": "src/index.js:502-506"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "收口 ledger 实测面未覆盖本变更测试：亲测只跑了 1 个他侧在途文件（4 例）",
+      "evidence": "复审：条件仍在、本轮未变，裁决 accepted（残余移交仓级）。现状——flow-state.yaml 的 ledger=done，gate_summary 仍指 .sillyspec/.runtime/verify-runs/20261126020927/test-result.json（ran_at 2026-11-26T02:09:27Z；modules 仅 deps(auto-js)=node --test test/autocheck-review-change-stamp.test.mjs，他侧未跟踪文件 4 例）；本轮 flow done 对 ledger 子步幂等跳过（任务书：已完成 ledger(skip)），未生成新回执，故该回执早于返工提交 bbd0bd21（02:30:48Z）——返工扩写的端到端用例从未进过 CLI 亲测面。机理（首轮收口日志 .sillyspec/.runtime/logs/flowdone-s-help.log:8-13）——仓缺省 gate_scope: lean 把命中枢纽源（src/flow.js、src/run/shared.js、src/index.js）的测试判为间接面移出阻断面（48 个归 pre-push/CI 门），本变更两份测试恰都 import 枢纽源，「本变更测试」分量得 0。裁决理由——取面逻辑在 CLI 收口 runner 与仓级门禁配置，不在本变更 5 文件交付面内，交付物无法处置；且不构成承诺违反：FR-04 由评审独立复跑取证（HEAD bbd0bd21 上 node --test 四文件 29/29 绿 exit 0，node test/check-syntax.mjs 1156 文件通过 exit 0；日志 .sillyspec/.runtime/logs/review-rerun2-flow-help-flag.log 与 review-rerun2-flow-help-flag-syntax.log）。残余与处置方——主会话（仓级，本变更外）：另行立项修 test-face 推断（变更自带测试命中枢纽源被归间接面），或收口时显式 test_strategy: full / fr_regress_cap 让 CLI 侧留一份覆盖本变更测试的回执；归档件里的 CLI 回执不覆盖本变更测试这一事实以本条留痕。",
+      "location": ".sillyspec/.runtime/verify-runs/20261126020927/test-result.json"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "真实入口下「帮助路径零写入」不严格成立：入口层旧布局迁移先于分发无条件预建 .runtime/state、temp（既有全局行为）",
+      "evidence": "复审：维持原判 accepted，返工未触及该面（src/index.js:395-410 原样）。本轮复核——入口层旧布局迁移对全部非 init 命令在分发前无条件执行，.runtime 在场且缺 state/temp 时预建两个目录：已初始化临时目录（仅含 .sillyspec/.runtime）首个 flow help 即新增 .sillyspec/.runtime/state/ 与 temp/，其后 flow help done / flow start --help / flow done -h 零新增；未初始化目录（非 git 与 git 仓）全部帮助形态与被拦形态均零落盘（目录树保持为空）。cmdFlow 内帮助短路仍是函数体首句（src/flow.js:3369-3372），先于 resolvePlatformSpecDir（3389-3396）、reportAgentLog（3419）与任何落盘且不调 process.exit，FR-02 的排序承诺成立；指针损坏目录下 flow help / flow help done / flow start --help 实测 exit 0、零落盘，对照 flow status 为 fail-closed exit 2。边界已裁决：可接受——迁移是既有幂等入口行为、无数据风险、非本变更引入；绑定测试走 bin 入口的未初始化目录，测不到该面。",
+      "location": "src/index.js:395"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——帮助判定是同步纯函数，门侧与命令层同源同参（src/index.js:502-505 与 src/flow.js:3322-3324、3366-3372）：--help/-h 在 rest 任意位置均识别，裸词 help 仅子命令位触发（真实入口 flow helping / flow help-me / flow start --input help 均不被判帮助，照旧被门拦 exit 2）。边界已裁决：可接受——design 声明「--help/-h 出现在 rest 任意位置都识别」，参数值恰为 --help/-h 时也判帮助并零副作用打印用法，两层判定一致，不会出现门放行而命令层真实执行的分叉；flow help <未知> 走通用用法 exit 0（test/uninit-cwd-gate.test.mjs:160 钉住），可接受。返工新增的 await import('./flow.js') 只在 command==='flow' 时发生，模块求值无时序面。",
+    "并发": "ok——帮助路径零写入零 git 操作。返工把 flow.js 的模块加载提前到未初始化门之前，已核实其无加载期副作用：flow.js 静态导入闭包 51 个模块，顶层带调用的语句仅正则/Set/Map/createRequire/规则表读取类纯初始化，无文件写入或建库调用；fresh 进程在未初始化 cwd 裸 import src/flow.js 后目录树仍为空；真实入口单跑 flow help 与被拦的 flow start 前后，本仓 .sillyspec/.runtime 无新增文件、~/.sillyspec 无新文件（期间在变的 sillyspec.db 与 watcher-* 属他会话 verify-stage-retire 的 watcher，空跑对照同样在变）。边界已裁决：可接受——入口层旧布局迁移（src/index.js:395-410）仍先于分发，残面见 findings P3 accepted。",
+    "切换": "ok——帮助路径在任何落盘与任何 process.exit 之前 return { help: true }（src/flow.js:3369-3372；test/flow-help-flag.test.mjs 断言 exitCodes 为空且不建 .sillyspec 与平台指针）；门侧 helpRequest 为真在 resolve(dir) 之前直接返回 skip（src/run/shared.js:460），连路径探测都不做。边界已裁决：可接受——design 死路②：裸 sillyspec flow 与未知子命令维持 stderr 加 exit 2（src/flow.js:3689-3691），真实入口实测成立；design 次风险：兜底首行保持原字面量、仅其后 6 行抽成 flowStartDetailLines 共享（src/flow.js:3354-3363、3690），stderr 兜底用法与帮助面 8 子命令两套文本并存——FR-03 明文要求兜底不变，接受该代价（flow-help-status / input-format-copy 两套源码断言复跑绿）。",
+    "作用域": "ok——前轮 finding 的根因已消除：未初始化目录下 flow help [<子命令>] 与旗标形态同放行、同输出（见 findings P2 resolved），不再随工作区初始化状态分叉。design 声明「只对 flow 族声明、其余命令帮助分支不放行」边界已裁决：可接受——真实入口实测 task/run/review 的 --help 与 help 形态在未初始化目录仍 exit 2，非 flow 命令路径零变化（index.js 新增代码整体包在 command==='flow' 内；无循环依赖：flow.js 静态导入闭含 51 模块、不含 src/index.js）。平台模式与本地模式输出一致（指针损坏目录 flow help exit 0；未初始化、已初始化、git 仓三处 flow help stdout 逐字相等）。附带观察（非 finding）：linked worktree 内跑 flow help 时 stderr 带既有的「进度库已自动锚定主仓」警告（src/index.js:440，全部非 init 命令共有），stdout 用法不变。"
+  },
+  "reviewedAt": "2026-11-26T02:58:30Z"
+}

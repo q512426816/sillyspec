@@ -3284,9 +3284,92 @@ async function cmdFlowReject({ change, cwd, specBase, reason }) {
   console.log(`   用户重新确认后批准须显式通道：flow approve --change ${change} --user-confirmed（agent 自批则 --self-approved 如实声明）`)
 }
 
+// ── flow 帮助旗标短路（2026-11-26-flow-help-flag-shortcircuit）────────────────────
+// cmdFlow 只按 args[0] 分发，`--help` 留在 rest 里无人消费：start 分支以 `<日期>-flow-<随机>`
+// 兜底变更名一路走到需求清晰度门（提示里带一个从未落盘的临时名），其余子命令报
+//「需 --change <名>」（坑：multi-agent-platform 仓 docs/sillyspec/2026-11-25-flow-start-help-as-start-call）。帮助旗标在入口短路——先于
+// 平台 spec 根解析（指针失效的 fail-closed exit 2）、agent 日志登记与任何落盘。
+
+const FLOW_HELP_FLAGS = new Set(['--help', '-h']);
+
+/**
+ * 各子命令用法行。旗标集合＝cmdFlow 实际消费的集合（getFlag/hasFlag 调用点）——
+ * test/flow-help-flag 对两者做双向相等断言：子命令增删旗标须同步改这里。
+ */
+const FLOW_SUBCOMMAND_USAGE = {
+  start: 'sillyspec flow start --change <名> --input "<需求>" [--title <标题>] [--thick | --with-tasks] [--review | --no-review] [--autopilot] [--no-prestage] [--turbo] [--json]',
+  done: 'sillyspec flow done --change <名> [--refreeze] [--freeze-dirty] [--accept-dirty-gap] [--accept-orphan-face] [--allow-batch-tick] [--accept-unmapped] [--accept-empty-face]',
+  status: 'sillyspec flow status --change <名> [--json]',
+  'verify-drafts': 'sillyspec flow verify-drafts --change <名> [--json]',
+  diff: 'sillyspec flow diff --change <名> [--json]',
+  approve: 'sillyspec flow approve --change <名> [--user-confirmed | --self-approved] [--by <标识>]',
+  reject: 'sillyspec flow reject --change <名> --reason <理由>',
+  'amend-draft': 'sillyspec flow amend-draft --change <名>',
+};
+
+const FLOW_SUBCOMMAND_NOTE = {
+  start: '立项并起草治理工件（协议调用 1/2）；变更已存在则输出恢复简报',
+  done: '收口归档（协议调用 2/2；CLI 亲测变更测试面）',
+  status: '查看或恢复当前阶段、槽位与子步进度',
+  'verify-drafts': 'spec 面只读自查（与批准门同判定，通过再请批准）',
+  diff: '变更粒度文件统计（只读）',
+  approve: 'spec 断点批准留痕（attest 通道二选一）',
+  reject: '否决方案留痕',
+  'amend-draft': '机器稿留痕重锚（重锚哈希 + ledger 审计）',
+};
+
+/** 是否为帮助请求：子命令位是 help / --help / -h，或 rest 里带 --help / -h 旗标。 */
+export function isFlowHelpInvocation(sub, rest) {
+  return sub === 'help' || FLOW_HELP_FLAGS.has(sub) || (rest || []).some((a) => FLOW_HELP_FLAGS.has(a));
+}
+
+/** 帮助目标子命令：`flow help <子命令>` 或 `flow <子命令> --help`；定位不到返回 null（输出通用用法）。 */
+export function flowHelpTarget(sub, rest) {
+  const known = (name) => Object.prototype.hasOwnProperty.call(FLOW_SUBCOMMAND_USAGE, name);
+  if (known(sub)) return sub;
+  const first = (rest || []).find((a) => typeof a === 'string' && !a.startsWith('-'));
+  return known(first) ? first : null;
+}
+
+/**
+ * 帮助文本行（纯函数）：八个子命令用法 + 通用旗标；目标为 start 或未指定时附 start 详注。
+ */
+export function flowHelpLines(target) {
+  const lines = ['SillySpec flow — 轻量变更（两次协议调用：start 立项起草，done 收口归档）', '', '用法:'];
+  for (const [name, usage] of Object.entries(FLOW_SUBCOMMAND_USAGE)) {
+    lines.push(`  ${usage}`);
+    lines.push(`        ${FLOW_SUBCOMMAND_NOTE[name]}`);
+  }
+  lines.push('  通用旗标（任意子命令可用）：--spec-root <路径>  --runtime-root <路径>');
+  lines.push('  help [<子命令>]：查看本用法；任一子命令后带 --help 或 -h 同效');
+  if (target === null || target === 'start') {
+    lines.push('');
+    // start 详注与兜底用法共用单一源（兜底形态带 6 空格缩进，帮助面去掉）
+    for (const l of flowStartDetailLines()) lines.push(l.replace(/^      /, ''));
+  }
+  return lines;
+}
+
+/** start 详注行组（--input 可照抄形态 + 预段同意门提示）：兜底用法与帮助面共用的单一源。 */
+function flowStartDetailLines() {
+  return [
+    '      --input 可照抄形态（引号内换行合法）：',
+    '      sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景',
+    '',
+    '      成功标准：',
+    '      - <可验证标准>"',
+    '      预段同意门被拦时（上个轻量变更被 route-hindsight 标记「疑似该走预段未走」）：确认需求已含决策加 --no-prestage；不清晰则先 run brainstorm --change <名>，完成后回来 flow start 收编（标记自动消费）',
+  ];
+}
+
 export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
   const sub = args[0] || ''
   const rest = args.slice(1)
+  // 帮助旗标短路：先于平台 spec 根解析、agent 日志登记与任何立项/提示逻辑（零落盘、不 process.exit）
+  if (isFlowHelpInvocation(sub, rest)) {
+    for (const line of flowHelpLines(flowHelpTarget(sub, rest))) console.log(line);
+    return { help: true };
+  }
   // 全局 --json 透传（2026-10-06-flow-status-json）：index.js 顶层把 --json 从 filteredArgs
   // 剥进全局变量，flow 族此前在真实 CLI 入口下永远收不到该 flag（in-process 直调 cmdFlow 带
   // --json 才生效）——cmdFlowStart 的 json 信封成了死代码、status 无机器可读面。统一入口
@@ -3604,12 +3687,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     return r
   }
   console.error('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow verify-drafts --change <名> [--json]（spec 面只读自查，通过再请批准） | sillyspec flow diff --change <名> [--json]（只读文件统计）')
-  console.error('      --input 可照抄形态（引号内换行合法）：')
-  console.error('      sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
-  console.error('')
-  console.error('      成功标准：')
-  console.error('      - <可验证标准>"')
-  console.error('      预段同意门被拦时（上个轻量变更被 route-hindsight 标记「疑似该走预段未走」）：确认需求已含决策加 --no-prestage；不清晰则先 run brainstorm --change <名>，完成后回来 flow start 收编（标记自动消费）')
+  for (const line of flowStartDetailLines()) console.error(line)
   process.exit(2)
 }
 

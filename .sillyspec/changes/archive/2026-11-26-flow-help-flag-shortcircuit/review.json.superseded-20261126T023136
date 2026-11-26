@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-flow-help-flag-shortcircuit",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9057a004bf5a3dc190d9122d2227b55daecdafcc",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "open",
+      "title": "flow help [<子命令>] 形态未被未初始化目录门的 helpRequest 判定覆盖：未初始化目录下 exit 2，与同族 --help/-h 形态及帮助文案「同效」不一致",
+      "evidence": "双源判定漂移：src/index.js:507 的 helpRequest 只认 filteredArgs.slice(1) 里的 --help/-h，不含子命令位裸词 help；src/flow.js:3322-3324 的 isFlowHelpInvocation 则三形态齐备（sub==='help' 亦判帮助）。真实入口实测（bin/sillyspec.js，临时目录）：未初始化目录下 flow start --help / flow done -h / flow --help / flow -h 均 exit 0 且 stdout 打印用法、stderr 空，flow help 与 flow help done 则 exit 2、stdout 空、stderr 为门的「当前目录未初始化…已上溯祖先链」文案；已初始化目录与平台指针损坏目录下 flow help 均 exit 0。FR-01 首条把「sillyspec flow help [<子命令>]」列为必须打印用法并退出 0 的形态，帮助面 src/flow.js:3334 又写「任一子命令后带 --help 或 -h 同效」。该形态在未初始化目录被拦是修复前既有行为（非回归），用户成功标准原话（proposal.md）与 FR-01 的 Given/When/Then 只钉旗标形态，故定 P2 不定 P1。现有 e2e（test/uninit-cwd-gate.test.mjs:155-166）只覆盖 flow start --help，flow help 形态在真实入口零覆盖。修复方向：index.js 的判定复用 isFlowHelpInvocation 或补 filteredArgs[1]==='help'，并补该形态在未初始化目录的 e2e。",
+      "location": "src/index.js:507"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "收口 ledger 实测面未覆盖本变更测试：亲测只跑了 1 个他侧在途文件（4 例）",
+      "evidence": "收口回执 .sillyspec/.runtime/verify-runs/20261126020927/test-result.json 的 modules 仅 deps(auto-js) 一项，命令为 node --test test/autocheck-review-change-stamp.test.mjs（4 例；该文件在 git status 中是他侧未跟踪文件，不属本变更声明面）。flowdone-s-help.log 第 9 行「本变更测试 ∪ import 依赖 = 1 个（分量 deps 1）」即本变更测试分量为 0，FR 关联回归 0/180：test/flow-help-flag.test.mjs 与 test/uninit-cwd-gate.test.mjs 均不在亲测面，回执 passed 不构成本变更的测试证据。评审按复跑口径亲跑补证：node --test 四文件（flow-help-flag / uninit-cwd-gate / flow-help-status / input-format-copy）29/29 绿、exit 0；node test/check-syntax.mjs 1156 文件通过、exit 0；日志 .sillyspec/.runtime/logs/review-rerun-flow-help-flag.log 与 review-rerun-flow-help-flag-syntax.log。属 CLI 测试面推断缺口而非交付物缺陷，定 P3。",
+      "location": ".sillyspec/.runtime/verify-runs/20261126020927/test-result.json"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "真实入口下「帮助路径零写入」不严格成立：入口层旧布局迁移先于分发无条件预建 .runtime/state、temp（既有全局行为）",
+      "evidence": "src/index.js:395-410 对所有非 init 命令在分发前调 migrateRuntimeLayout；src/runtime-paths.js:172-174 在 .runtime 在场时无条件 mkdirSync state/ 与 temp/（已存在即零写入）。实测：已初始化临时目录（含 .sillyspec/.runtime、缺 state 与 temp）连跑 flow start --help / flow help / flow help done / flow status --help 后新增 .sillyspec/.runtime/state 与 temp 两个目录；未初始化目录零落盘（test/uninit-cwd-gate.test.mjs:160 所钉）。cmdFlow 内帮助短路（src/flow.js:3369-3372）确在 resolvePlatformSpecDir（3389-3396）、reportAgentLog（3419）与任何落盘之前且不调 process.exit，FR-02 的排序承诺成立；指针损坏目录下 flow start --help 实测 exit 0，对照 flow status 则 fail-closed exit 2。边界裁决：可接受——迁移是既有幂等入口行为，对全部非 init 命令等同生效，无数据风险，非本变更引入；绑定测试为进程内直调 cmdFlow，不经 index.js 入口层，故测不到该面。",
+      "location": "src/index.js:395"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——帮助判定是入口处的同步纯函数：rest 任意位置的 --help/-h 均识别，裸词 help 仅子命令位触发（src/flow.js:3322-3324；test/flow-help-flag.test.mjs:84-113 形态矩阵含参数值 help 不误判，真实入口 flow status --change help 实测走「变更不存在」exit 1）。边界已裁决：可接受——design 声明「--help / -h 出现在 rest 任意位置都识别」，即参数值恰为 --help 或 -h 时也会判为帮助并退出 0 而不执行；FR-03 只要求裸词 help 值位不触发（已测），该形态无现实冲突面且误判后果是零副作用的打印用法。",
+    "并发": "ok——cmdFlow 帮助路径零写入零 git 操作，return { help: true } 先于 resolvePlatformSpecDir 与 reportAgentLog（src/flow.js:3369-3372 对 3389-3396 与 3419）；真实入口未初始化目录零落盘实测成立。边界已裁决：可接受——短路位于 cmdFlow 入口（design 声明位置），src/index.js:395-410 既有旧布局迁移仍先于分发执行（已收敛仓零写入，缺 state/temp 时预建两目录），属既有幂等入口行为、非本变更引入，残面记 findings P3 accepted。",
+    "切换": "ok——帮助路径在任何落盘与任何 process.exit 之前返回，中断无残留（test/flow-help-flag.test.mjs:144-166 断言 exitCodes 为空且不建 .sillyspec 与平台指针）。边界已裁决：可接受——①design 死路②：裸 sillyspec flow 与未知子命令维持 stderr 加 exit 2，不改 stdout 加 0（src/flow.js:3689-3691；真实入口实测 exit 2、stderr 7 行、stdout 0 行；test:185-198 钉住），保住依赖退出码 2 的脚本；②design 次风险：兜底首行保持原字面量、仅其后 6 行抽成 flowStartDetailLines 共享（逐字一致），代价是 stderr 兜底用法仍只列 start/done/status/verify-drafts/diff 且不提 --help，与帮助面 8 子命令并存两套文本——FR-03 明文要求兜底不变，接受该代价。",
+    "作用域": "finding——design 称「帮助不读取任何工作区状态」「未初始化目录下也放行到命令层」，对旗标形态属实（src/index.js:507 仅 command==='flow' 放行，其余命令零变化——「只对 flow 族声明、其余命令帮助分支不放行」边界已裁决：可接受）；但同属 flow 族的 flow help [<子命令>] 未被该门的 helpRequest 判定覆盖，未初始化目录下 exit 2 而已初始化目录 exit 0，输出随工作区初始化状态分叉——见 findings P2（src/index.js:507）。平台模式与本地模式输出一致属实（指针损坏目录下 flow start --help 实测 exit 0）。"
+  },
+  "reviewedAt": "2026-11-26T02:25:00Z"
+}

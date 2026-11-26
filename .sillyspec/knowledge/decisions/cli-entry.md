@@ -300,3 +300,12 @@ supersedes：D-010@v1
 文件：src/flow.js, src/task-tick.js, test/task-tick-blocked-by.test.mjs
 最近确认：37981e7e874bb164d9d8912d7880b78109cee55f
 理由：把 mattpocock 链路里 to-tickets/implement-spec 的阻塞边思想做进 SillySpec 轻量道的 tasks.md，形态刻意最轻：标注是任务行描述段尾的可选方括号段（`[blocked-by: task-MM/task-KK]`），collectRows 解析挂 blockedBy 数组，tickTasksMd 在返回值上多给 blockedWarning（软门）与 frontier 化 next 指针，runTaskTick 回显 warn 与注记。不引入任务状态机/不阻断任何勾选（轻量哲学：提示词纪律+机器识别，不做机器硬门）；无标注路径零变化。选纯函数增量方案因为全部行为都在 tickTasksMd 一个纯函数接缝上可测，IO 层只加回显。
+
+## D-cli-entry-019@v1 2026-11-26-flow-help-flag-shortcircuit——cmdFlow 此前只按 args[0] 分发，`--help` 留在 rest 里无人消费：start 分支以 `getFlag('--change') ||
+状态：implemented
+变更：2026-11-26-flow-help-flag-shortcircuit
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-26-flow-help-flag-shortcircuit/design.md
+文件：src/flow.js, src/index.js, src/run/shared.js, test/flow-help-flag.test.mjs, test/uninit-cwd-gate.test.mjs
+最近确认：bbd0bd2171b3656b97a3b2074e6ee933bf7e1e4e
+理由：cmdFlow 此前只按 args[0] 分发，`--help` 留在 rest 里无人消费：start 分支以 `getFlag('--change') || <日期>-flow-<随机>` 生成临时名并一路走到需求清晰度门，其余子命令则报「需 --change <名>」。修法是在 cmdFlow 入口（算出 sub/rest 之后、平台 spec 根解析之前）加一道帮助短路：识别「子命令带 --help / -h」「flow --help / -h」「flow help [子命令]」三种形态，打印用法到 stdout 后正常返回。用法行由新的纯函数生成——八个子命令各一行，旗标按 cmdFlow 实际消费的集合枚举；start 的 `--input` 照抄形态与预段同意门提示抽成共享行组，兜底分支照旧打印同一份，stderr 文本与退出码 2 逐字不变。实现期发现 CLI 入口还有一道更靠前的关卡——未初始化目录门先于命令分发，会让帮助请求在未初始化目录被拦成报错；由于帮助零副作用，给该门加一个由调用方按命令声明的「帮助请求」入参（仅 flow 族声明），放行到命令层打印用法。
