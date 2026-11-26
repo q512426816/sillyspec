@@ -1,0 +1,49 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  push 命令容忍 shell 残留并透出完整错误
+
+  动机与背景：平台 git 代执行通道不解析 shell，命令行里的 2>&1 / 管道被原样透传为位置参数，sillyspec push 严格白名单直接拒绝；同时 human 模式 git push 用 inherit
+  导致失败详情被吞，只剩一行 failed to push some refs。
+
+  成功标准：
+
+  - parsePushArgs 忽略代执行环境残留的 shell 重定向 token（2>&1、>/dev/null、>/dev/null 等）并产生告警
+
+  - parsePushArgs 遇到管道/链式控制符（|、||、&&、;、&）截断其后参数并产生告警
+
+  - 合法参数组合与现有 fail-closed 行为保持不变
+
+  - human 模式 git push 失败时错误信息包含底层 stderr 详情
+
+  - 成功与失败均由 CLI 转发捕获的 git 输出到终端
+
+  - 相关单测与集成测试通过
+autopilot: false
+prestage_ack: false
+baseline_commit: 33c389e45c86f492028d1486ecc9f0c79aeb9b36
+updatedAt: '2026-11-11T08:19:48.124Z'
+baseline_sha256: b603ca8f3c980264c8e51bd63057c7cf324c8e8c43ed8c9d315103f9d8fd1543
+spec_approved: true
+spec_approved_at: '2026-11-11T08:11:20.864Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（43.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261111081933\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+

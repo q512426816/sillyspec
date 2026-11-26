@@ -1,0 +1,47 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: false
+input: >-
+  变更创建时向用户展示完整 key 与名称
+
+
+  动机与背景：用户反馈——头脑风暴和轻量变更触发创建变更后，agent 不向用户展示变更完整 key 与名称，用户都不知道创建的是啥变更名。CLI 输出里 key/标题虽有但分散且无「必须转述」指令，agent
+  拿到横幅直接干活。要求在两个入口的 CLI 输出中嵌入变更身份（key+名称）并明确指令要求 agent 原样转述给用户。
+
+
+  成功标准：
+
+  - flow start 新建路径横幅含变更身份行：完整 key 与名称 + 必须转述给用户的指令
+
+  - flow start 头脑风暴收编（adopt）路径含同款变更身份指令行
+
+  - run brainstorm 自动创建变更输出含完整 key + 名称 + 转述指令
+
+  - run <stage> 显式 --change 净新建（brainstorm 显式入口走此路径）输出含完整 key + 名称 + 转述指令
+autopilot: false
+prestage_ack: false
+baseline_commit: 3b5e139f284bb6cd3a377a96a7c23233e5a4bee6
+updatedAt: '2026-11-15T00:17:09.529Z'
+baseline_sha256: ab75654e977c4f3665cebc7aa57a7d6aad42ce1760b5b37d2d8e866d72040dfe
+spec_approved: true
+spec_approved_at: '2026-11-15T00:04:10.895Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（41.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261115001616\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+

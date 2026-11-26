@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  辅助阶段 scan/explore 豁免变更吸附路由
+
+  成功标准：
+  - 活跃变更在场时 run scan / run explore 不再被轻量跑道升厚同意门拦截（直接执行辅助阶段）
+  - quick/archive 保持原路由（有变更归属语义不豁免）
+  - multi-agent-platform 真机（活跃变更在场）run scan 可正常输出路径判定
+autopilot: false
+prestage_ack: true
+baseline_commit: d31a98d4081abca05e225b432e84d48fd6e07d53
+updatedAt: '2026-11-15T00:19:24.554Z'
+baseline_sha256: d9a37292672fa380e80f3279bbed50dcd6aa5a8509dadade8f0ada70acd96dd8
+spec_approved: true
+spec_approved_at: '2026-11-15T00:14:01.551Z'
+spec_approved_by: claude-flow-fixes
+spec_approved_channel: user-confirmed
+spec_attested_by: claude-flow-fixes
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js15)（12.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261115001920\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 2 个
+

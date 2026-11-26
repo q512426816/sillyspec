@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-15-auxiliary-scan-no-stick",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-15-auxiliary-scan-no-stick:flow:测试绑定FR-01",
+      "tests": [
+        "test/auxiliary-scan-no-stick.test.mjs「scan/explore 豁免吸附：effectiveChange 置空不进升厚门」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-auxiliary-scan-no-stick"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-15-auxiliary-scan-no-stick:flow:测试绑定FR-02",
+      "tests": [
+        "test/auxiliary-scan-no-stick.test.mjs「quick/archive 不豁免：路由行为零变化（源码断言豁免集不含二者）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-auxiliary-scan-no-stick"
+    }
+  ]
+}

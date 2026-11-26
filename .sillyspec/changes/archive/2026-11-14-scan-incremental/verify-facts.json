@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-11-14-scan-incremental",
+  "generatedAt": "2026-11-14T15:43:33.954Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "matches": 9,
+        "skippedFiles": 0,
+        "worktreeHits": 5,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-11-14-scan-incremental",
+      "metrics": {
+        "checkedFiles": 7,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "apiFace": {
+    "endpoints": [],
+    "declared": 0,
+    "writeEndpoints": []
+  },
+  "probe7ExistingTests": [
+    {
+      "tasks": [
+        "task-05",
+        "task-06"
+      ],
+      "count": 81,
+      "files": [
+        "test/agent-session-log.test.mjs",
+        "test/align-execute-review-gate.test.mjs",
+        "test/apply-stash-conflict-scan.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/brainstorm-exit-thin-default.test.mjs",
+        "test/brainstorm-solution-constraint-gate.test.mjs",
+        "test/change-exists-validation.test.mjs",
+        "test/change-ownership-guards.test.mjs",
+        "test/change-title-flow.test.mjs",
+        "test/cli-top-level-aliases.test.mjs",
+        "test/config-known-failures.test.mjs",
+        "test/continue-idempotent.test.mjs",
+        "test/decision-caliber-unify.test.mjs",
+        "test/default-no-dir-and-affinity.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/doctor-anchor-batch.test.mjs",
+        "test/doctor-local-yaml.test.mjs",
+        "test/done-heartbeat.test.mjs",
+        "test/execute-batch-endtoend-checkbox.test.mjs",
+        "test/execute-run-dir-fail-loud.test.mjs",
+        "test/execute-run-marker-drift.test.mjs",
+        "test/execution-mode-render.test.mjs",
+        "test/explore-graph-guidance.test.mjs",
+        "test/flow-agent-log-report.test.mjs",
+        "test/flow-order-canon.test.mjs",
+        "test/flow-parity.test.mjs",
+        "test/flow-protocol.test.mjs",
+        "test/flow-status-heartbeat.test.mjs",
+        "test/gate-stage-review-hint.test.mjs",
+        "test/handoff-takeover-hint.test.mjs",
+        "test/init-agents-injection.test.mjs",
+        "test/init-tool-multi.test.mjs",
+        "test/knowledge-hotpath-cache.test.mjs",
+        "test/knowledge-tier-denoise.test.mjs",
+        "test/motive-from-input.test.mjs",
+        "test/out-file-tail.test.mjs",
+        "test/output-repeat-delta.test.mjs",
+        "test/output-step-render.test.mjs",
+        "test/pitfall-anchor-paren.test.mjs",
+        "test/pitfall-autotick-anchor.test.mjs",
+        "test/pitfall-batch-review-backfill.test.mjs",
+        "test/pitfall-commit-suggest.test.mjs",
+        "test/pitfall-facts-apiface.test.mjs",
+        "test/pitfall-gate-collect.test.mjs",
+        "test/pitfall-probe7-noise.test.mjs",
+        "test/pitfall-reconcile-eol.test.mjs",
+        "test/pitfall-rejected-fields.test.mjs",
+        "test/pitfall-stage-review-dir.test.mjs",
+        "test/pitfall-sync-409.test.mjs",
+        "test/plan-review-focus.test.mjs",
+        "test/proto-provenance-hardline.test.mjs",
+        "test/proto-real-code.test.mjs",
+        "test/proto-reuse-register.test.mjs",
+        "test/redomain-unmapped-bulk.test.mjs",
+        "test/review-dispatch.test.mjs",
+        "test/review-json-field-gate.test.mjs",
+        "test/review-unsupervised-exit.test.mjs",
+        "test/run-complete-step-execute-batch.test.mjs",
+        "test/run-tests.mjs",
+        "test/runtime-relayout.test.mjs",
+        "test/short-change-title.test.mjs",
+        "test/sillyhub-mcp-platform-fixes.test.mjs",
+        "test/spawn-settle.test.mjs",
+        "test/spec-sync-fail-streak.test.mjs",
+        "test/stage-completion-atomicity.test.mjs",
+        "test/status-empty-guide.test.mjs",
+        "test/status-nosync.test.mjs",
+        "test/task-done.test.mjs",
+        "test/task-review-retire.test.mjs",
+        "test/task-truth-unify.test.mjs",
+        "test/timing-segments.test.mjs",
+        "test/title-range-gate.test.mjs",
+        "test/ui-prototype-form.test.mjs",
+        "test/wait-json-answers.test.mjs",
+        "test/worktree-cwd-guard.test.mjs",
+        "test/worktree-ensure-idempotent.test.mjs",
+        "test/worktree-gitignore-probe.test.mjs",
+        "test/worktree-guard.test.mjs",
+        "test/worktree-native-overlay.test.mjs"
+      ]
+    }
+  ],
+  "handover": {
+    "count": 0,
+    "items": []
+  },
+  "dbScriptDeclarations": [],
+  "matrixPartialRows": 0,
+  "runtimeEvidence": [
+    {
+      "claim": "空仓（无 codegraph 索引）跑 scan 自动降级全量零回归——输出降级一行留痕+profile/覆盖保护/步骤推进与现行一致",
+      "command": "node C:/Users/qinyi/IdeaProjects/sillyspec/.sillyspec/.runtime/worktrees/2026-11-14-scan-incremental/bin/sillyspec.js run scan（cwd=临时空仓，实测后已清理）",
+      "exitCode": 0,
+      "logPath": "verify-evidence.md 验收 2 段（实测输出摘录在案）"
+    },
+    {
+      "claim": "multi-agent-platform 真机增量计划正确——5 项目软门回退（缺省）+force 计划全貌（9 模块/3 篇章/对账 3294 文件 1 未归属）",
+      "command": "node --input-type=module -e \"import { computeIncrementalPlan } from 'file:///C:/.../worktrees/2026-11-14-scan-incremental/src/scan-incremental.js'; ...\"（逐项目计算，脚本在会话记录）",
+      "exitCode": 0,
+      "logPath": "verify-evidence.md 验收 1/3 段（耗时/归属/对账数字在案）"
+    }
+  ],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "consumerHints": {
+    "script": [
+      "test/scan-codegraph.test.mjs",
+      "test/scan-incremental.test.mjs",
+      "test/scan-incremental-wiring.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "factsConsistency": {
+    "checked": [
+      "probe3"
+    ],
+    "verdict": "mismatch",
+    "detail": [
+      {
+        "probe": "probe3",
+        "snapshot": 5,
+        "rerun": 6,
+        "severity": "warning",
+        "note": "facts 快照 hasTest 数与重跑不符（测试布局环境敏感，WARNING）"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[]+deps(js28)",
+    "exitCode": 0,
+    "strategy": "dynamic-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-11-14T15:47:25.500Z"
+  }
+}

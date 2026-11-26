@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "reviewedAgainst": "8f76681fb6d3515737e5b11a9c6da44838180d75",
+  "reviewer": "claude-scan-incremental-fix（主会话自审·轻量道）",
+  "reviewerNotes": "轻量变更收口自审：改动面 2 文件+文档补记（src/scan-incremental.js 对账剥前缀+双口径、test 2 新用例、file-lifecycle 补记）；测试七套 87/87 全绿；真机 multi-agent-platform 数字验证（backend 3296 误报→226/1560 真实盲区、根项目 1/3294 不变）；spec 三 FR 逐条达成（域过滤/单项目不变/零回归）。",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "frontend map 中缀 glob 形态与 inScope 前缀语义不兼容",
+      "evidence": "frontend map paths 用 **/*.tsx 中缀 glob，inScope 只处理前缀/精确匹配——该仓对账覆盖率恒 0（上游既有局限，修复前后行为一致）",
+      "location": "src/scan-incremental.js:inScope"
+    }
+  ],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-11-15T06:00:00.000Z"
+}

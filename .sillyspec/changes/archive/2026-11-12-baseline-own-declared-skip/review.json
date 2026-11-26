@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-baseline-own-declared-skip",
+  "reviewer": "inline-self（主会话代行自审）",
+  "verdict": "PASS",
+  "reviewedAgainst": "e4b93656e7446e58fd88c9379c1ed6600a399059",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "原拟「归档交付面只算提交面」会漏检未提交交付并破坏既有阻断语义",
+      "evidence": "change-ownership-guards ⑦a/⑦a2 实测变红 → 已撤销该改动，保留原口径；归档残留文件根因另行诊断",
+      "location": "src/worktree-apply.js"
+    }
+  ],
+  "dimensionNotes": { "乱序": "n/a", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-11-12T00:40:00+08:00"
+}

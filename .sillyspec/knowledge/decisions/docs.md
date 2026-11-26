@@ -165,3 +165,12 @@
 文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, docs/prompt/execute.md, docs/prompt/plan.md, docs/prompt/verify.md, src/run/shared.js, src/stages/brainstorm.js, src/stages/execute.js, src/stages/plan.js, src/stages/verify.js, templates/prompts/foreground-sync.md, templates/prompts/material-pack-baseline.md, templates/prompts/review-subagent-discipline.md, templates/prompts/review-unsupervised-exempt.md, test/prompt-golden.json, test/prompt-include-params.test.mjs
 最近确认：97c2b0a153618ea8a6f4e16a4ef4dadab9e00d9c
 理由：按批 3a survey（docs/sillyspec/prompt-primitives-survey.md）施工路径分两步：①扩展 `src/run/shared.js` 的 resolvePromptIncludes——正则支持 `{{include: name|key=value|key2=value2}}` 参数段，模板文件内 `{{param:key}}` 占位被实参替换（缺参保留原样+warn；无参写法向后兼容；模板缺失保留占位符 warn 的 fail-soft 哲学不变）；②按 survey 顺序抽取四条高优原语进 templates/prompts/——高 2（前台同步禁后台，零参数直抽 ×2 处）与高 5（评审豁免，零参数直抽 ×3 处独立块，execute.js dispatchExec 段的指针句保留不动）；高 4（审查子代理纪律包，budget/scope 参数）与高 9（材料包基准面，pack 参数）参数化抽取，阶段特有差异段（既往勿重验/gate 重试修复）按最小扰动保留 stage 原文。选此方案因为共性进模板单一源+侧重走参数是 survey D 节既定路径，且每批抽取后金档可机械验证。
+
+## D-docs-013@v1 2026-11-26-unavailable-wording-fix——只做三处文案订正，零逻辑改动： 1. `.sillyspec/local.yaml`：commands 段注释改为如实描述——`test: unavailabl
+状态：implemented
+变更：2026-11-26-unavailable-wording-fix
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-26-unavailable-wording-fix/design.md
+文件：docs/sillyspec/file-lifecycle.md, src/stages/archive.js
+最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
+理由：只做三处文案订正，零逻辑改动： 1. `.sillyspec/local.yaml`：commands 段注释改为如实描述——`test: unavailable` 仅取消显式命令，`extractTestCommand` 返回 null 后 `runFullCommand` 回退 `inferFullTestCommand` 结构推断照跑（引 `src/verify-postcheck.js:3056-3068`）；删除「unavailable→skip 逃逸」「关闭亲跑」表述。 2. `src/stages/archive.js:12`：首步注释同款订正（删除「D-008 关闭亲跑」）。 3. `docs/sillyspec/file-lifecycle.md:53`：archive 行「D-008 关闭亲跑留痕归 CI」改为如实语义。 选择「只改文字、不改配置取值」：用户明确选择「保持测试照跑 + 只订正文案」；改取值为空命令或 skip 都会改变实测行为，与选择相悖。

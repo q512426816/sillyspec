@@ -1,0 +1,4 @@
+{
+  "verdict": "pass",
+  "evidence": "交付提交 451533b9（src/scan-incremental.js 对账按注册 path 剥前缀+双口径兼容）；真机 multi-agent-platform backend uncovered 3296 误报→226/1560 真实盲区；单测「对账域过滤：多项目仓子项目按注册 path 剥前缀比对」"
+}

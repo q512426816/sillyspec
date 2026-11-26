@@ -1,0 +1,159 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index bd0e8432..dcf38f9f 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -63,6 +63,7 @@ modules:
+       - src/local-register.js
+       - src/commit-suggest.js
+       - src/flow.js
++      - src/change-identity.js
+       - src/flow-state.js
+       - src/flow-draft.js
+       - src/flow-review.js
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 53288638..88b7e30c 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -117,3 +117,4 @@
+ | 2026-11-11 | 2026-11-11-deps-hub-symbol-narrow | 枢纽模块回归面按触达导出符号收敛 |
+ | 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |
+ | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
++| 2026-11-15 | 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index b5906057..d782c51c 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -94,3 +94,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查
+ - 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall
+ - 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物
++- 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 5ce84a72..b9bbb073 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -15,7 +15,7 @@
+  * 任意 run 的 tasks 目录下对应任务子目录）。
+  */
+ import { join, dirname } from 'path';
+-import { existsSync, readdirSync } from 'fs';
++import { existsSync, readdirSync, readFileSync } from 'fs';
+ 
+ /** 判集行锚：`- [x] task-01: …`（id 行才是可验证主张；无 id 勾选行不入判——不可验证不拒收）。 */
+ const CHECKED_TASK_LINE_RE = /^[-*] \[( |x|X)\] (task-\d+)/;
+@@ -46,13 +46,20 @@ export function expandTaskShorthand(messages) {
+ /**
+  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
+  */
++/**
++ * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
++ * 路径修正（2026-11-15-sentinel-evidence-channel FR-01）：变更目录在 specBase/changes/<name>，
++ * execute-runs 实际在 specBase/.runtime/execute-runs——原实现 dirname(changeDir) 错位一级
++ * （changes/.runtime/，目录不存在恒扫空），通道自 2026-10-07-thin-tasks-v3 引入以来从未生效。
++ * 修正为上两级（specBase）。
++ */
+ function listReviewEvidence(changeDir, opts) {
+   if (typeof opts.listReviewsImpl === 'function') {
+     try { return opts.listReviewsImpl(changeDir) || []; } catch { return []; }
+   }
+   if (!changeDir) return [];
+   try {
+-    const runsRoot = join(dirname(changeDir), '.runtime', 'execute-runs');
++    const runsRoot = join(dirname(dirname(changeDir)), '.runtime', 'execute-runs');
+     const out = [];
+     for (const run of readdirSync(runsRoot)) {
+       let names = [];
+@@ -69,6 +76,21 @@ function listReviewEvidence(changeDir, opts) {
+   }
+ }
+ 
++/**
++ * 变更目录 review.json 文本证据（第三通道，2026-11-15-sentinel-evidence-channel FR-02）：
++ * 轻量道收口评审产物（flow done review 子步 schema 校验在场性）文本含词边界 task-NN 即认。
++ * 动机：轻量变更无 execute-runs，且 .sillyspec-gitignored 仓的勾选留档不可入库——
++ * commit token 单通道结构性卡死（忘带即被迫制造仪式性提交）。读失败/缺失 → null（通道缺席）。
++ */
++function readChangeReviewText(changeDir) {
++  if (!changeDir) return null;
++  try {
++    return readFileSync(join(changeDir, 'review.json'), 'utf8');
++  } catch {
++    return null;
++  }
++}
++
+ /**
+  * 假勾选三态判定（L0 收口拒收支点）。
+  *
+@@ -102,6 +124,8 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts =
+     return { status: 'none', claimTotal, checked, missing: [] };
+   }
+   const reviews = listReviewEvidence(changeDir, opts);
++  // 第三通道（2026-11-15-sentinel-evidence-channel FR-02）：变更目录 review.json 文本证据
++  const changeReviewText = readChangeReviewText(changeDir);
+   // 连写组先展开（坑 flow-done-sentinel-token-split）：task-01/02/03 → 独立 token 再字面判
+   const expanded = expandTaskShorthand(messages);
+   const missing = entries
+@@ -109,7 +133,8 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts =
+       if (!e.checked) return false;
+       const re = taskTokenRe(e.id);
+       const byCommit = expanded.some((msg) => re.test(msg));
+-      const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`));
++      const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`))
++        || (changeReviewText !== null && re.test(changeReviewText));
+       return !(byCommit || byReview);
+     })
+     .map((e) => e.id);
+diff --git a/test/sentinel-unified-evidence.test.mjs b/test/sentinel-unified-evidence.test.mjs
+index bfe96985..c2fe5a71 100644
+--- a/test/sentinel-unified-evidence.test.mjs
++++ b/test/sentinel-unified-evidence.test.mjs
+@@ -13,7 +13,7 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import {  mkdtempSync, mkdirSync } from 'node:fs'
++import {  mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import { detectFakeCheckCompletion } from '../src/sentinel-assertions.js'
+@@ -127,3 +127,39 @@ test('⑥ 零提交全勾 → fake（空转变更不许过门）', () => {
+   assert.equal(r.status, 'fake')
+   assert.deepEqual(r.missing.sort(), ['task-01', 'task-02', 'task-03'])
+ })
++
++// ── FR-01/FR-02（2026-11-15-sentinel-evidence-channel）：execute 路径复活+第三通道 ──
++
++test('FR-01 execute-runs 真实路径证据复活（specBase 层级，原错位一级恒扫空）', () => {
++  const specBase = mkdtempSync(join(tmpdir(), 'sentinel-path-'))
++  const changeDir = join(specBase, 'changes', 'x')
++  // 真实产物层级：specBase/.runtime/execute-runs/<run>/<tasks 段>/<task 段>/review.json
++  const evDir = join(specBase, '.runtime', 'execute-runs', 'run-1')
++  mkdirSync(join(evDir, 'tasks', 'task-01'), { recursive: true })
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(evDir, 'tasks', 'task-01', 'review.json'), '{}')
++  const r = detectFakeCheckCompletion({
++    changeDir, tasksMd: allChecked, commits: [], // 零 commit——只能靠 review 通道
++  })
++  assert.equal(r.status, 'fake')
++  assert.deepEqual(r.missing, ['task-02', 'task-03'], 'task-01 被 execute-runs 证据豁免（路径修复生效——原实现 dirname 错位恒扫空）')
++})
++
++test('FR-02 变更目录 review.json 第三通道：文本含 task id 即认+词边界不放大', () => {
++  const changeDir = mkdtempSync(join(tmpdir(), 'sentinel-chrev-'))
++  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
++    checklist: [
++      { item: 'task-01 域过滤修复', result: 'pass' },
++      { item: 'task-02 单项目不变', result: 'pass' },
++      { item: 'task-03 回归全绿', result: 'pass' },
++    ],
++  }))
++  const ok = detectFakeCheckCompletion({ changeDir, tasksMd: allChecked, commits: [] })
++  assert.equal(ok.status, 'complete', '三任务全被变更目录 review.json 文本证据覆盖')
++
++  const dir2 = mkdtempSync(join(tmpdir(), 'sentinel-chrev2-'))
++  writeFileSync(join(dir2, 'review.json'), '{"note": "参见 task-011 的历史"}')
++  const bad = detectFakeCheckCompletion({ changeDir: dir2, tasksMd: allChecked, commits: [] })
++  assert.equal(bad.status, 'fake')
++  assert.ok(bad.missing.includes('task-01'), 'task-011 不证 task-01（词边界）')
++})

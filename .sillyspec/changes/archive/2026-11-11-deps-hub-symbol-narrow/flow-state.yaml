@@ -1,0 +1,53 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  枢纽模块回归面按触达导出符号收敛
+
+
+  动机：import 依赖回归面现行按模块路径子串匹配（discoverModuleDependentTests，verify-postcheck.js:1180），枢纽模块（依赖方众多的 mcp_tools
+  类模块）任一改动把全部引用该路径的测试拖入回归面，实测慢且噪音大。按「最近提交触达的导出符号」收敛：只把引用触达符号的依赖测试入面。
+
+
+  依据：.sillyspec/changes/archive/2026-09-26-dynamic-test-inference/design.md（动态测试面契约）；src/verify-postcheck.js:1180
+  现行实现（子串匹配「只可能多跑不漏」口径）。
+
+
+  成功标准：
+
+  - 变更枢纽模块某导出符号时，仅引用模块其他未触达导出的依赖测试不再入 import 依赖回归面
+
+  - 引用触达符号的依赖测试（命名 import/解构）照常入面
+
+  - 无法判定引用形态（star import/动态 import/别名/解析失败）时 fail-open 回落模块路径匹配（多跑侧不漏）
+
+  - 无符号信息（不可提取/未传 diff）时行为与现状逐字一致，既有测试面推断零回归
+
+  - 新增符号提取与收敛判定的纯函数测试跑绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 631ee0ed075f0c92eab7e454077cb029151b3ca0
+updatedAt: '2026-11-11T05:43:21.390Z'
+baseline_sha256: a03c2fcf19b4ae5bf2deb2a5b6f831d1be43bc7cdea26db3fa16191d42515298
+spec_approved: true
+spec_approved_at: '2026-11-11T05:08:15.338Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（16.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261111052426\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+

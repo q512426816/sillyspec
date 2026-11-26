@@ -1,0 +1,4 @@
+{
+  "verdict": "pass",
+  "evidence": "七套 scan 测试 87/87 全绿（四既有+三新增套零改动零失败）；scan-incremental 14 用例含新增 2 例"
+}

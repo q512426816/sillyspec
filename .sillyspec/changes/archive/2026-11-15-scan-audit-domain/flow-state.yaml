@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  修复增量 scan 对账的多项目跨域污染
+
+  成功标准：
+  - 子项目对账只统计本项目责任域内的未归属文件（backend 项目不再把 frontend 等其他项目文件算进 uncovered）
+  - 单项目仓对账行为不变（multi-agent-platform 根项目仍报 1 未归属）
+  - 既有 scan-incremental 单测零回归+新增域过滤用例
+autopilot: false
+prestage_ack: true
+baseline_commit: 3b5e139f284bb6cd3a377a96a7c23233e5a4bee6
+updatedAt: '2026-11-14T23:42:25.903Z'
+baseline_sha256: 8c23277997cb7dc7cafdea31eea6a4cbbf2b10fd4ca0988b73fe11a6f810195a
+spec_approved: true
+spec_approved_at: '2026-11-14T16:29:52.544Z'
+spec_approved_by: claude-scan-incremental-fix
+spec_approved_channel: user-confirmed
+spec_attested_by: claude-scan-incremental-fix
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（0.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261114234113\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 3 个
+

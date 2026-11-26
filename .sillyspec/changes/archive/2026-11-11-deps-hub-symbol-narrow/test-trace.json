@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-11-deps-hub-symbol-narrow",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-01",
+      "tests": [
+        "test/deps-symbol-narrow.test.mjs「枢纽收敛主路径：未触达符号依赖出面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-deps-hub-symbol-narrow"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-02",
+      "tests": [
+        "test/deps-symbol-narrow.test.mjs「触达符号命名导入/require 解构保持入面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-deps-hub-symbol-narrow"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-03",
+      "tests": [
+        "test/deps-symbol-narrow.test.mjs「fail-open：default/动态/无 import 语句三态保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-deps-hub-symbol-narrow"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-04",
+      "tests": [
+        "test/deps-cwd-prefix.test.mjs",
+        "test/deps-symbol-narrow.test.mjs「无符号参数与现状逐字一致」",
+        "test/dynamic-deps-comment-edge.test.mjs",
+        "test/dynamic-test-inference.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-deps-hub-symbol-narrow"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-11-deps-hub-symbol-narrow:flow:测试绑定FR-05",
+      "tests": [
+        "test/deps-symbol-narrow.test.mjs「extractTouchedExports span×hunk」",
+        "test/deps-symbol-narrow.test.mjs「namedImportEvidence 三态与别名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-deps-hub-symbol-narrow"
+    }
+  ]
+}

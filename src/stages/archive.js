@@ -9,7 +9,10 @@ export const definition = {
       // 「CLI 亲跑 commands.test」这一机器门前移到归档首步——runner/动态子集三源推断/指纹
       // 缓存沿用原 verify-quality-scan（更名 archive-quality-scan）。失败 throw 不盖
       // completed = 归档被阻断（fail-closed），可重入断点续。
-      // 本仓落点：local.yaml 将 commands.test 标 unavailable（D-008 关闭亲跑，留痕归 CI）。
+      // 本仓落点（语义订正 2026-11-26-unavailable-wording-fix）：local.yaml 的
+      // `test: unavailable` 只表示不显式指定命令——执行层仍回退项目结构推断照跑
+      // （verify-postcheck.js 的 extractTestCommand → runFullCommand/inferFullTestCommand），
+      // 收口门实测照常阻断归档。真跳过只有 test_strategy: skip（全局、带审计痕）。
       noAI: true,
       _cliAction: 'archiveCloseGate',
       prompt: '',

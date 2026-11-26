@@ -1,0 +1,93 @@
+{
+  "change": "2026-11-15-sentinel-evidence-channel",
+  "baseline": "d31a98d4081abca05e225b432e84d48fd6e07d53",
+  "head": "1058bb4d523b67fdd558ff52fbf33a7ba9c9c7d4",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    "src/sentinel-assertions.js",
+    "test/sentinel-unified-evidence.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 68,
+    "deletions": 4
+  },
+  "savedAt": "2026-11-15T00:17:28.174Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d31a98d4081abca05e225b432e84d48fd6e07d53",
+    "totals": {
+      "files": 5,
+      "additions": 68,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/sentinel-assertions.js",
+        "additions": 28,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "test/sentinel-unified-evidence.test.mjs",
+        "additions": 37,
+        "deletions": 1,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7938a307a97d7138d46ce81568d9f7a51196fd5aa491327322a366b8ebd7d962",
+  "patchStatus": "ok"
+}

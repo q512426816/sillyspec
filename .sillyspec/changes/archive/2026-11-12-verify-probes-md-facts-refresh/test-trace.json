@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-verify-probes-md-facts-refresh",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-01",
+      "tests": [
+        "test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-verify-probes-md-facts-refresh"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-verify-probes-md-facts-refresh"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-12-verify-probes-md-facts-refresh:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-facts-v2.test.mjs「writeVerifyFacts md 派生段刷新：verify-result.md 在场时重解析 handover 等三段，缺场时不产段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-verify-probes-md-facts-refresh"
+    }
+  ]
+}

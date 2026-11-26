@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  修复哨兵 review 证据通道死代码并增轻量道第三通道
+
+  成功标准：
+  - listReviewEvidence 扫描路径修正（现扫 changes/.runtime 错位一级，真实 execute-runs 在 specBase/.runtime——通道从未生效）
+  - 增认变更目录 review.json 文本含 task id 作为第三证据通道（轻量道收口产物即证据）
+  - 既有 sentinel 测试 11 用例零回归+新增用例覆盖两通道
+autopilot: false
+prestage_ack: true
+baseline_commit: d31a98d4081abca05e225b432e84d48fd6e07d53
+updatedAt: '2026-11-15T00:17:29.708Z'
+baseline_sha256: 83093388411f087e2ebc7016a9337e5e2ce5b3191ce3a346d04ffaacc27dc552
+spec_approved: true
+spec_approved_at: '2026-11-15T00:14:00.956Z'
+spec_approved_by: claude-flow-fixes
+spec_approved_channel: user-confirmed
+spec_attested_by: claude-flow-fixes
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js6)（16.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261115001726\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 3 个
+

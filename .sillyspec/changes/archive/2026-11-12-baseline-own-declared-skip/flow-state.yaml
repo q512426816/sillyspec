@@ -1,0 +1,46 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  baseline 不收编本变更声明文件、归档只算提交面
+
+  动机：两个实证口径缺陷——①本变更前置生成的未提交交付文件（原型三件套）被 baseline checkpoint 收编，target_files 对账看不见、verify 误判「声明未做」；②baseline
+  带入的并行会话未提交脏文件（11 个模块 changelog）被归档前置检查算成本变更未 apply 交付面，只能 --skip-apply 绕过。
+
+  成功标准：
+
+  - _overlayBaseline 返回 ownDeclaredFiles（本变更声明集 ∩ overlay 文件），文件仍复制进 worktree
+
+  - _createBaselineCheckpoint 以 pathspec 排除 ownDeclaredFiles，checkpoint 后这些文件保持未提交态
+
+  - 归档前置检查（applyWorktree checkOnly）新增 deliverableFaceCommittedOnly：只算 baselineCommit..HEAD + untracked
+
+  - 未声明命中时行为与现状完全一致；apply 主流程不受影响
+autopilot: false
+prestage_ack: false
+baseline_commit: d694bb621497bf973cec65ed2ab16a8e12ee38af
+updatedAt: '2026-11-12T00:22:14.870Z'
+baseline_sha256: 2169dbd631146afba04717e21a8afddd85b0e08b14c35b8e74713498c82b9bd7
+spec_approved: true
+spec_approved_at: '2026-11-12T00:17:00.913Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（47.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261112002211\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 7 个
+

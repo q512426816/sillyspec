@@ -1,0 +1,73 @@
+{
+  "change": "2026-11-12-baseline-own-declared-skip",
+  "baseline": "d694bb621497bf973cec65ed2ab16a8e12ee38af",
+  "head": "e4b93656e7446e58fd88c9379c1ed6600a399059",
+  "files": [
+    "src/worktree.js",
+    "test/baseline-own-declared-skip.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 144,
+    "deletions": 11
+  },
+  "savedAt": "2026-11-12T00:22:13.511Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 5,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d694bb621497bf973cec65ed2ab16a8e12ee38af",
+    "totals": {
+      "files": 2,
+      "additions": 144,
+      "deletions": 11
+    },
+    "rows": [
+      {
+        "path": "src/worktree.js",
+        "additions": 48,
+        "deletions": 11,
+        "kind": "modified"
+      },
+      {
+        "path": "test/baseline-own-declared-skip.test.mjs",
+        "additions": 96,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6722ee17cc26fa0d5e7abd705701938c73d70042ba87d1c28d247b8df0e92377",
+  "patchStatus": "ok"
+}

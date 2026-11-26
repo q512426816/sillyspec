@@ -1,0 +1,46 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  verify-probes 落盘时刷新 md 派生段
+
+  动机：gate verify 对 facts.handover 等 md 派生字段的拦截提示写「重跑 verify-probes 幂等刷新 facts 即可消解」，但实际该命令只保留旧段不产出新段（产出唯一入口是 gates
+  verify 收尾的 backfill）——提示与行为不符，2026-11-11-workspace-ia-redesign 实证重跑无效只能靠 --done 回填。
+
+  成功标准：
+
+  - writeVerifyFacts 落盘前，若变更目录 verify-result.md 存在，则从 md 重解析并刷新 handover / dbScriptDeclarations / matrixPartialRows
+  三段（md 为真相源）
+
+  - verify-result.md 不存在时行为与现状完全一致（不产新段）
+
+  - conclusion 段维持现状（解析器在 stage-contract，分层单向不引入反向 import）
+
+  - 新增测试覆盖：md 含移交项表格时重跑命令后 facts.handover 反映 md 内容
+autopilot: false
+prestage_ack: false
+baseline_commit: bb0ce1cc03067f215928185608b71b6f12108eb2
+updatedAt: '2026-11-11T23:50:19.309Z'
+baseline_sha256: 0499d11979143d4b92806fe4cc6a2dfb6bb80f823ff78e53189ce50e9bee3207
+spec_approved: true
+spec_approved_at: '2026-11-11T23:49:02.730Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（11.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261111235011\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 7 个
+

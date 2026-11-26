@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-verify-probes-md-facts-refresh",
+  "reviewer": "inline-self（主会话代行自审，单函数落盘点小改动）",
+  "verdict": "PASS",
+  "reviewedAgainst": "53bcb058b7cb3d575eaba9b1b43db1da376f0124",
+  "findings": [],
+  "dimensionNotes": { "乱序": "n/a", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-11-12T00:05:00+08:00"
+}

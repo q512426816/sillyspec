@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-11-deps-hub-symbol-narrow",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5bfa52450e168cf326f7037243bfab23133dfd96",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "namedImportEvidence 对「纯命名导入 + 变量间接动态 import 并存」判 miss（动态 import 仅识别字面量形态）",
+      "evidence": "动态 import 扫描正则 /import\\s*\\(\\s*['\"]/ 只匹配字面量字符串；若测试文件既有纯命名导入（不含触达符号）又经变量间接动态加载同一模块（import(p)），前者使 sawNamed=true、后者不被识别为 unnamable → 返回 'miss' 被收敛出面。该形态按 FR-03 文义（无法判定的引用形态须 fail-open）属未判定形态被当作可判定，构成罕见漏测窗口；静态分析固有极限，且与已裁决接受的「间接可见行为变化」取舍同向，故 P3 不阻断。",
+      "location": "src/deps-symbol-narrow.js:198"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——design「不适用」作答属实：全链纯同步静态计算（readFileSync/execFileSync），无事件流无时序假设；diff 按调用时点工作区/HEAD 现态取（collectTouchedExportSymbols 每次重算 anchor..HEAD ∪ HEAD..工作区）",
+    "并发": "ok——design 只读声明与代码一致：collect/discover/两调用点均只读不写盘；并行会话未提交改动进 diff → 符号集偏大 → 收敛变弱=多跑侧，安全方向（deps-symbol-narrow.js:244-271）",
+    "切换": "ok——无模块级可变持久状态，每轮收口/开工全量重算，中断重入幂等；anchor 缺失 → 仅脏面 → 无脏面则符号空集不进 symMap → discover 侧整体回落模块级（deps-symbol-narrow.js:260-267），无跨轮残留",
+    "作用域": "ok——git 固定调用方 cwd（defaultGit {cwd}，index.js:1078 传 dir、verify-postcheck 两调用点传 cwd）；flow-state.yaml specBase 优先 + cwd/.sillyspec 兜底双候选（deps-symbol-narrow.js:223-234）；路径 posix 归一（\\\\→/）与 discover 侧 norm 同形，键面一致不串台；anchor 偏旧只放大符号集=多跑侧。边界已裁决：可接受（详见 boundaryAdjudications）"
+  },
+  "checklist": {
+    "1_FR实现测试三方一致": "pass——FR-01 两阶段判定（verify-postcheck.js:1198-1237：symMap 非空时 hitSrcs 命中计数，>8 枢纽文件经 namedImportEvidence!=='miss' 裁决）；FR-02 hit 保留（:1226）；FR-03 unknown fail-open + 符号空集不进 symMap 整体回落（deps-symbol-narrow.js:264-267 + verify-postcheck.js:1203 只收非空数组）；FR-04 null 参数完全跳过 symMap 块（逐字现状路径），{} 空映射经 empty map 每文件回落模块级，deepEqual 断言（test 无符号参数用例）；FR-05 两纯函数具名导出独立可测。绑定测试 11 个用例真存在且断言对应行为，合并复跑 34/34 全绿。绑定条目「path「用例名」」中用例名为锚展示面（test-bindings.js testAnchorFile 只摘不译，门禁按文件面消费），用例名与实际 test 标题的差异不构成违诺",
+    "2_盲维四问真实性": "pass——四问作答与 diff 实态一致（详见 dimensionNotes）；「乱序不适用」经代码核实（无任何事件/异步时序面）；并发只读声明核实（无 writeFileSync/无 git 写）；作用域双候选 anchor 读取与 resolveMainChangedFiles 同口径声明核实",
+    "3_披露边界显式裁决": "见 boundaryAdjudications——4 条声明边界/取舍逐条裁决，全部可接受，无默认放行",
+    "4_防护声明真实性": "pass——三调用点 fail-soft try/catch 逐一核实（index.js task start 接线、verify-postcheck.js runVerifyTestCheck closeout、runModuleSubset deps 面）；collect 顶层 catch→null、safeDiff catch→''、readBaselineCommit 逐候选 catch；untracked 全符号合成（等价模块级不收窄，有测试）；git timeout 30s 帽；isTestFilePath 过滤防测试文件进符号源。全部真实存在且经测试验证（collectTouchedExportSymbols 失败面 fail-soft 用例绿）",
+    "5_生成物同步": "n/a——无类型/契约生成物；对外命令面/配置面/输出格式「无变化」声明与 diff 一致（无新 CLI 文案、无新配置键、deps 计数自然变小不改格式）",
+    "6_测试有效性与根因性": "pass——空实现判据：extractTouchedExports 恒[]→collect 返回 null→回落模块级→FR-01/02/03 测试红；namedImportEvidence 恒 unknown→FR-01 红、恒 miss→FR-03 红；两阶段判定删除→FR-01 红。测试断言可观察返回值非 mock 摆设，有效。根因判据：本变更为功能增强非缺陷修复；fail-soft catch 是声明的回落设计（回落=现状多跑侧语义），非吞崩溃伪装成功"
+  },
+  "probes": {
+    "cli-copy-selfsufficient_文案真实性": "pass——本变更未新增/修改任何 CLI 用户文案（index.js 两行 console.log 为上下文行未动，新增仅注释与逻辑）；无报错/指引/门禁提示新增，不依赖二跑定位的检查对象不存在；打印的 node --test 清单与判定同源",
+    "cli-copy-selfsufficient_文案门一致": "pass——「受影响测试族（deps(auto) 同源 N 个）」打印清单即 discoverModuleDependentTests 同一调用返回值（index.js 接线处计算与打印同一变量），描述的放行条件与代码实际判定一致，无文案漂移",
+    "config-absent-zero-regression": "pass（n/a 触发+测试锚兑现）——无新增 local.yaml 消费键（阈值 DEPS_SYMBOL_NARROW_HUB_MIN 为代码常量，design 显式声明无配置键）；零回归主张有测试锚非口头：「无符号参数 → 行为与现状一致」（含 {} 空映射 deepEqual）+「非枢纽 → 不收敛」+ dynamic-test-inference / dynamic-deps-comment-edge / deps-cwd-prefix 三既有套件零改动全绿（本评审复跑 34/34 实证）",
+    "crossrepo-path-compat": "pass——触及 deps 面但未触及所列 worktree*.js/cross-repo*.js/local-register.js；按 deps 触发口径核对：collect/discover 双侧 norm（\\\\→/）同形，git 参数用 posix 相对路径（Windows git 兼容），readFileSync 用平台原生 join；execFileSync('git') 无 shell 依赖（本 Windows 机器 collect git 真实仓测试 239ms 绿实证）；git 缺失/失败 → safeDiff catch → '' → 回落模块级，不假设工具链必在 PATH"
+  },
+  "boundaryAdjudications": [
+    {
+      "boundary": "收敛漏测——「命名导入全不触达」测试出面后，被触达符号的行为变化经模块内其他导出间接可见时该测试不再兜底（design 风险与死路显式声明为设计取舍/用户决策）",
+      "verdict": "可接受",
+      "reason": "只放开这一个可判定形态、仅枢纽（>8 命中）激活、其余形态全 fail-open、Python/异常零收敛；回退单点（调常量或不传参数即恢复全收敛）；全量套件仍在 pre-push/CI 门兜底"
+    },
+    {
+      "boundary": "枢纽阈值常量化（DEPS_SYMBOL_NARROW_HUB_MIN=8 代码内常量、无配置键）",
+      "verdict": "可接受",
+      "reason": "零配置默认可用纪律；有测试锚（非枢纽不收敛用例）；回退路径明确"
+    },
+    {
+      "boundary": "fail-soft 静默回落（三调用点收集失败静默回现状，无日志留痕——design 接口契约显式声明）",
+      "verdict": "可接受",
+      "reason": "回落方向=现状多跑侧安全语义；已声明的显式设计；代价仅为收敛失效时不可观测（功能静默退化为现状），非正确性风险——留作观察项"
+    },
+    {
+      "boundary": "放弃方案①②③（符号集参数注入而非函数内跑 git / flow-state baseline 直锚而非 merge-base / 仅枢纽激活而非全模块通用收敛）",
+      "verdict": "可接受",
+      "reason": "属设计决策记录非交付边界：①纯函数可测已实证（FR-05 用例）；②anchor 偏旧只放大符号集=多跑侧方向安全，merge-base 收窄留后续为优化非正确性；③FR-04 既有面零回归经复跑实证"
+    }
+  ],
+  "rerunEvidence": {
+    "command": "node --test test/deps-symbol-narrow.test.mjs test/dynamic-test-inference.test.mjs test/dynamic-deps-comment-edge.test.mjs test/deps-cwd-prefix.test.mjs",
+    "exit": 0,
+    "summary": "tests 34 / pass 34 / fail 0（11 新用例 + 23 既有受影响用例），与 ledger 回执（passed exit=0 17s, 面 module[]+deps(js30)）同向",
+    "log": ".sillyspec/.runtime/logs/review-rerun-deps-symbol-narrow.log"
+  },
+  "reviewedAt": "2026-11-11T05:41:50Z"
+}

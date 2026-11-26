@@ -1,0 +1,227 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 9d0793c9..0663774f 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -43,3 +43,4 @@
+ | 2026-11-12 | 2026-11-12-knowledge-recall-gap-observe | 知识召回缺口记录：历史裁决不被意图查询命中 |
+ | 2026-11-13 | 2026-11-13-brainstorm-solution-constraint-gate | 头脑风暴方案须逐条满足约束，禁止凑数 |
+ | 2026-11-14 | 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物 |
++| 2026-11-14 | 2026-11-15-scan-audit-domain | 修复增量 scan 对账的多项目跨域污染 |
+diff --git a/src/change-identity.js b/src/change-identity.js
+new file mode 100644
+index 00000000..130cdfb2
+--- /dev/null
++++ b/src/change-identity.js
+@@ -0,0 +1,21 @@
++/**
++ * change-identity.js — 变更身份行单一来源（2026-11-15-change-key-visibility）。
++ *
++ * 用户痛点：头脑风暴/轻量变更创建变更后 agent 直接干活，用户不知道创建的变更
++ * key 与名称——CLI 输出里 key/标题虽在场但零「必须转述」指令。本函数把
++ * 「完整 key + 名称 + 必须原样转述指令」渲染为一行可照抄文案，在四个创建/收编
++ * 时点接线输出（flow.js 新建横幅与 adopt 收编、run/command.js 净新建与
++ * brainstorm 零活跃自动创建）。选 console 输出层而非阶段 prompt：agent 对两者
++ * 同样可见，console 层零提示词文档同步负担（docs/prompt/_extract.mjs 链）。
++ */
++
++/**
++ * 渲染变更身份指令行。
++ * @param {string} change 变更完整 key（如 2026-11-15-change-key-visibility）
++ * @param {string} [title] 变更名称（标题）；缺省兜底 change（防御——调用点应传已解析标题，
++ *   brainstorm 无 --input 时标题本就兜底为 key 同值，语义一致）
++ * @returns {string} 单行指令文案（console.log 直接输出）
++ */
++export function renderChangeIdentityLine(change, title) {
++  return `📣 变更身份（必须原样转述给用户——用户需知道本次创建的变更名）：key：${change}｜名称：${title || change}`
++}
+diff --git a/src/flow.js b/src/flow.js
+index c9370795..6e4322ed 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -36,6 +36,8 @@ import { scopeTelemetryRefs } from './knowledge-graph.js'
+ // 防「改一处漏一处」的口径漂移。
+ import { isRecallRelevant, isRecallRelevantScored } from './knowledge-match.js'
+ import { writeAtomicSync } from './fs-atomic.js'
++// 变更身份行单一来源（2026-11-15-change-key-visibility）：新建横幅与 adopt 收编两处接线
++import { renderChangeIdentityLine } from './change-identity.js'
+ import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+ import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
+@@ -789,6 +791,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
+           if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
+           console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
++          // 变更身份行（2026-11-15-change-key-visibility）：收编时点同款转述指令——推导失败随 try 块
++          // 静默跳过（best-effort，横幅 🧲 行仍含 key）
++          console.log(renderChangeIdentityLine(change, adoptTitle))
+           if (!isValidChangeTitle(adoptTitle)) console.log(shortTitleRangeWarnLine(adoptTitle))
+         } catch { /* adopt 标题 best-effort */ }
+         const materials = materialPaths(specBase, change, changeDir)
+@@ -1189,6 +1194,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   } catch { /* 域预判 best-effort：图/路径读取失败零输出 */ }
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
++    // 变更身份行（2026-11-15-change-key-visibility）：key+名称嵌行内 + 必须转述指令——
++    // 用户痛点：创建变更后 agent 直接干活，用户不知道创建的变更名
++    renderChangeIdentityLine(change, changeTitle),
+     `══════════════════════════════════════`,
+     // 极速指引行（2026-10-14-thin-turbo-mode FR-01；2026-10-14-turbo-guide-tier-copy 评审 P3
+     // 清偿）：承诺文案随档位收窄——thick 起步时 done 读态 turbo 不生效（D-007），文案如实告知
+diff --git a/src/run/command.js b/src/run/command.js
+index 17b98162..50c0b3ee 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -31,6 +31,8 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
+ import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+ import { runStage } from './stage.js'
+ import { sanitizeDesc, deriveShortChangeTitle } from '../quicklog.js'
++// 变更身份行单一来源（2026-11-15-change-key-visibility）：净新建与 brainstorm 自动创建两处接线
++import { renderChangeIdentityLine } from '../change-identity.js'
+ import { ProgressManager, resolveSessionIdentity } from '../progress.js'
+ import { validateChangeExists, checkTransition } from '../stage-contract.js'
+ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
+@@ -1322,7 +1324,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       // 优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
+       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
+       // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
+-      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
++      const _netFreshTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange
++      progress = pm.initChange(cwd, autoChange, { title: _netFreshTitle })
++      // 变更身份行（2026-11-15-change-key-visibility）：净新建注册成功即输出 key+名称+必须转述
++      // 指令——brainstorm 显式 --change 入口走此路径；title 为创建时点临时值（后续由真实标题刷新）
++      console.log(renderChangeIdentityLine(autoChange, _netFreshTitle))
+     } else if (isAuxiliary) {
+       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
+       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
+@@ -1371,7 +1377,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
+         const date = new Date().toISOString().slice(0, 10)
+         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+-        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        const _autoTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName
++        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: _autoTitle })
+         if (!claim.created) {
+           const activeChanges = claim.activeChanges || []
+           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
+@@ -1381,6 +1388,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+           process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
+         }
+         console.log(`🔄 自动创建变更：${autoName}`)
++        // 变更身份行（2026-11-15-change-key-visibility）：自动创建后 key+名称+必须转述指令；
++        // 无 --input 时 title 兜底=autoName（名称与 key 同值，如实展示）
++        console.log(renderChangeIdentityLine(autoName, _autoTitle))
+         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
+         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
+         progress = claim.progress
+diff --git a/test/change-identity-line.test.mjs b/test/change-identity-line.test.mjs
+new file mode 100644
+index 00000000..dcdf0f3b
+--- /dev/null
++++ b/test/change-identity-line.test.mjs
+@@ -0,0 +1,106 @@
++/**
++ * 2026-11-15-change-key-visibility 回归：变更创建时点四入口输出变更身份行
++ * （完整 key + 名称 + 必须转述给用户的指令）——agent 读到即可照抄展示，
++ * 用户不再「不知道创建的啥变更名」。
++ *
++ * 四入口：① flow start 新建横幅；② flow start adopt 收编；③ run brainstorm
++ * 零活跃自动创建；④ run <stage> --change 净新建（brainstorm 显式入口）。
++ * 单一来源：src/change-identity.js renderChangeIdentityLine。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++/** 身份行形态：key 与名称分组捕获（名称推导链归各自变更所有，此处只断言在场与非空）。 */
++const IDENTITY_RE = /📣 变更身份（必须原样转述给用户——用户需知道本次创建的变更名）：key：(.+?)｜名称：(.+)/
++
++/** 造临时 git 仓 + local.yaml（thin 轻量跑道，run brainstorm 与 flow 通用）。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'cil-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e 0"\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd }
++}
++
++const cli = (cwd, args) => spawnSync(process.execPath, [CLI, ...args], {
++  cwd, encoding: 'utf8', timeout: 180_000,
++  env: { ...process.env, SILLYSPEC_WATCHER: '0', SILLYSPEC_SESSION_ID: 'cil-test' },
++})
++
++test('单源纯函数：行形态与 title 兜底', async () => {
++  const { renderChangeIdentityLine } = await import(pathToFileURL(join(ROOT, 'src', 'change-identity.js')).href)
++  const line = renderChangeIdentityLine('2026-11-15-ci-unit', '变更创建时向用户展示完整身份')
++  assert.equal(line, '📣 变更身份（必须原样转述给用户——用户需知道本次创建的变更名）：key：2026-11-15-ci-unit｜名称：变更创建时向用户展示完整身份', '行形态逐字')
++  assert.equal(renderChangeIdentityLine('2026-11-15-ci-unit'), '📣 变更身份（必须原样转述给用户——用户需知道本次创建的变更名）：key：2026-11-15-ci-unit｜名称：2026-11-15-ci-unit', 'title 缺省兜底 change')
++})
++
++test('FR-01 flow start 新建横幅含变更身份行（key+名称+转述指令）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-ci-fresh'
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '首行概括合规达标用例\n成功标准：\n- 身份行在场'])
++  assert.equal(r.status, 0, `start 应成功: ${r.stdout}\n${r.stderr}`)
++  const m = r.stdout.match(IDENTITY_RE)
++  assert.ok(m, '变更身份行在场')
++  assert.equal(m[1], change, 'key=--change 完整值')
++  assert.equal(m[2], '首行概括合规达标用例', '名称=--input 首行提炼标题（合规首行原样）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('FR-02 adopt 收编输出含变更身份行', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-ci-adopt'
++  // 模拟 brainstorm 预段产物（同 flow-protocol ⑬ 造法：agent 手写、无 flow-state）
++  const changeDir = join(cwd, '.sillyspec', 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), [
++    '# 提案书', '', '## 动机', '需要一个守护行为', '',
++    '## 成功标准', '- 守护行为 X 发生', '',
++  ].join('\n'))
++  const r = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(r.status, 0, `收编应成功: ${r.stdout}\n${r.stderr}`)
++  const m = r.stdout.match(IDENTITY_RE)
++  assert.ok(m, '收编输出含变更身份行')
++  assert.equal(m[1], change, 'key=变更名完整值')
++  assert.ok(m[2] && m[2].length > 0, '名称非空（收编推导标题）')
++  assert.ok(r.stdout.indexOf('📣 变更身份') < r.stdout.indexOf('头脑风暴产物已收编'), '身份行先于收编横幅输出（adopt try 块内接线形态）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('FR-03 run brainstorm 自动创建输出含变更身份行', () => {
++  const { cwd } = makeRepo()
++  const r = cli(cwd, ['run', 'brainstorm'])
++  assert.equal(r.status, 0, `自动创建应成功: ${r.stdout.slice(-300)}\n${r.stderr.slice(-300)}`)
++  assert.ok(r.stdout.includes('自动创建变更'), '既有行保留（兼容断言面）')
++  const m = r.stdout.match(IDENTITY_RE)
++  assert.ok(m, '自动创建后输出变更身份行')
++  assert.match(m[1], /^\d{4}-\d{2}-\d{2}-new-change-[0-9a-f]{8}$/, 'key=自动生成完整 key')
++  assert.ok(m[2] && m[2].length > 0, '名称非空（无 --input 时兜底=key）')
++  assert.ok(r.stdout.indexOf('自动创建变更') < r.stdout.indexOf('📣 变更身份'), '身份行在自动创建提示之后')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('FR-04 run brainstorm 显式 --change 净新建输出含变更身份行', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-ci-explicit'
++  const r = cli(cwd, ['run', 'brainstorm', '--change', change, '--input', '显式净新建入口用例'])
++  assert.equal(r.status, 0, `显式净新建应成功: ${r.stdout.slice(-300)}\n${r.stderr.slice(-300)}`)
++  const m = r.stdout.match(IDENTITY_RE)
++  assert.ok(m, '净新建注册后输出变更身份行')
++  assert.equal(m[1], change, 'key=--change 完整值')
++  assert.equal(m[2], '显式净新建入口用例', '名称=--input 首行提炼标题（合规首行原样）')
++  rmSync(cwd, { recursive: true, force: true })
++})

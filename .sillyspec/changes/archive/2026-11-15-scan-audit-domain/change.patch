@@ -1,0 +1,115 @@
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index e8aed3f2..062b3be5 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -46,7 +46,7 @@ updated_at: 2026-10-16（2026-10-16 批次：spec-sync 失败可观测性加固
+ 
+ | 阶段 | 当前步骤数 | 备注 |
+ |---|---:|---|
+-| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫；**scan refresh 增量刷新命令**（2026-09-14，change 2026-09-14-scan-incremental-refresh）：`sillyspec scan refresh [--project <名>] [--force] [--json]`（①拍：dirtyCheck fail-closed——in-scope 未提交改动拒绝；三硬门 no-baseline/non-ancestor/quick-depth——`--force` 不可越；软门漂移>100 文件或落后>200 commit 可 `--force` 越；per-doc 基线分组 diff + staleRefs 受影响集 + 手术工单 + guard 握手写 `.runtime/scan-guard.json`（mode=scan-refresh/refreshDocs 白名单/docHashes，worktree-guard 白名单内放行编辑））与 `scan refresh --done [--docs a.md,b.md]`（②拍：内容比对门——未编辑默认不盖章；`bumpScanDocBaselines` per-doc 推进 source_commit/updated_at/generator；postcheck；审计 `.runtime/scan-refresh-<ts>.json`；退出码 0/1/2）。检出极限如实声明：只覆盖带 file:line 引用的检出项，不声称文档与源码一致（staleness advisory 不撤）。连带行为变化：worktree-guard check-1 比对归一 7 位（修复 guard 40 位 vs frontmatter 7 位恒拦存量 bug，恢复同基线放行/异基线拦截）；scan-diff `readSourceCommit` 与 scan-staleness 基线收集统一「全文档→落后最多聚合」（堵 per-doc bump 后 readdir 顺序失真；`collectStaleRefs`/`parseNameStatus` 转导出单源）；**scan 增量模式**（2026-11-14，change 2026-11-14-scan-incremental）：`sillyspec run scan [--incremental] [--force-incremental]` 启动入口层（`src/run/stage.js` scan 启动段，quick/standard/deep 三档统一）跑 `probeCodegraph`（`src/scan-codegraph.js`：探测三态 fail-soft/Windows cmd-shim 解析/形状防御式映射/分级超时）+ `computeIncrementalPlan`（`src/scan-incremental.js`：基线锚落后最多/变化集排除常量过滤/`matchFilesToModules` 归属/篇章影响映射（结构信号→STRUCTURE+ARCHITECTURE、路由信号→INTEGRATIONS）/`_module-map` 对账/软门 100-200（behind 轴前置省大 diff，`--force-incremental` 可越）/quick 深度回退）——可行则四生成步骤按**条件前缀注入段**收窄（只重生成受影响面，`docsToSkip` 篇章零触碰；模块映射压制「已存在则跳过」增量更新；模块卡覆盖等待豁免），guard 写 mode='scan-incremental'（incrementalDocs 白名单内放行外照拦——未受影响面的执行保护，worktree-guard 新分支），收口 `executeScanFinalize` 增量分支统一 `bumpScanDocBaselines` 推进至 HEAD（generator=sillyspec-scan-incremental，staleness 转 fresh；触发条件=guard 会话态判定防残留错标）；不可行自动回退现行全量（路径判定原因一次给全，零回归）。新运行时文件：`.sillyspec/.runtime/scan-incremental-plan.json`（计划快照——启动层原子写、编排各步与收口共读、断点续扫复用、下次 scan 覆盖、不入 git 不上平台）与 `docs/<project>/scan/_module-map-audit.md`（对账报告——索引全量文件 vs 模块 paths 覆盖的未归属清单；`_` 前缀非基线载体，staleness 全 .md 收集读到它取 max 口径无实害；source_commit=本次 HEAD）|
++| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫；**scan refresh 增量刷新命令**（2026-09-14，change 2026-09-14-scan-incremental-refresh）：`sillyspec scan refresh [--project <名>] [--force] [--json]`（①拍：dirtyCheck fail-closed——in-scope 未提交改动拒绝；三硬门 no-baseline/non-ancestor/quick-depth——`--force` 不可越；软门漂移>100 文件或落后>200 commit 可 `--force` 越；per-doc 基线分组 diff + staleRefs 受影响集 + 手术工单 + guard 握手写 `.runtime/scan-guard.json`（mode=scan-refresh/refreshDocs 白名单/docHashes，worktree-guard 白名单内放行编辑））与 `scan refresh --done [--docs a.md,b.md]`（②拍：内容比对门——未编辑默认不盖章；`bumpScanDocBaselines` per-doc 推进 source_commit/updated_at/generator；postcheck；审计 `.runtime/scan-refresh-<ts>.json`；退出码 0/1/2）。检出极限如实声明：只覆盖带 file:line 引用的检出项，不声称文档与源码一致（staleness advisory 不撤）。连带行为变化：worktree-guard check-1 比对归一 7 位（修复 guard 40 位 vs frontmatter 7 位恒拦存量 bug，恢复同基线放行/异基线拦截）；scan-diff `readSourceCommit` 与 scan-staleness 基线收集统一「全文档→落后最多聚合」（堵 per-doc bump 后 readdir 顺序失真；`collectStaleRefs`/`parseNameStatus` 转导出单源）；**scan 增量模式**（2026-11-14，change 2026-11-14-scan-incremental）：`sillyspec run scan [--incremental] [--force-incremental]` 启动入口层（`src/run/stage.js` scan 启动段，quick/standard/deep 三档统一）跑 `probeCodegraph`（`src/scan-codegraph.js`：探测三态 fail-soft/Windows cmd-shim 解析/形状防御式映射/分级超时）+ `computeIncrementalPlan`（`src/scan-incremental.js`：基线锚落后最多/变化集排除常量过滤/`matchFilesToModules` 归属/篇章影响映射（结构信号→STRUCTURE+ARCHITECTURE、路由信号→INTEGRATIONS）/`_module-map` 对账/软门 100-200（behind 轴前置省大 diff，`--force-incremental` 可越）/quick 深度回退）——可行则四生成步骤按**条件前缀注入段**收窄（只重生成受影响面，`docsToSkip` 篇章零触碰；模块映射压制「已存在则跳过」增量更新；模块卡覆盖等待豁免），guard 写 mode='scan-incremental'（incrementalDocs 白名单内放行外照拦——未受影响面的执行保护，worktree-guard 新分支），收口 `executeScanFinalize` 增量分支统一 `bumpScanDocBaselines` 推进至 HEAD（generator=sillyspec-scan-incremental，staleness 转 fresh；触发条件=guard 会话态判定防残留错标）；不可行自动回退现行全量（路径判定原因一次给全，零回归）。新运行时文件：`.sillyspec/.runtime/scan-incremental-plan.json`（计划快照——启动层原子写、编排各步与收口共读、断点续扫复用、下次 scan 覆盖、不入 git 不上平台）与 `docs/<project>/scan/_module-map-audit.md`（对账报告——索引全量文件 vs 模块 paths 覆盖的未归属清单；`_` 前缀非基线载体，staleness 全 .md 收集读到它取 max 口径无实害；source_commit=本次 HEAD）；**对账口径对齐**（2026-11-15，change 2026-11-15-scan-audit-domain）：对账按注册项目 path 剥前缀比对（子项目 map 历史两种口径并存——backend=项目相对、daemon=全仓相对，覆盖判定双口径任一命中即算），域外文件（其他项目）不进分母与未归属——修复子项目跨域误报（backend 实测 3296 误报→226 真实盲区）；frontend map 中缀 glob（`**/*.tsx`）与 inScope 前缀语义不兼容为已知局限（该仓 map 形态与匹配器错配，归后续匹配器升级）|
+ | brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick），并提示按需求关键词查询 `knowledge/INDEX.md`（命中 known-issues/已知坑时方案期规避，不要等到 execute 命中报告）；2026-08-15 D-7 起该步另注入 `{SCAN_STALENESS}` 新鲜度提示（`src/scan-staleness.js` CLI 算 source_commit vs HEAD 落后数：≥50 commit 或 ≥14 天 → needs-refresh——提示核对/重扫而非判文档失效，文档引用是否失效由 docs check 判定；2026-08-16 ql-20260816-009-fb44 修正语义）；fresh/unknown/绿地各有降级文案，advisory 不阻断）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick）；**`validateBrainstormOutputs` 经 contract `condition(scale≠small)` 豁免 proposal/requirements/tasks 三规则**（2026-08-07 修复：末步 small 指引只写 design.md 后 validator 四件套全 error 撞墙的矛盾；fail-safe：读不到 scale → 四件套全要求，保守走重流程）；2026-08-26 起决策记录增量落盘（坑 brainstorm-decisions-lost-on-interrupt）：step3「对话式探索」每解决一个有实现影响的问题当场追加 `decisions.md`（含文件创建规则：mkdir + frontmatter + 标题；按 D-xxx@vN 判重幂等），step4 用户选定方案后当场落盘一条 architecture 决策，step6「写设计文档」改为对账整理（判重 + 补全字段 + 漏网补写）而非一次性写入——decisions.md 出现时机从 step6 提前到 step3，brainstorm 第 6 步之前会话中断时已确认决策可从文件恢复 |
+ | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；全局验收标准模板含集成冒烟引导（集成敏感 task 建议加集成冒烟验收，组件单测全绿 ≠ 集成正确；2026-08-20 起该段为编号清单非 checkbox——机器侧零消费勿留执行态，验收结论统一落 verify-result.md）；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
+ | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`（2026-08-20-task-truth-unify 起 Wave 段为纯 ID 引用行 `- task-XX`，任务注册表唯一真相在 `tasks.md`：`- [ ] task-XX: 名称 [model:xxx] (depends_on: …)`，ql-xxx 等 quick 挂载行正交不收），解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 tasks.md 全勾（agent 手动 + `complete.js autoCheckPlanFromReviews` 机器勾选双路写 tasks.md，锁 `.tasks.md.lock`）+ 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」）；Wave prompt 含中断续跑引导（429/API 配额/崩溃中断后，tasks.md 已勾选 task 跳过不重跑，`sillyspec status` + `run execute` 回当前 Wave step 续跑）；Wave 调度要求 + acceptance「运行测试」步要求子代理**既跑 lint check 也跑 formatter**（只 check 不 format 会把格式问题留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步预告 worktree 内工具链可能缺失（先 `--version` 确认，缺则 `uv tool install`/`uv sync`）；「加载上下文」步 2026-08-16 起符号影响面报告落盘核验（`{SPEC_ROOT}/changes/<change>/symbol-impact.md`，`gates.js` `enforceSymbolImpactGate` 在该步 --done 硬校验：文件存在 + tasks.md 注册表每个 task-XX 在报告中有结论行，缺 → blocked exit 1，防前缀步被一句摘要盖章跳过）；2026-08-21 起每个 Wave prompt 末段含「知识沉淀」指引：Wave 收尾由主代理汇总 task 子代理报告中的项目特有坑，统一追加 `knowledge/uncategorized.md`（避免并行子代理改同一文件冲突），末步「知识库审阅」检查待确认条目并提示用户归类 |
+diff --git a/src/scan-incremental.js b/src/scan-incremental.js
+index 943163c0..7506d9e4 100644
+--- a/src/scan-incremental.js
++++ b/src/scan-incremental.js
+@@ -238,8 +238,26 @@ export async function computeIncrementalPlan(opts = {}) {
+   if (probe.available && scope.length > 0) {
+     const files = await listIndexFiles(projectRoot)
+     if (files) {
+-      const effective = files.filter((f) => !isExcludedPath(f.path))
+-      const uncovered = effective.filter((f) => !inScope(f.path, scope)).map((f) => f.path)
++      // 项目责任域与口径对齐（2026-11-15-scan-audit-domain）：索引路径是全仓相对、子项目
++      // map paths 历史上两种口径并存（backend=项目相对 app/core/**；sillyhub-daemon=全仓相对
++      // sillyhub-daemon/src/**）——按注册 path 剥前缀得 rel，覆盖判定双口径兼容（rel 或全仓
++      // 原路径任一命中即覆盖）；剥不动的文件（其他项目域内）不进对账分母与未归属（跨域污染
++      // 修复，backend 项目实测误报 3296）。空前缀（主项目 path:. / 未注册单项目仓）不剥不滤
++      // ——根级散文件仍是真实盲区，行为不变（FR-02）。uncovered 报全仓原始路径（可定位）。
++      const pre = readProjectPathPrefix(specBase, projectName)
++      const effective = []
++      for (const f of files) {
++        if (isExcludedPath(f.path)) continue
++        let rel
++        if (pre) {
++          if (!f.path.startsWith(pre)) continue // 其他项目域内
++          rel = f.path.slice(pre.length)
++        } else {
++          rel = f.path
++        }
++        effective.push({ rel, orig: f.path })
++      }
++      const uncovered = effective.filter((e) => !inScope(e.rel, scope) && !inScope(e.orig, scope)).map((e) => e.orig)
+       audit = {
+         uncoveredFiles: uncovered,
+         totalIndexed: effective.length,
+@@ -283,6 +301,19 @@ export async function computeIncrementalPlan(opts = {}) {
+ 
+ // ── 内部工具 ───────────────────────────────────────────────────────────────
+ 
++/** 读注册项目 path 的前缀形态（'backend' → 'backend/'；主项目 '.'/未注册/读失败 → ''） */
++function readProjectPathPrefix(specBase, projectName) {
++  try {
++    const p = join(specBase, 'projects', `${projectName}.yaml`)
++    if (!existsSync(p)) return ''
++    const m = readFileSync(p, 'utf8').match(/^path:\s*(\S+)\s*$/m)
++    const v = m ? m[1].replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '') : ''
++    return !v || v === '.' ? '' : `${v}/`
++  } catch {
++    return ''
++  }
++}
++
+ /** module-map 全部 paths 去重归一（scan-diff/scan-refresh 同口径内联先例，防双向耦合） */
+ function collectScope(moduleIndex) {
+   const set = new Set()
+diff --git a/test/scan-incremental.test.mjs b/test/scan-incremental.test.mjs
+index 89e00b49..0265df80 100644
+--- a/test/scan-incremental.test.mjs
++++ b/test/scan-incremental.test.mjs
+@@ -188,3 +188,44 @@ test('对账：listIndexFiles mock（含索引目录与 node_modules 样本）
+   assert.match(rep.c, /orphan\/z\.py/)
+   assert.match(rep.c, /source_commit: bbbbbbb/)
+ })
++
++// ── 对账域过滤（2026-11-15-scan-audit-domain FR-01/FR-02）───────────────────
++
++test('对账域过滤：多项目仓子项目按注册 path 剥前缀比对（域外文件不计入）', async () => {
++  // 本项目注册为子项目（path: proj-sub）——map paths 是项目相对（src/**），索引是全仓相对
++  const f = mkFixture({ mapYaml: MAP })
++  mkdirSync(join(f.specBase, 'projects'), { recursive: true })
++  writeFileSync(join(f.specBase, 'projects', 'proj.yaml'), 'name: proj\npath: proj-sub\n')
++  writeFileSync(join(f.specBase, 'projects', 'other.yaml'), 'name: other\n')
++  const files = [
++    { path: 'proj-sub/src/a.js', language: 'javascript', nodeCount: 1, size: 1 }, // 剥后 src/a.js → inScope ✓
++    { path: 'proj-sub/lib/other2.js', language: 'javascript', nodeCount: 1, size: 1 }, // 剥后未命中 → uncovered
++    { path: 'frontend/app.tsx', language: 'tsx', nodeCount: 1, size: 1 },  // 其他项目域 → 跳过
++    { path: 'backend/api.py', language: 'python', nodeCount: 1, size: 1 }, // 其他项目域 → 跳过
++  ]
++  const r = await computeIncrementalPlan({ ...f, deps: {
++    safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }),
++    probeCodegraph: probeOk,
++    listIndexFiles: async () => files,
++    writeFile: () => {},
++  } })
++  assert.deepEqual(r.audit.uncoveredFiles, ['proj-sub/lib/other2.js'], 'uncovered=域内未归属（报全仓原始路径）；lib/other2.js 未被 lib/helper.js 精确路径覆盖')
++  assert.equal(r.audit.totalIndexed, 2, '分母只算域内')
++})
++
++test('对账域过滤：单项目仓不启用（根级散文件仍报，行为不变）', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  rmSync(join(f.specBase, 'projects'), { recursive: true, force: true }) // 隔离上一用例的多项目注册残留
++  const files = [
++    { path: 'src/a.js', language: 'javascript', nodeCount: 1, size: 1 },
++    { path: 'sync_tool.py', language: 'python', nodeCount: 1, size: 1 },
++  ]
++  const r = await computeIncrementalPlan({ ...f, deps: {
++    safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }),
++    probeCodegraph: probeOk,
++    listIndexFiles: async () => files,
++    writeFile: () => {},
++  } })
++  assert.deepEqual(r.audit.uncoveredFiles, ['sync_tool.py'], '根级散文件不被域过滤藏掉')
++  assert.equal(r.audit.totalIndexed, 2)
++})

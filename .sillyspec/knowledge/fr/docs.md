@@ -2613,3 +2613,43 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-22-include-param-primitives
   status: active
+
+## FR-docs-147 .sillyspec/local.yaml 的 commands 段注释改为如实描述（unavailable=不显式指定，执行层回退结构推断仍会跑）
+变更：2026-11-26-unavailable-wording-fix
+状态：active
+摘要：读配置的人看到真话
+全文：.sillyspec/changes/archive/2026-11-26-unavailable-wording-fix/requirements.md#FR-01
+最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
+
+## FR-docs-148 src/stages/archive.js 首步注释与 docs/sillyspec/file-lifecycle.md 的「D-008 关闭亲跑」表述改为如实语义
+变更：2026-11-26-unavailable-wording-fix
+状态：active
+摘要：文档与代码一致
+全文：.sillyspec/changes/archive/2026-11-26-unavailable-wording-fix/requirements.md#FR-02
+最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
+
+## FR-docs-149 全仓不再出现失真表述
+变更：2026-11-26-unavailable-wording-fix
+状态：active
+摘要：护栏清零
+全文：.sillyspec/changes/archive/2026-11-26-unavailable-wording-fix/requirements.md#FR-03
+最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
+
+## FR-docs-150 行为零变化
+变更：2026-11-26-unavailable-wording-fix
+状态：active
+摘要：只动文字
+全文：.sillyspec/changes/archive/2026-11-26-unavailable-wording-fix/requirements.md#FR-04
+最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-unavailable-wording-fix:flow:测试绑定FR-04
+  tests: test/check-syntax.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-unavailable-wording-fix
+  status: active

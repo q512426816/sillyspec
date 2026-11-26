@@ -1,0 +1,1709 @@
+diff --git a/.claude/skills/sillyspec-scan/SKILL.md b/.claude/skills/sillyspec-scan/SKILL.md
+index d477b981..c22722b8 100644
+--- a/.claude/skills/sillyspec-scan/SKILL.md
++++ b/.claude/skills/sillyspec-scan/SKILL.md
+@@ -42,6 +42,14 @@ sillyspec run scan --reset                     # 重置阶段（从头开始）
+ | `--deep` | 强制 deep profile（完整流程，不按规模裁剪） |
+ | `--force-rescan` | 覆盖已有 scan 文档的保护（默认覆盖需 source_commit/updated_at 匹配） |
+ | `--diff` | 增量漂移清单：`sillyspec scan diff`（或 `--diff` flag）算 source_commit..HEAD 的 A/D/M/R 四分类漂移，按 module-map paths 归模块，agent 据此定点补文档而非全量重扫（2026-08-16） |
++| `--incremental` | 显式请求增量模式（2026-11-14）：探测不可行时警告留痕+回退全量，不 exit 非 0 |
++| `--force-incremental` | 越过软门（漂移 >100 文件 / 落后 >200 commit 默认建议全量）强制增量，warnings 留痕 |
++
++### 增量模式（2026-11-14，默认自动判定）
++
++scan 启动时 CLI 在入口层自动探测（quick/standard/deep 三档统一生效）：仓内有就绪 CodeGraph 索引（`.sillyspec-codegraph/`）且 scan 基线可用时**自动走增量路径**——启动输出「⚡ 增量路径」行（受影响模块清单/篇章重生成与跳过/对账未归属数，原因一次给全），计划落盘 `.sillyspec/.runtime/scan-incremental-plan.json`；四生成步骤按条件前缀注入段只处理受影响面（`docsToSkip` 篇章零触碰，模块映射增量更新，模块卡覆盖等待豁免），收口统一推进基线至 HEAD（增量后 staleness 判定 fresh）。对账报告 `docs/<project>/scan/_module-map-audit.md` 列出索引全量文件中未归属任何模块 paths 的盲区文件。
++
++增量不可行（未装 CodeGraph/无索引/无基线/非祖先基线/quick 浅文档/软门超限）自动回退现行全量 scan——一行原因留痕，零行为回归。模块归属语义决策不做：索引只供结构事实，unmapped 新文件归属由 agent 补扫时判断。
+ 
+ ### scanProfile（显式选择优先，否则按规模自动裁剪）
+ 
+diff --git a/.gitignore b/.gitignore
+index b9c00280..b69b1764 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -35,3 +35,5 @@ sa-rename-probe/
+ .sillyspec/sillyspec.db
+ # 归档变更目录内嵌套的运行时异物（cwd 漂移事故遗留 db/日志——archive 机械 add 曾夹带入库）
+ .sillyspec/changes/archive/**/.sillyspec/
++# CodeGraph 本地代码索引目录（scan 增量模式消费，2026-11-14-scan-incremental D-008——防污染 git diff/对账）
++.sillyspec-codegraph/
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index eb1f547b..960521a4 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -215,7 +215,7 @@
+       {
+         "index": 2,
+         "name": "构建环境探测",
+-        "prompt": "生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。\n\n### 操作\n对扫描列表中的每个项目重复以下操作：\n1. **先跑 CLI 确定性抽取**（端点/依赖/脚本/源码规模/git 基线，零 AI token）：\n   `sillyspec scan facts`（主项目；子项目加 `--path <仓库相对路径> --project <项目名>`）。\n   产物落 `{DOCS_ROOT}/scan/_facts.md`——后续所有子代理共享这一份底稿，**不要重复 grep 发现这些事实**。\n2. 补充机器拿不到的线索（保持精简）：README / CI 配置里的构建与测试命令、特殊环境要求、\n   配置文件要点（`cat <project-dir>/*.config.* 2>/dev/null | head -80`），\n   追加写入 `{DOCS_ROOT}/scan/_env-detect.md`（临时文件，扫描完删除）。\n\n### ⛔ 红线\n- **禁止自己 grep/rg 重新发现端点、路由、依赖清单**——以 `_facts.md` 为准；发现与源码冲突时以底稿为准并在文档中标注差异\n- 只读探测，不修改任何源文件\n\n### 输出\n每个项目的 _facts.md 状态（类型/依赖数/端点数）+ 补充线索摘要",
++        "prompt": "⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——`sillyspec scan facts` 照常执行，但 _env-detect.md 的补充线索只写受影响模块（plan.affectedModules）相关内容；_facts.md 为 CLI 产物直接沿用。\n\n生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。\n\n### 操作\n对扫描列表中的每个项目重复以下操作：\n1. **先跑 CLI 确定性抽取**（端点/依赖/脚本/源码规模/git 基线，零 AI token）：\n   `sillyspec scan facts`（主项目；子项目加 `--path <仓库相对路径> --project <项目名>`）。\n   产物落 `{DOCS_ROOT}/scan/_facts.md`——后续所有子代理共享这一份底稿，**不要重复 grep 发现这些事实**。\n2. 补充机器拿不到的线索（保持精简）：README / CI 配置里的构建与测试命令、特殊环境要求、\n   配置文件要点（`cat <project-dir>/*.config.* 2>/dev/null | head -80`），\n   追加写入 `{DOCS_ROOT}/scan/_env-detect.md`（临时文件，扫描完删除）。\n\n### ⛔ 红线\n- **禁止自己 grep/rg 重新发现端点、路由、依赖清单**——以 `_facts.md` 为准；发现与源码冲突时以底稿为准并在文档中标注差异\n- 只读探测，不修改任何源文件\n\n### 输出\n每个项目的 _facts.md 状态（类型/依赖数/端点数）+ 补充线索摘要",
+         "outputHint": "_facts.md 状态 + 环境探测补充摘要",
+         "optional": false
+       },
+@@ -231,7 +231,7 @@
+       {
+         "index": 4,
+         "name": "深度扫描 — 7 份文档（子代理并行）",
+-        "prompt": "按照 `{WORKFLOWS_ROOT}/scan-docs.yaml` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。\n\n**你必须使用子代理执行，不要自己写文档。**\n**对扫描列表中的每个项目分别执行以下流程。**\n\n### 操作\n1. 读取 `{WORKFLOWS_ROOT}/scan-docs.yaml`，了解角色定义、输出要求和检查规则\n2. 对每个项目（扫描列表中标记为需生成/覆盖的项目）：\n   a. 将 `<project>` 替换为实际项目名，得到该项目的目标文件路径\n   b. 为每个角色启动独立子代理（可并行），每个子代理负责 1-2 份文档\n   c. 子代理的搜索范围限定在该项目目录内（子项目如 `packages/dashboard/`，不要搜索主项目源码）\n   d. 子代理在**事实底稿覆盖范围内的机械事实**（端点/依赖/规模）直接消费注入的 `_facts.md`，不重新 grep 发现；底稿之外的架构理解仍用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文\n   e. 等待该项目所有子代理完成后，直接进入下一项目——产物存在性/引用有效性由第 3 步 workflow check 与 postcheck **机器校验**，不要自己读回文件核对\n   f. 该项目完成后，继续下一个项目\n3. 所有项目完成后，运行以下命令检查产物：\n   `sillyspec workflow check scan-docs --project <project>`（CLI 子命令，任意项目根可用）\n   对每个项目分别执行（将 `<project>` 替换为实际项目名）\n4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分\n\n### 覆盖保护\n- **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。\n- **frontmatter 由 CLI 自动写入（2026-09-05 ②）：子代理不写 frontmatter、不跑 git 取值**。文档正文第 1 行直接写中文标题；终检步骤（scanFinalize）的 CLI 会按需注入 author / created_at / source_commit / updated_at / generator，只补缺不覆盖。\n- 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 `source_commit` 与当前 HEAD 不一致，或旧文档 `updated_at` 晚于本次 scan 开始时间，不要覆盖。\n- 如果用户明确传入 `--force-rescan`，允许覆盖（新 frontmatter 仍由 CLI 注入）。\n\n### 子代理上下文注入\n启动每个子代理前，将以下信息拼入子代理 prompt：\n- 项目名（直接用实际项目名）\n- 目标文件路径（从 workflow YAML 中 `<project>` 替换后的路径）\n- 检查要求（从 workflow YAML 中该角色的 checks）\n- 断点续扫步骤列出的缺失文档列表\n- **事实底稿 `{DOCS_ROOT}/scan/_facts.md` 全文直接贴入**（CLI 确定性抽取的端点/依赖/规模清单——子代理**禁止重新 grep 发现**这些机械事实，只做解读与成文；INTEGRATIONS/ARCHITECTURE 中的端点与集成条目必须与底稿一致，并直接使用底稿里的 file:line 引用）\n- 环境探测补充摘要（如有 _env-detect.md，直接贴入）\n- **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**\n- **文件标题用中文**（sillyhub 平台解析识别用）：正文第 1 行写 # 中文名（English）作为标题（CLI 会把 frontmatter 自动插到标题之前，你不用管）。各文档标准标题格式：\n  - STRUCTURE.md = # 目录结构（Structure）\n  - CONVENTIONS.md = # 代码约定（Conventions）\n  - ARCHITECTURE.md = # 架构（Architecture）\n  - TESTING.md = # 测试（Testing）\n  - CONCERNS.md = # 关注点（Concerns）\n  - INTEGRATIONS.md = # 集成（Integrations）\n  - PROJECT.md = # 项目（Project）\n- **事实引用纪律**：子代理写入文档的关键事实（模块职责、技术栈组件、外部集成、核心命令）必须带反引号包裹的 path:line 引用（如 `src/db.js:42`），且引用必须真实——CLI postcheck 会逐条核验 file:line，失效引用产生 warning。**禁止猜行号**：不确定时只写文件路径不写行号；无法确证的结论标「待确认」，不写成事实。\n\n### 收敛规则（防打转）\n- `sillyspec workflow check scan-docs` 报告失败项后，**只修复报告点名的角色/文件对应的问题**，不要重写未失败的文档\n- 每轮修复后重跑检查，跟踪失败项数量：连续两轮失败项数量没有下降 → 停止重试，在 --output 里如实报告未解决的失败项与已尝试的修复，等待人工决策。**禁止为通过检查而编造内容或降低文档质量**\n\n### 完成后\n列出每个项目的 7 份文档状态：\n- ✅ ARCHITECTURE.md / ❌ 缺失\n- ✅ CONVENTIONS.md / ❌ 缺失\n- ...",
++        "prompt": "⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——只为 `docsToRegenerate` 命中的篇章启动子代理；`docsToSkip` 篇章**跳过不碰**（⛔ 未受影响篇章零触碰——worktree-guard 也会拦白名单外的编辑），在输出中逐份报「跳过（增量判定未受影响）」；受影响测试清单（plan 内 affectedTests 如有）注入子代理作回归提示。\n\n按照 `{WORKFLOWS_ROOT}/scan-docs.yaml` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。\n\n**你必须使用子代理执行，不要自己写文档。**\n**对扫描列表中的每个项目分别执行以下流程。**\n\n### 操作\n1. 读取 `{WORKFLOWS_ROOT}/scan-docs.yaml`，了解角色定义、输出要求和检查规则\n2. 对每个项目（扫描列表中标记为需生成/覆盖的项目）：\n   a. 将 `<project>` 替换为实际项目名，得到该项目的目标文件路径\n   b. 为每个角色启动独立子代理（可并行），每个子代理负责 1-2 份文档\n   c. 子代理的搜索范围限定在该项目目录内（子项目如 `packages/dashboard/`，不要搜索主项目源码）\n   d. 子代理在**事实底稿覆盖范围内的机械事实**（端点/依赖/规模）直接消费注入的 `_facts.md`，不重新 grep 发现；底稿之外的架构理解仍用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文\n   e. 等待该项目所有子代理完成后，直接进入下一项目——产物存在性/引用有效性由第 3 步 workflow check 与 postcheck **机器校验**，不要自己读回文件核对\n   f. 该项目完成后，继续下一个项目\n3. 所有项目完成后，运行以下命令检查产物：\n   `sillyspec workflow check scan-docs --project <project>`（CLI 子命令，任意项目根可用）\n   对每个项目分别执行（将 `<project>` 替换为实际项目名）\n4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分\n\n### 覆盖保护\n- **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。\n- **frontmatter 由 CLI 自动写入（2026-09-05 ②）：子代理不写 frontmatter、不跑 git 取值**。文档正文第 1 行直接写中文标题；终检步骤（scanFinalize）的 CLI 会按需注入 author / created_at / source_commit / updated_at / generator，只补缺不覆盖。\n- 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 `source_commit` 与当前 HEAD 不一致，或旧文档 `updated_at` 晚于本次 scan 开始时间，不要覆盖。\n- 如果用户明确传入 `--force-rescan`，允许覆盖（新 frontmatter 仍由 CLI 注入）。\n\n### 子代理上下文注入\n启动每个子代理前，将以下信息拼入子代理 prompt：\n- 项目名（直接用实际项目名）\n- 目标文件路径（从 workflow YAML 中 `<project>` 替换后的路径）\n- 检查要求（从 workflow YAML 中该角色的 checks）\n- 断点续扫步骤列出的缺失文档列表\n- **事实底稿 `{DOCS_ROOT}/scan/_facts.md` 全文直接贴入**（CLI 确定性抽取的端点/依赖/规模清单——子代理**禁止重新 grep 发现**这些机械事实，只做解读与成文；INTEGRATIONS/ARCHITECTURE 中的端点与集成条目必须与底稿一致，并直接使用底稿里的 file:line 引用）\n- 环境探测补充摘要（如有 _env-detect.md，直接贴入）\n- **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**\n- **文件标题用中文**（sillyhub 平台解析识别用）：正文第 1 行写 # 中文名（English）作为标题（CLI 会把 frontmatter 自动插到标题之前，你不用管）。各文档标准标题格式：\n  - STRUCTURE.md = # 目录结构（Structure）\n  - CONVENTIONS.md = # 代码约定（Conventions）\n  - ARCHITECTURE.md = # 架构（Architecture）\n  - TESTING.md = # 测试（Testing）\n  - CONCERNS.md = # 关注点（Concerns）\n  - INTEGRATIONS.md = # 集成（Integrations）\n  - PROJECT.md = # 项目（Project）\n- **事实引用纪律**：子代理写入文档的关键事实（模块职责、技术栈组件、外部集成、核心命令）必须带反引号包裹的 path:line 引用（如 `src/db.js:42`），且引用必须真实——CLI postcheck 会逐条核验 file:line，失效引用产生 warning。**禁止猜行号**：不确定时只写文件路径不写行号；无法确证的结论标「待确认」，不写成事实。\n\n### 收敛规则（防打转）\n- `sillyspec workflow check scan-docs` 报告失败项后，**只修复报告点名的角色/文件对应的问题**，不要重写未失败的文档\n- 每轮修复后重跑检查，跟踪失败项数量：连续两轮失败项数量没有下降 → 停止重试，在 --output 里如实报告未解决的失败项与已尝试的修复，等待人工决策。**禁止为通过检查而编造内容或降低文档质量**\n\n### 完成后\n列出每个项目的 7 份文档状态：\n- ✅ ARCHITECTURE.md / ❌ 缺失\n- ✅ CONVENTIONS.md / ❌ 缺失\n- ...",
+         "outputHint": "7 份文档生成状态（含 workflow 检查报告）",
+         "optional": false
+       },
+@@ -245,14 +245,14 @@
+       {
+         "index": 6,
+         "name": "生成模块映射",
+-        "prompt": "生成当前项目的模块索引文件 `_module-map.yaml`。\n\n### ⚠️ 重要：这个文件是唯一的结构化索引源\n所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。\n模块卡片（modules/*.md）只负责人类语义说明，不重复索引信息。\n\n### 操作\n对扫描列表中的每个项目分别执行：\n1. 检查 `{DOCS_ROOT}/modules/_module-map.yaml` 是否已存在，已存在则跳过\n2. 分析项目源码目录结构，识别模块划分：\n   - 用 `find . -maxdepth 3 -type d -not -path \"*/node_modules/*\" -not -path \"*/.git/*\"` 查看目录结构\n   - 每个有明确职责的独立目录识别为一个模块\n   - 路径用 glob 模式\n3. 用 grep/rg 分析每个模块：\n   - `main_symbols`：模块导出的主要函数/类/常量（grep export / module.exports / def / class）\n   - `entrypoints`：对外 API 端点或命令入口（grep route / router / @Controller / @GetMapping 等）\n   - `tags`：模块相关关键词标签\n   - `aliases`：模块的别名（其他开发者可能怎么称呼这个模块）\n4. 分析跨模块依赖关系：\n   - 用 grep import/require 分析模块间的引用链\n   - 填充 depends_on（本模块依赖谁）和 used_by（谁依赖本模块）\n5. 生成 `{DOCS_ROOT}/modules/_module-map.yaml`\n6. 如果 modules/ 目录不存在，先创建\n7. 原子写入（先写 tmp 文件再 rename）\n\n### YAML 格式\n```yaml\nschema_version: 2\nproject: <project-name>\nsource_commit: <git-head-short>\ngenerated_at: <now-datetime>\ngenerator: sillyspec-scan\n\nmodules:\n  <module-id>:\n    status: active\n    doc: modules/<module-id>.md\n    paths:\n      - <glob-pattern>\n    tags:\n      - <tag1>\n      - <tag2>\n    aliases:\n      - <alias1>\n    entrypoints:\n      - <exported-symbol-or-api-endpoint>\n    main_symbols:\n      - <exported-class-or-function>\n    depends_on:\n      - <other-module-id>\n    used_by:\n      - <other-module-id>\n    needs_review: false\n    concerns: []\n    review_reasons: []\n```\n\n### 示例\n```yaml\nschema_version: 2\nproject: demo-platform\nsource_commit: abc1234\ngenerated_at: 2026-06-02 22:00:00\ngenerator: sillyspec-scan\n\nmodules:\n  auth-service:\n    status: active\n    doc: modules/auth-service.md\n    paths:\n      - src/modules/auth/**\n      - src/middleware/auth.js\n    tags:\n      - auth\n      - jwt\n      - rbac\n      - middleware\n    aliases:\n      - login\n      - token\n      - authentication\n    entrypoints:\n      - authenticate\n      - authorize\n      - signToken\n      - refreshToken\n    main_symbols:\n      - AuthService\n      - AuthController\n      - hashPassword\n      - verifyPassword\n    depends_on:\n      - users\n      - redis\n    used_by:\n      - api-routes\n      - admin-routes\n    needs_review: false\n    concerns: []\n    review_reasons: []\n```\n\n### 关键规则\n- module-id 用 kebab-case（如 auth-service）\n- depends_on / used_by 引用其他模块的 module-id\n- tags 和 aliases 用于 brainstorm 阶段的需求→模块匹配，尽量覆盖开发者可能用的词\n- entrypoints 和 main_symbols 用于 execute 阶段快速定位源码\n- 不要编造无法从源码 grep 到的符号\n- 如果无法确定依赖关系，depends_on/used_by 留空列表，不要猜\n\n### 输出\n_module-map.yaml 生成结果（已存在/已生成/模块列表）",
++        "prompt": "⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**压制下方「已存在则跳过」规则**——_module-map.yaml 已存在时不整体跳过，改为增量更新：读取 `.sillyspec/.runtime/scan-incremental-plan.json`，只重抽受影响模块（affectedModules）的 paths/entrypoints/main_symbols，其余模块条目原样保留；unmappedFiles（含 hint 归属线索）逐个给出归属**建议**（你判断后写入，勿盲从 hint——索引只供结构事实）；顺带读 `scan/_module-map-audit.md` 对账报告核对盲区。\n\n生成当前项目的模块索引文件 `_module-map.yaml`。\n\n### ⚠️ 重要：这个文件是唯一的结构化索引源\n所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。\n模块卡片（modules/*.md）只负责人类语义说明，不重复索引信息。\n\n### 操作\n对扫描列表中的每个项目分别执行：\n1. 检查 `{DOCS_ROOT}/modules/_module-map.yaml` 是否已存在，已存在则跳过\n2. 分析项目源码目录结构，识别模块划分：\n   - 用 `find . -maxdepth 3 -type d -not -path \"*/node_modules/*\" -not -path \"*/.git/*\"` 查看目录结构\n   - 每个有明确职责的独立目录识别为一个模块\n   - 路径用 glob 模式\n3. 用 grep/rg 分析每个模块：\n   - `main_symbols`：模块导出的主要函数/类/常量（grep export / module.exports / def / class）\n   - `entrypoints`：对外 API 端点或命令入口（grep route / router / @Controller / @GetMapping 等）\n   - `tags`：模块相关关键词标签\n   - `aliases`：模块的别名（其他开发者可能怎么称呼这个模块）\n4. 分析跨模块依赖关系：\n   - 用 grep import/require 分析模块间的引用链\n   - 填充 depends_on（本模块依赖谁）和 used_by（谁依赖本模块）\n5. 生成 `{DOCS_ROOT}/modules/_module-map.yaml`\n6. 如果 modules/ 目录不存在，先创建\n7. 原子写入（先写 tmp 文件再 rename）\n\n### YAML 格式\n```yaml\nschema_version: 2\nproject: <project-name>\nsource_commit: <git-head-short>\ngenerated_at: <now-datetime>\ngenerator: sillyspec-scan\n\nmodules:\n  <module-id>:\n    status: active\n    doc: modules/<module-id>.md\n    paths:\n      - <glob-pattern>\n    tags:\n      - <tag1>\n      - <tag2>\n    aliases:\n      - <alias1>\n    entrypoints:\n      - <exported-symbol-or-api-endpoint>\n    main_symbols:\n      - <exported-class-or-function>\n    depends_on:\n      - <other-module-id>\n    used_by:\n      - <other-module-id>\n    needs_review: false\n    concerns: []\n    review_reasons: []\n```\n\n### 示例\n```yaml\nschema_version: 2\nproject: demo-platform\nsource_commit: abc1234\ngenerated_at: 2026-06-02 22:00:00\ngenerator: sillyspec-scan\n\nmodules:\n  auth-service:\n    status: active\n    doc: modules/auth-service.md\n    paths:\n      - src/modules/auth/**\n      - src/middleware/auth.js\n    tags:\n      - auth\n      - jwt\n      - rbac\n      - middleware\n    aliases:\n      - login\n      - token\n      - authentication\n    entrypoints:\n      - authenticate\n      - authorize\n      - signToken\n      - refreshToken\n    main_symbols:\n      - AuthService\n      - AuthController\n      - hashPassword\n      - verifyPassword\n    depends_on:\n      - users\n      - redis\n    used_by:\n      - api-routes\n      - admin-routes\n    needs_review: false\n    concerns: []\n    review_reasons: []\n```\n\n### 关键规则\n- module-id 用 kebab-case（如 auth-service）\n- depends_on / used_by 引用其他模块的 module-id\n- tags 和 aliases 用于 brainstorm 阶段的需求→模块匹配，尽量覆盖开发者可能用的词\n- entrypoints 和 main_symbols 用于 execute 阶段快速定位源码\n- 不要编造无法从源码 grep 到的符号\n- 如果无法确定依赖关系，depends_on/used_by 留空列表，不要猜\n\n### 输出\n_module-map.yaml 生成结果（已存在/已生成/模块列表）",
+         "outputHint": "_module-map.yaml 生成状态",
+         "optional": true
+       },
+       {
+         "index": 7,
+         "name": "生成模块卡片文档",
+-        "prompt": "根据当前项目的 `_module-map.yaml` 生成模块卡片文档。\n\n### ⚠️ 重要：模块卡片只负责人类语义说明\n结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。\n卡片里不要重复这些信息，只写 _module-map.yaml 无法表达的语义内容。\n\n### 操作\n对扫描列表中的每个项目分别执行：\n1. 读取 `{DOCS_ROOT}/modules/_module-map.yaml`，获取模块列表和路径\n2. 检查 `{DOCS_ROOT}/modules/` 下已有的模块文档（<module>.md）\n3. 列出每个模块的状态：已有文档 / 缺失\n4. **如果有覆盖风险（已有模块文档会被覆盖），必须暂停等待用户**：\n   - 展示模块列表及现有文档状态\n   - 明确提供选项：**为缺失模块生成初始文档** / **全部重新生成（覆盖已有）** / **跳过**\n   - 调用：`sillyspec run scan --wait --reason \"检测到已有模块文档覆盖风险\" --options \"只生成缺失,全部重新生成,跳过\" --output \"受影响模块列表\"`\n5. **如果没有覆盖风险（全部都是缺失模块），正常完成即可，不需要等待。**\n\n### 生成方法（子代理并行，只针对用户选中的模块）\n**你必须为每个模块启动独立子代理执行，不要自己写文档。**\n\n每个子代理的 prompt（**主 agent 启动前必须拼入**）：\n- 模块名和路径（从 _module-map.yaml 读取）\n- 环境探测结果摘要（构建工具、语言框架）\n- scan 文档关键信息摘要（ARCHITECTURE.md 的技术栈、CONVENTIONS.md 的代码风格要点，如已生成）\n```\n模块名：<module-id>\n模块路径：<glob patterns>\n目标文件：{DOCS_ROOT}/modules/<module-id>.md\n\n操作：\n1. 用 grep/rg 搜索模块路径范围内的源码（禁止读源码全文）\n2. 提取：模块职责、对外接口、关键逻辑、注意事项\n3. 按以下模板写入目标文件：\n\n---\nschema_version: 1\ndoc_type: module-card\nmodule_id: <module-id>\n---\n\n# <中文名>（<module-id>）\n\n## 定位\n（负责什么，不负责什么 — 明确边界）\n\n## 契约摘要\n（核心能力列表，具体导出符号以 _module-map.yaml 的 entrypoints/main_symbols 为准）\n\n## 关键逻辑\n（最核心的流程摘要，用 text 伪代码，不超过 3-5 行）\n\n## 注意事项\n（维护提醒、已知限制、修改时需同步检查的模块）\n\n## 人工备注\n\n<!-- MANUAL_NOTES_START -->\n\n<!-- MANUAL_NOTES_END -->\n\n规则：\n- 不要编造接口或依赖，只写 grep/rg 能搜到的\n- 一级标题格式 `# <中文名>（<module-id>）`：中文名从模块职责提炼 2-8 字（如 认证与令牌、变更中心），括号内保留 module-id 原样——sillyhub 平台解析识别用\n- 目标长度：500-1000 字 / 80-150 行\n- 如果模块特别复杂（状态机、多角色交互、复杂领域规则），可以在 modules/details/ 下生成扩展文档（如 details/<module-id>-flow.md），agent 默认不读\n- 不要重复 _module-map.yaml 中的索引信息\n- 不要写设计决策表、完整依赖表、变更索引长表\n- 人工备注区域保持空标记，留给用户填写\n```\n\n等待所有子代理完成，验证文件是否生成且非空。\n\n### 输出\n已生成的模块文档路径列表",
++        "prompt": "⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**覆盖等待豁免**——增量重生成已获授权（授权链=启动时路径判定输出已明示重生成面+guard 白名单放行边界），下方 conditionalWait 覆盖检测**不触发等待**；只为 `.sillyspec/.runtime/scan-incremental-plan.json` 中受影响模块（affectedModules）重生成模块卡（人工备注区 MANUAL_NOTES 块从旧卡原样迁移）；未受影响模块卡**零触碰**（⛔ 越界编辑会被 worktree-guard 拦截）。\n\n根据当前项目的 `_module-map.yaml` 生成模块卡片文档。\n\n### ⚠️ 重要：模块卡片只负责人类语义说明\n结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。\n卡片里不要重复这些信息，只写 _module-map.yaml 无法表达的语义内容。\n\n### 操作\n对扫描列表中的每个项目分别执行：\n1. 读取 `{DOCS_ROOT}/modules/_module-map.yaml`，获取模块列表和路径\n2. 检查 `{DOCS_ROOT}/modules/` 下已有的模块文档（<module>.md）\n3. 列出每个模块的状态：已有文档 / 缺失\n4. **如果有覆盖风险（已有模块文档会被覆盖），必须暂停等待用户**：\n   - 展示模块列表及现有文档状态\n   - 明确提供选项：**为缺失模块生成初始文档** / **全部重新生成（覆盖已有）** / **跳过**\n   - 调用：`sillyspec run scan --wait --reason \"检测到已有模块文档覆盖风险\" --options \"只生成缺失,全部重新生成,跳过\" --output \"受影响模块列表\"`\n5. **如果没有覆盖风险（全部都是缺失模块），正常完成即可，不需要等待。**\n\n### 生成方法（子代理并行，只针对用户选中的模块）\n**你必须为每个模块启动独立子代理执行，不要自己写文档。**\n\n每个子代理的 prompt（**主 agent 启动前必须拼入**）：\n- 模块名和路径（从 _module-map.yaml 读取）\n- 环境探测结果摘要（构建工具、语言框架）\n- scan 文档关键信息摘要（ARCHITECTURE.md 的技术栈、CONVENTIONS.md 的代码风格要点，如已生成）\n```\n模块名：<module-id>\n模块路径：<glob patterns>\n目标文件：{DOCS_ROOT}/modules/<module-id>.md\n\n操作：\n1. 用 grep/rg 搜索模块路径范围内的源码（禁止读源码全文）\n2. 提取：模块职责、对外接口、关键逻辑、注意事项\n3. 按以下模板写入目标文件：\n\n---\nschema_version: 1\ndoc_type: module-card\nmodule_id: <module-id>\n---\n\n# <中文名>（<module-id>）\n\n## 定位\n（负责什么，不负责什么 — 明确边界）\n\n## 契约摘要\n（核心能力列表，具体导出符号以 _module-map.yaml 的 entrypoints/main_symbols 为准）\n\n## 关键逻辑\n（最核心的流程摘要，用 text 伪代码，不超过 3-5 行）\n\n## 注意事项\n（维护提醒、已知限制、修改时需同步检查的模块）\n\n## 人工备注\n\n<!-- MANUAL_NOTES_START -->\n\n<!-- MANUAL_NOTES_END -->\n\n规则：\n- 不要编造接口或依赖，只写 grep/rg 能搜到的\n- 一级标题格式 `# <中文名>（<module-id>）`：中文名从模块职责提炼 2-8 字（如 认证与令牌、变更中心），括号内保留 module-id 原样——sillyhub 平台解析识别用\n- 目标长度：500-1000 字 / 80-150 行\n- 如果模块特别复杂（状态机、多角色交互、复杂领域规则），可以在 modules/details/ 下生成扩展文档（如 details/<module-id>-flow.md），agent 默认不读\n- 不要重复 _module-map.yaml 中的索引信息\n- 不要写设计决策表、完整依赖表、变更索引长表\n- 人工备注区域保持空标记，留给用户填写\n```\n\n等待所有子代理完成，验证文件是否生成且非空。\n\n### 输出\n已生成的模块文档路径列表",
+         "outputHint": "模块文档生成状态",
+         "optional": true,
+         "conditionalWait": true,
+@@ -501,7 +501,7 @@
+         "index": 3,
+         "id": "generate_blueprints",
+         "name": "生成 TaskCard（默认主代理直填，大规模才派 batch）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n  （注意：该约束只限制 Wave 内**多任务之间**的文件交集——同一张卡携带实现+测试+module-map 多文件合法，勿为规避此约束把测试/接线拆成独立卡，见步骤 2 拆分粒度纪律）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n卡片粒度对齐 plan.md/tasks.md 的任务数——plan 未拆出的收尾动作不为仪式另立卡。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**\n   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**\n   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）\n3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）\n4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n6. 等待所有 batch 子代理完成\n7. 验证每个 task-N.md 文件已生成且非空\n8. **全部卡片填充完成后，主 agent 跑一次零成本自检（plan 门禁同源规则前置暴露，免 Step 4 门禁批量报错返工）**：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --validate\n   ```\n   报错即门禁报错（frontmatter YAML/占位符/必要字段/target_files 形态，YAML 错误带中文分诊动作）；修复后重跑至通过再进下一步。\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n  （注意：该约束只限制 Wave 内**多任务之间**的文件交集——同一张卡携带实现+测试+module-map 多文件合法，勿为规避此约束把测试/接线拆成独立卡，见步骤 2 拆分粒度纪律）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n卡片粒度对齐 plan.md/tasks.md 的任务数——plan 未拆出的收尾动作不为仪式另立卡。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**\n   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**\n   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）\n3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）\n4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n6. 等待所有 batch 子代理完成\n7. 验证每个 task-N.md 文件已生成且非空\n8. **全部卡片填充完成后，主 agent 跑一次零成本自检（plan 门禁同源规则前置暴露，免 Step 4 门禁批量报错返工）**：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --validate\n   ```\n   报错即门禁报错（frontmatter YAML/占位符/必要字段/target_files 形态，YAML 错误带中文分诊动作）；修复后重跑至通过再进下一步。\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+diff --git a/docs/prompt/scan.md b/docs/prompt/scan.md
+index 185f5dd1..265d6887 100644
+--- a/docs/prompt/scan.md
++++ b/docs/prompt/scan.md
+@@ -132,6 +132,8 @@
+ **提示词原文**
+ 
+ ````markdown
++⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——`sillyspec scan facts` 照常执行，但 _env-detect.md 的补充线索只写受影响模块（plan.affectedModules）相关内容；_facts.md 为 CLI 产物直接沿用。
++
+ 生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。
+ 
+ ### 操作
+@@ -194,6 +196,8 @@
+ **提示词原文**
+ 
+ ````markdown
++⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 `.sillyspec/.runtime/scan-incremental-plan.json` 中本项目条目——只为 `docsToRegenerate` 命中的篇章启动子代理；`docsToSkip` 篇章**跳过不碰**（⛔ 未受影响篇章零触碰——worktree-guard 也会拦白名单外的编辑），在输出中逐份报「跳过（增量判定未受影响）」；受影响测试清单（plan 内 affectedTests 如有）注入子代理作回归提示。
++
+ 按照 `{WORKFLOWS_ROOT}/scan-docs.yaml` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
+ 
+ **你必须使用子代理执行，不要自己写文档。**
+@@ -346,6 +350,8 @@ local.yaml 生成结果（已存在/已生成 + project.type + agent 补充的
+ **提示词原文**
+ 
+ ````markdown
++⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**压制下方「已存在则跳过」规则**——_module-map.yaml 已存在时不整体跳过，改为增量更新：读取 `.sillyspec/.runtime/scan-incremental-plan.json`，只重抽受影响模块（affectedModules）的 paths/entrypoints/main_symbols，其余模块条目原样保留；unmappedFiles（含 hint 归属线索）逐个给出归属**建议**（你判断后写入，勿盲从 hint——索引只供结构事实）；顺带读 `scan/_module-map-audit.md` 对账报告核对盲区。
++
+ 生成当前项目的模块索引文件 `_module-map.yaml`。
+ 
+ ### ⚠️ 重要：这个文件是唯一的结构化索引源
+@@ -478,6 +484,8 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）
+ **提示词原文**
+ 
+ ````markdown
++⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**覆盖等待豁免**——增量重生成已获授权（授权链=启动时路径判定输出已明示重生成面+guard 白名单放行边界），下方 conditionalWait 覆盖检测**不触发等待**；只为 `.sillyspec/.runtime/scan-incremental-plan.json` 中受影响模块（affectedModules）重生成模块卡（人工备注区 MANUAL_NOTES 块从旧卡原样迁移）；未受影响模块卡**零触碰**（⛔ 越界编辑会被 worktree-guard 拦截）。
++
+ 根据当前项目的 `_module-map.yaml` 生成模块卡片文档。
+ 
+ ### ⚠️ 重要：模块卡片只负责人类语义说明
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index f8f011ca..d166f5d6 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -1,7 +1,7 @@
+ ---
+ author: qinyi
+ created_at: 2026-05-31 11:00:00
+-updated_at: 2026-10-16（2026-10-16 批次：spec-sync 失败可观测性加固——`.runtime/spec-sync-fail-streak.json` 连续失败计数（按 label {count,lastAt,lastError}，连续 ≥3 次同步失败升级 🚨 显式告警、任一次成功清零；不入 git 不上平台）；前批次：2026-10-13（2026-10-13 批次：删除台账登记——src/deleted-ledger.js 与 .runtime/deleted-changes.jsonl：终态转换（deleteChange deleted / unregisterChange archived）事务提交后追加 {name,status,at}（追加-only、fail-open、latest-wins、坏行容错）；sync() 行缺失（serializeForSync null）分支查台账命中终态即合成最小六表载荷补推墓碑（quick-* 豁免）；platform sync --change 失败路径 exit 1 修假成功）；前批次：2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——spec-sync 纯墓碑形态按被删变更名落 spec-sync-conflict-〈被删变更》.json（kind='tombstone'幂等合并）+全绿同步清陈旧纯墓碑记录（conflicting_paths 空+platform_deleted 非空，kind 无关）+stage-machine _listPendingConflicts 优先读 kind 透传 type='tombstone'）；前批次：2026-09-24（2026-09-24 批次：门禁快照生命周期账本登记——`src/run/gate-snapshot-ledger.js` 与账本 `.sillyspec/.runtime/active-gate-snapshots.json`：create 登记 / cleanup 双清确认后销账，进程被杀残留由下个门禁建快照前 TTL×pid 双闸自愈回收，删除前必经 isSafeLedgerEntry 守卫，不入 git 不上平台）；前批次：2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦信号计数文件登记——`.runtime/friction-tally-<changeName>.json` 与 `quick-sessions/<sessionId>/friction-tally.json` 条目：三类摩擦事件时点写入、quick·verify --done 收尾 consume 清零、归档/change-delete prune、放弃变更残留接受（R-06）；不入 git 不上平台（D-002/D-005））；前批次：2026-09-08 批次：doctor `--gc-unstamped-runs` 存量无戳 execute-runs 一次性清扫（默认 dry-run，`--confirm` 才删；tasks.md / 归档目录名交叉核验，不进 archive 热路径）；归档取证回收（`pruneArchivedChangeRuntime`，delta.md 落盘后按 change 精确删 execute-runs/stage-reviews/verify-runs/apply-pathspec，fail-closed 禁 mtime/后缀匹配，接线在 worktree 无 meta 早退之前）；pre-import 快照写入侧滚动裁剪（`ProgressManager._pruneImportBaks`，import 落 bak 后即回收，默认只留最新 1 份 + `SILLYSPEC_PREIMPORT_BAK_KEEP` 可覆盖，按文件名 ISO 时间戳序、被裁份连 `.bak-wal` 成对删、存活份侧车保留、本次 keepPath 永不裁、fail-open 不阻断 import——此前只写不回收，实证单仓 292 份 / 317MB；口径详见 file-lifecycle/storage-and-state.md §pre-import 快照回收）；前批次：2026-09-07 批次：ghost 判定排除 quick 会话行（quick-<8hex> 按设计无 changes/ 实体目录，stage-machine overview/show 与 doctor-diagnostics D4 同源豁免，cleanup-ghosts 保留 quick 行归档兜底）；前批次：2026-09-04 批次：done-like 幻影变更守卫（--done/--skip/--wait/--continue/--reset/--reopen 目标未物化拒绝静默 initCommand 新建，治指针切库后幻影变更事故）/ progress check-repair 双库分裂探测（指针库与 cwd/.sillyspec 残留库并存报告，两库活跃/目标在旧库 issue 级）/ stage review docHash 失配 gate 自动机械重算放行（verdict 保留 + 审计行，主文档缺失/schema/verdict=fail 不自动刷）；前历史：+change-delete 一等删除命令（status='deleted' 与 archived 语义分离 + 移目录/清 worktree/推平台墓碑，两段式）/ progress show 滞留与疑似完成信号（tasks 全勾未收口 + 超 7 天无活跃）；批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
++updated_at: 2026-11-14（2026-11-14 批次：scan 增量模式——`.runtime/scan-incremental-plan.json`/`_module-map-audit.md` 运行时文件条目 + guard mode='scan-incremental' 握手（2026-11-14-scan-incremental）；前批次：2026-10-16（2026-10-16 批次：spec-sync 失败可观测性加固——`.runtime/spec-sync-fail-streak.json` 连续失败计数（按 label {count,lastAt,lastError}，连续 ≥3 次同步失败升级 🚨 显式告警、任一次成功清零；不入 git 不上平台）；前批次：2026-10-13（2026-10-13 批次：删除台账登记——src/deleted-ledger.js 与 .runtime/deleted-changes.jsonl：终态转换（deleteChange deleted / unregisterChange archived）事务提交后追加 {name,status,at}（追加-only、fail-open、latest-wins、坏行容错）；sync() 行缺失（serializeForSync null）分支查台账命中终态即合成最小六表载荷补推墓碑（quick-* 豁免）；platform sync --change 失败路径 exit 1 修假成功）；前批次：2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——spec-sync 纯墓碑形态按被删变更名落 spec-sync-conflict-〈被删变更》.json（kind='tombstone'幂等合并）+全绿同步清陈旧纯墓碑记录（conflicting_paths 空+platform_deleted 非空，kind 无关）+stage-machine _listPendingConflicts 优先读 kind 透传 type='tombstone'）；前批次：2026-09-24（2026-09-24 批次：门禁快照生命周期账本登记——`src/run/gate-snapshot-ledger.js` 与账本 `.sillyspec/.runtime/active-gate-snapshots.json`：create 登记 / cleanup 双清确认后销账，进程被杀残留由下个门禁建快照前 TTL×pid 双闸自愈回收，删除前必经 isSafeLedgerEntry 守卫，不入 git 不上平台）；前批次：2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦信号计数文件登记——`.runtime/friction-tally-<changeName>.json` 与 `quick-sessions/<sessionId>/friction-tally.json` 条目：三类摩擦事件时点写入、quick·verify --done 收尾 consume 清零、归档/change-delete prune、放弃变更残留接受（R-06）；不入 git 不上平台（D-002/D-005））；前批次：2026-09-08 批次：doctor `--gc-unstamped-runs` 存量无戳 execute-runs 一次性清扫（默认 dry-run，`--confirm` 才删；tasks.md / 归档目录名交叉核验，不进 archive 热路径）；归档取证回收（`pruneArchivedChangeRuntime`，delta.md 落盘后按 change 精确删 execute-runs/stage-reviews/verify-runs/apply-pathspec，fail-closed 禁 mtime/后缀匹配，接线在 worktree 无 meta 早退之前）；pre-import 快照写入侧滚动裁剪（`ProgressManager._pruneImportBaks`，import 落 bak 后即回收，默认只留最新 1 份 + `SILLYSPEC_PREIMPORT_BAK_KEEP` 可覆盖，按文件名 ISO 时间戳序、被裁份连 `.bak-wal` 成对删、存活份侧车保留、本次 keepPath 永不裁、fail-open 不阻断 import——此前只写不回收，实证单仓 292 份 / 317MB；口径详见 file-lifecycle/storage-and-state.md §pre-import 快照回收）；前批次：2026-09-07 批次：ghost 判定排除 quick 会话行（quick-<8hex> 按设计无 changes/ 实体目录，stage-machine overview/show 与 doctor-diagnostics D4 同源豁免，cleanup-ghosts 保留 quick 行归档兜底）；前批次：2026-09-04 批次：done-like 幻影变更守卫（--done/--skip/--wait/--continue/--reset/--reopen 目标未物化拒绝静默 initCommand 新建，治指针切库后幻影变更事故）/ progress check-repair 双库分裂探测（指针库与 cwd/.sillyspec 残留库并存报告，两库活跃/目标在旧库 issue 级）/ stage review docHash 失配 gate 自动机械重算放行（verdict 保留 + 审计行，主文档缺失/schema/verdict=fail 不自动刷）；前历史：+change-delete 一等删除命令（status='deleted' 与 archived 语义分离 + 移目录/清 worktree/推平台墓碑，两段式）/ progress show 滞留与疑似完成信号（tasks 全勾未收口 + 超 7 天无活跃）；批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
+ ---
+ 
+ # SillySpec 文件生命周期
+@@ -46,7 +46,7 @@ updated_at: 2026-10-16（2026-10-16 批次：spec-sync 失败可观测性加固
+ 
+ | 阶段 | 当前步骤数 | 备注 |
+ |---|---:|---|
+-| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫；**scan refresh 增量刷新命令**（2026-09-14，change 2026-09-14-scan-incremental-refresh）：`sillyspec scan refresh [--project <名>] [--force] [--json]`（①拍：dirtyCheck fail-closed——in-scope 未提交改动拒绝；三硬门 no-baseline/non-ancestor/quick-depth——`--force` 不可越；软门漂移>100 文件或落后>200 commit 可 `--force` 越；per-doc 基线分组 diff + staleRefs 受影响集 + 手术工单 + guard 握手写 `.runtime/scan-guard.json`（mode=scan-refresh/refreshDocs 白名单/docHashes，worktree-guard 白名单内放行编辑））与 `scan refresh --done [--docs a.md,b.md]`（②拍：内容比对门——未编辑默认不盖章；`bumpScanDocBaselines` per-doc 推进 source_commit/updated_at/generator；postcheck；审计 `.runtime/scan-refresh-<ts>.json`；退出码 0/1/2）。检出极限如实声明：只覆盖带 file:line 引用的检出项，不声称文档与源码一致（staleness advisory 不撤）。连带行为变化：worktree-guard check-1 比对归一 7 位（修复 guard 40 位 vs frontmatter 7 位恒拦存量 bug，恢复同基线放行/异基线拦截）；scan-diff `readSourceCommit` 与 scan-staleness 基线收集统一「全文档→落后最多聚合」（堵 per-doc bump 后 readdir 顺序失真；`collectStaleRefs`/`parseNameStatus` 转导出单源）|
++| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫；**scan refresh 增量刷新命令**（2026-09-14，change 2026-09-14-scan-incremental-refresh）：`sillyspec scan refresh [--project <名>] [--force] [--json]`（①拍：dirtyCheck fail-closed——in-scope 未提交改动拒绝；三硬门 no-baseline/non-ancestor/quick-depth——`--force` 不可越；软门漂移>100 文件或落后>200 commit 可 `--force` 越；per-doc 基线分组 diff + staleRefs 受影响集 + 手术工单 + guard 握手写 `.runtime/scan-guard.json`（mode=scan-refresh/refreshDocs 白名单/docHashes，worktree-guard 白名单内放行编辑））与 `scan refresh --done [--docs a.md,b.md]`（②拍：内容比对门——未编辑默认不盖章；`bumpScanDocBaselines` per-doc 推进 source_commit/updated_at/generator；postcheck；审计 `.runtime/scan-refresh-<ts>.json`；退出码 0/1/2）。检出极限如实声明：只覆盖带 file:line 引用的检出项，不声称文档与源码一致（staleness advisory 不撤）。连带行为变化：worktree-guard check-1 比对归一 7 位（修复 guard 40 位 vs frontmatter 7 位恒拦存量 bug，恢复同基线放行/异基线拦截）；scan-diff `readSourceCommit` 与 scan-staleness 基线收集统一「全文档→落后最多聚合」（堵 per-doc bump 后 readdir 顺序失真；`collectStaleRefs`/`parseNameStatus` 转导出单源）；**scan 增量模式**（2026-11-14，change 2026-11-14-scan-incremental）：`sillyspec run scan [--incremental] [--force-incremental]` 启动入口层（`src/run/stage.js` scan 启动段，quick/standard/deep 三档统一）跑 `probeCodegraph`（`src/scan-codegraph.js`：探测三态 fail-soft/Windows cmd-shim 解析/形状防御式映射/分级超时）+ `computeIncrementalPlan`（`src/scan-incremental.js`：基线锚落后最多/变化集排除常量过滤/`matchFilesToModules` 归属/篇章影响映射（结构信号→STRUCTURE+ARCHITECTURE、路由信号→INTEGRATIONS）/`_module-map` 对账/软门 100-200（`--force-incremental` 可越）/quick 深度回退）——可行则四生成步骤按**条件前缀注入段**收窄（只重生成受影响面，`docsToSkip` 篇章零触碰；模块映射压制「已存在则跳过」增量更新；模块卡覆盖等待豁免），guard 写 mode='scan-incremental'（incrementalDocs 白名单内放行外照拦——未受影响面的执行保护，worktree-guard 新分支），收口 `executeScanFinalize` 增量分支统一 `bumpScanDocBaselines` 推进至 HEAD（generator=sillyspec-scan-incremental，staleness 转 fresh）；不可行自动回退现行全量（路径判定原因一次给全，零回归）。新运行时文件：`.sillyspec/.runtime/scan-incremental-plan.json`（计划快照——启动层原子写、编排各步与收口共读、断点续扫复用、下次 scan 覆盖、不入 git 不上平台）与 `docs/<project>/scan/_module-map-audit.md`（对账报告——索引全量文件 vs 模块 paths 覆盖的未归属清单；`_` 前缀非基线载体，staleness 全 .md 收集读到它取 max 口径无实害；source_commit=本次 HEAD）|
+ | brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick），并提示按需求关键词查询 `knowledge/INDEX.md`（命中 known-issues/已知坑时方案期规避，不要等到 execute 命中报告）；2026-08-15 D-7 起该步另注入 `{SCAN_STALENESS}` 新鲜度提示（`src/scan-staleness.js` CLI 算 source_commit vs HEAD 落后数：≥50 commit 或 ≥14 天 → needs-refresh——提示核对/重扫而非判文档失效，文档引用是否失效由 docs check 判定；2026-08-16 ql-20260816-009-fb44 修正语义）；fresh/unknown/绿地各有降级文案，advisory 不阻断）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick）；**`validateBrainstormOutputs` 经 contract `condition(scale≠small)` 豁免 proposal/requirements/tasks 三规则**（2026-08-07 修复：末步 small 指引只写 design.md 后 validator 四件套全 error 撞墙的矛盾；fail-safe：读不到 scale → 四件套全要求，保守走重流程）；2026-08-26 起决策记录增量落盘（坑 brainstorm-decisions-lost-on-interrupt）：step3「对话式探索」每解决一个有实现影响的问题当场追加 `decisions.md`（含文件创建规则：mkdir + frontmatter + 标题；按 D-xxx@vN 判重幂等），step4 用户选定方案后当场落盘一条 architecture 决策，step6「写设计文档」改为对账整理（判重 + 补全字段 + 漏网补写）而非一次性写入——decisions.md 出现时机从 step6 提前到 step3，brainstorm 第 6 步之前会话中断时已确认决策可从文件恢复 |
+ | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；全局验收标准模板含集成冒烟引导（集成敏感 task 建议加集成冒烟验收，组件单测全绿 ≠ 集成正确；2026-08-20 起该段为编号清单非 checkbox——机器侧零消费勿留执行态，验收结论统一落 verify-result.md）；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
+ | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`（2026-08-20-task-truth-unify 起 Wave 段为纯 ID 引用行 `- task-XX`，任务注册表唯一真相在 `tasks.md`：`- [ ] task-XX: 名称 [model:xxx] (depends_on: …)`，ql-xxx 等 quick 挂载行正交不收），解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 tasks.md 全勾（agent 手动 + `complete.js autoCheckPlanFromReviews` 机器勾选双路写 tasks.md，锁 `.tasks.md.lock`）+ 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」）；Wave prompt 含中断续跑引导（429/API 配额/崩溃中断后，tasks.md 已勾选 task 跳过不重跑，`sillyspec status` + `run execute` 回当前 Wave step 续跑）；Wave 调度要求 + acceptance「运行测试」步要求子代理**既跑 lint check 也跑 formatter**（只 check 不 format 会把格式问题留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步预告 worktree 内工具链可能缺失（先 `--version` 确认，缺则 `uv tool install`/`uv sync`）；「加载上下文」步 2026-08-16 起符号影响面报告落盘核验（`{SPEC_ROOT}/changes/<change>/symbol-impact.md`，`gates.js` `enforceSymbolImpactGate` 在该步 --done 硬校验：文件存在 + tasks.md 注册表每个 task-XX 在报告中有结论行，缺 → blocked exit 1，防前缀步被一句摘要盖章跳过）；2026-08-21 起每个 Wave prompt 末段含「知识沉淀」指引：Wave 收尾由主代理汇总 task 子代理报告中的项目特有坑，统一追加 `knowledge/uncategorized.md`（避免并行子代理改同一文件冲突），末步「知识库审阅」检查待确认条目并提示用户归类 |
+diff --git a/meta.json b/meta.json
+index 3a028714..1e209983 100644
+--- a/meta.json
++++ b/meta.json
+@@ -1,11 +1,25 @@
+ {
+   "name_zh": "worktree 元数据",
+-  "changeName": "2026-09-11-cross-change-decision-guard",
+-  "branch": "sillyspec/2026-09-11-cross-change-decision-guard",
++  "changeName": "2026-11-14-scan-incremental",
++  "branch": "sillyspec/2026-11-14-scan-incremental",
+   "baseBranch": "main",
+-  "baseHash": "42aa9927f71b78c903709fadd681d71719855d66",
+-  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-cross-change-decision-guard",
++  "baseHash": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
++  "actualBaseHash": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
++  "createdAt": "2026-11-14T14:46:09.756Z",
++  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-11-14-scan-incremental",
+   "mode": "worktree",
+-  "createdAt": "2026-09-11T06:50:20.659Z",
+-  "provisioning": true
++  "baselineFiles": [],
++  "baselineCommit": null,
++  "baselineHash": null,
++  "syncDiagnostic": {
++    "status": "up-to-date",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 0
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "3ce62702b50db02a",
++  "depsCheckedAt": "2026-11-14T14:46:09.689Z"
+ }
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 5179916b..fc7f1a1f 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -225,6 +225,16 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
+     if (guard.refreshDocs.includes(refreshRel)) return { blocked: false }
+   }
+ 
++  // 增量 scan 会话态分支（2026-11-14-scan-incremental D-006@v1）：scan 启动层探测可行时 guard 写
++  // mode='scan-incremental' + incrementalDocs 白名单（=计划 guardDocs：重生成篇章+受影响模块卡+
++  // _module-map/_module-map-audit/_facts）——白名单内=本次增量重生成面放行（新增文件无旧哈希=
++  // 计划内新建，放行依据是 membership，Review Focus #2）；白名单外照常走原保护（增量模式下
++  // 未受影响面的覆盖保护反而更强）。mode='scan-refresh' 分支与存量 guard（无 mode）不受影响。
++  if (guard.mode === 'scan-incremental' && Array.isArray(guard.incrementalDocs)) {
++    const incrRel = toPosixPath(path.relative(scanDocInfo.specRoot, filePath))
++    if (guard.incrementalDocs.includes(incrRel)) return { blocked: false }
++  }
++
+   let frontmatter = {}
+   try {
+     frontmatter = parseFrontmatter(readFileSync(filePath, 'utf8'))
+diff --git a/src/run/command.js b/src/run/command.js
+index ea8bc87a..17b98162 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -259,6 +259,7 @@ sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${
+   quick 专属: --linked-changes none|a,b --files a.js,b.js --allow-new
+              --allow-delete --force-baseline --confirm --file-notes
+   scan  专属: --quick --standard --deep --force-rescan --diff [--base <commit>] [--full] [--report]
++             --incremental（显式请求增量，不可行时警告+回退全量） --force-incremental（越软门）
+   archive专属: --confirm
+ `)
+ }
+@@ -747,6 +748,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--req', '--cause', '--solution', '--result',
+     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+     '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
++    '--incremental', '--force-incremental', // scan 增量模式（2026-11-14-scan-incremental FR-07：显式请求/越软门；启动层 stage.js 消费）
+     '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
+     '--json', '--dir', '--help',
+     '--reopen', '--from-step', '--mode',
+diff --git a/src/run/scan-profile.js b/src/run/scan-profile.js
+index 929d3fe1..78a64841 100644
+--- a/src/run/scan-profile.js
++++ b/src/run/scan-profile.js
+@@ -361,6 +361,35 @@ export async function executeScanFinalize(cwd, platformOpts) {
+   const stamped = stampScanDocHeaders({ cwd, specDir })
+   if (stamped.fixed.length > 0) console.log(`  📝 frontmatter 已由 CLI 注入 ${stamped.fixed.length} 份文档（${stamped.stampedKeys} 个键，只补缺不覆盖）`)
+ 
++  // ── 增量 scan 统一推进（2026-11-14-scan-incremental FR-05/D-007）──
++  // 触发条件=本次会话 guard 的 mode==='scan-incremental'（guard 每次 scan 启动重写——是
++  // 会话态权威；不用计划文件存在性判断，防上次增量的审计残留让后续全量 scan 的 generator
++  // 错标，execute 审查 note 修正）。stamp（只补缺）后把全部基线载体统一 bump 至当前
++  // HEAD——增量核对了整个漂移窗口（受影响者重写、未受影响者经验证），staleness 判定转
++  // fresh（C6 兼容）。bump 在 stamp 之后执行使 generator 终态=sillyspec-scan-incremental。
++  // 全程 fail-soft：guard 缺失/读取失败/非 git 仓 → 跳过（非增量会话零行为变化）。
++  try {
++    const guardPath = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
++    let guardMode = null
++    try { guardMode = JSON.parse(readFileSync(guardPath, 'utf8')).mode || null } catch { /* 无 guard → 非增量 */ }
++    if (guardMode === 'scan-incremental') {
++      const headShortRes = safeGit(cwd, ['rev-parse', '--short', 'HEAD'])
++      const hs = headShortRes.error ? null : String(headShortRes.value).trim()
++      if (hs) {
++        const { bumpScanDocBaselines } = await import('../scan-postcheck.js')
++        const bump = bumpScanDocBaselines({ cwd, specDir, project: null, docs: SCAN_REQUIRED_DOCS, headShort: hs, generator: 'sillyspec-scan-incremental' })
++        if (bump.bumped.length > 0) {
++          console.log(`  ⚡ 增量收口：基线统一推进 ${bump.bumped.length} 份文档（source_commit→${hs} / generator→sillyspec-scan-incremental）`)
++        }
++        for (const s of bump.skipped) console.log(`  ⏭️  ${s.file}：${s.reason}`)
++      } else {
++        console.warn('  ⚠️ 增量收口跳过：git rev-parse --short HEAD 失败（非 git 仓？）')
++      }
++    }
++  } catch (e) {
++    console.warn(`  ⚠️ 增量收口失败（不阻断）：${String((e && e.message) || e).split('\n')[0]}`)
++  }
++
+   for (const p of listRegisteredProjects(specBase, cwd)) {
+     const tmp = join(specBase, 'docs', p, 'scan', '_env-detect.md')
+     try { if (existsSync(tmp)) { unlinkSync(tmp); console.log(`  🧹 已清理 ${p}/scan/_env-detect.md`) } } catch { /* 清理失败不阻断 */ }
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 3a1c4f87..c7a1d431 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -16,9 +16,10 @@
+  *     './stages/plan-postcheck.js' / './worktree-deps.js' → '../'（src/ 下退一层）
+  *   - 'child_process'（execSync）裸模块名不变
+  */
+-import { join, dirname } from 'node:path'
++import { join, dirname, basename } from 'node:path'
+ import { runtimeStatePath } from '../runtime-paths.js'
+ import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, unlinkSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+@@ -322,22 +323,129 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+   if (stageName === 'scan') {
+     try {
+       const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
+-      const scanGuard = {
+-        name_zh: '扫描守卫',
+-        sourceCommit: gitResult.value,
+-        sourceCommitError: gitResult.error,
+-        startedAt: new Date().toISOString(),
+-        forceRescan: quickOpts?.isForceRescan || false,
++      const isForceRescan = quickOpts?.isForceRescan || false
++
++      // ── 增量探测（2026-11-14-scan-incremental D-003/D-006/D-007）──
++      // 启动入口层执行（quick/standard/deep 三档统一——挂步骤内会被 standard skipNames/quick
++      // 步表跳过）；--force-rescan 跳过探测走现行全量。探测/计划全程 fail-soft：任何异常
++      // 回退现行 guard 语义（零回归，D-002）。
++      let incremental = null // { planFile, guardDocs: Set, projects: [{project, plan}] }
++      if (!isForceRescan) {
++        try {
++          const flags = process.argv.slice(2)
++          const forceIncremental = flags.includes('--force-incremental')
++          const explicitIncremental = flags.includes('--incremental')
++          const { probeCodegraph } = await import('../scan-codegraph.js')
++          const { computeIncrementalPlan } = await import('../scan-incremental.js')
++          const probe = await probeCodegraph(cwd)
++          if (explicitIncremental && !probe.available) {
++            console.warn(`⚠️  --incremental 已请求但增量不可行：${probe.reason}——回退全量 scan（不阻断）`)
++          }
++          if (probe.available) {
++            // 多项目仓逐项目计算（已注册项目清单；无注册表时 basename 兜底单项目）；
++            // 探测只做一次（同 root 结果恒定），逐项目经 deps 注入复用——省 N-1 次 status 子进程
++            const projects = []
++            try {
++              const projectsDir = join(specBase, 'projects')
++              if (existsSync(projectsDir)) {
++                projects.push(...readdirSync(projectsDir).filter((f) => f.endsWith('.yaml')).map((f) => f.slice(0, -5)))
++              }
++            } catch { /* 读失败走兜底 */ }
++            if (projects.length === 0) projects.push(basename(cwd))
++            // listIndexFiles 全仓索引清单同 root 恒定——memoize 闭包按需跑一次（软门回退的项目不触发）
++            const { listIndexFiles } = await import('../scan-codegraph.js')
++            let filesCache = null
++            const memoList = async (root) => {
++              if (filesCache === null) filesCache = await listIndexFiles(root)
++              return filesCache
++            }
++            const perProject = []
++            for (const p of projects) {
++              const plan = await computeIncrementalPlan({
++                projectRoot: cwd, specBase, projectName: p, forceIncremental,
++                deps: { probeCodegraph: async () => probe, listIndexFiles: memoList },
++              })
++              perProject.push({ project: p, plan })
++            }
++            const incrProjects = perProject.filter((x) => x.plan.mode === 'incremental')
++            // 计划落盘（原子写，断点续扫与 finalize 共读；下次 scan 覆盖）
++            const planFile = runtimeStatePath(join(specBase, '.runtime'), 'scan-incremental-plan.json')
++            mkdirSync(dirname(planFile), { recursive: true })
++            writeAtomicSync(planFile, JSON.stringify({
++              changeType: 'scan-incremental',
++              startedAt: new Date().toISOString(),
++              projects: perProject.map((x) => ({
++                project: x.project, mode: x.plan.mode, reason: x.plan.reason,
++                base: x.plan.base, headShort: x.plan.headShort, behindCommits: x.plan.behindCommits,
++                docsToRegenerate: x.plan.docsToRegenerate, docsToSkip: x.plan.docsToSkip,
++                affectedModules: (x.plan.affectedModules || []).map((m) => m.id),
++                unmappedFiles: x.plan.unmappedFiles, warnings: x.plan.warnings,
++              })),
++            }, null, 2) + '\n')
++            // 路径判定输出（一次给全：各项目路径+原因+数字）
++            for (const x of perProject) {
++              if (x.plan.mode === 'incremental') {
++                const auditN = x.plan.audit ? x.plan.audit.uncoveredFiles.length : null
++                console.log(`⚡ 增量路径 [${x.project}]：基线 ${x.plan.base}..${x.plan.headShort}（落后 ${x.plan.behindCommits ?? '?'} commit），模块受影响 ${x.plan.affectedModules.length} 个（${x.plan.affectedModules.map((m) => m.id).join(', ') || '无'}），篇章重生成 ${x.plan.docsToRegenerate.length} 份 / 跳过 ${x.plan.docsToSkip.length} 份${auditN !== null ? `，对账未归属 ${auditN} 个（_module-map-audit.md）` : ''}——计划已落盘 ${planFile}`)
++                for (const w of x.plan.warnings) console.warn(`   ⚠️ ${w}`)
++              } else {
++                console.log(`🛡️ 全量路径 [${x.project}]：${x.plan.reason}`)
++              }
++            }
++            if (incrProjects.length > 0) incremental = { planFile, perProject, incrProjects }
++          } else if (!explicitIncremental) {
++            console.log(`🛡️ 全量路径：${probe.reason}——增量不可用，走现行 scan`)
++          }
++        } catch (e) {
++          console.warn(`⚠️ 增量探测失败（fail-soft 回退全量）：${String(e && e.message || e).split('\n')[0]}`)
++        }
++      } else {
++        console.log('🛡️ --force-rescan 已开启：跳过增量探测，走全量重扫')
+       }
++
++      // ── guard 写入（增量模式=白名单握手 D-006；非增量=原样，逐字兼容存量）──
+       const guardFile = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
+       mkdirSync(dirname(guardFile), { recursive: true })
+       // 原子写：hook 进程（worktree-guard 的 readScanGuard）并发读，裸 truncate→write 的
+       // 半截窗口会被 JSON.parse 吞成 null → 覆盖保护静默失效（fail-open）
+-      writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
+-      if (scanGuard.forceRescan) {
+-        console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
++      if (incremental) {
++        // 增量白名单=各增量项目 guardDocs 并集；docHashes 只记现存文件（审计面——新文件无
++        // 旧哈希=计划内新建，guard 放行依据是白名单 membership，Review Focus #2）
++        const guardDocs = new Set()
++        for (const x of incremental.incrProjects) for (const g of x.plan.guardDocs) guardDocs.add(g)
++        const docHashes = {}
++        for (const rel of guardDocs) {
++          try {
++            const abs = join(specBase, rel)
++            if (existsSync(abs)) docHashes[rel] = createHash('sha256').update(readFileSync(abs)).digest('hex')
++          } catch { /* 读失败不进 docHashes（membership 放行不受影响） */ }
++        }
++        const scanGuard = {
++          name_zh: '增量扫描守卫',
++          mode: 'scan-incremental',
++          incrementalDocs: [...guardDocs],
++          docHashes,
++          sourceCommit: gitResult.value,
++          sourceCommitError: gitResult.error,
++          startedAt: new Date().toISOString(),
++          forceRescan: false,
++        }
++        writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
++        console.log(`🛡️ scan 增量守卫已记录: 白名单 ${scanGuard.incrementalDocs.length} 个文件（白名单内放行重生成，白名单外照常保护）`)
+       } else {
+-        console.log('🛡️ scan 覆盖保护已记录: existing scan docs require current source_commit/updated_at')
++        const scanGuard = {
++          name_zh: '扫描守卫',
++          sourceCommit: gitResult.value,
++          sourceCommitError: gitResult.error,
++          startedAt: new Date().toISOString(),
++          forceRescan: isForceRescan,
++        }
++        writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
++        if (scanGuard.forceRescan) {
++          console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
++        } else {
++          console.log('🛡️ scan 覆盖保护已记录: existing scan docs require current source_commit/updated_at')
++        }
+       }
+     } catch (e) {
+       console.warn(`⚠️ scan 覆盖保护记录失败: ${e.message}`)
+diff --git a/src/scan-codegraph.js b/src/scan-codegraph.js
+new file mode 100644
+index 00000000..389f55eb
+--- /dev/null
++++ b/src/scan-codegraph.js
+@@ -0,0 +1,238 @@
++/**
++ * scan-codegraph — CodeGraph CLI 统一封装层（change: 2026-11-14-scan-incremental / task-01）。
++ *
++ * 定位：增量 scan（scan-incremental.js / run 层探测）对 codegraph 子进程调用的唯一入口——
++ * 探测三态（fail-soft）、Windows .cmd shim 解析、输出形状防御式映射、分级超时、统一 env。
++ * 设计依据：design.md Phase 1（2026-11-14 实测 codegraph 1.6.2 发布包输出形状）+
++ *   D-002（探测失败绝不阻断 scan）+ daemon 参考实现（multi-agent-platform 仓
++ *   sillyhub-daemon/src/codegraph/cli.ts 的超时分级/env 注入/形状映射思路，本层为
++ *   零 daemon 依赖的 JS 轻量版；Windows .cmd 解析参考同仓 cmd-shim.ts 模式 1/2）。
++ *
++ * 边界（design 非目标）：不做索引状态机判定、不做 init/index/sync 维护编排；
++ * 任何异常 → available:false / null，绝不抛出（调用方零 try-catch 包裹）。
++ * 1.6.2 发布包无 --local-only / --no-telemetry 参数（已实测），全模块禁止携带。
++ */
++import { execFile as cpExecFile, execFileSync } from 'node:child_process'
++import { existsSync, readFileSync } from 'node:fs'
++import { dirname } from 'node:path'
++import { promisify } from 'node:util'
++
++/** 统一注入环境（D-007 参考口径）：CODEGRAPH_DIR 是相对 root 的单段目录名（禁嵌套），以 cwd=root 执行使其落在 <root>/.sillyspec-codegraph */
++export const CODEGRAPH_ENV = Object.freeze({
++  CODEGRAPH_DIR: '.sillyspec-codegraph',
++  CODEGRAPH_TELEMETRY: '0',
++  DO_NOT_TRACK: '1',
++})
++
++/** 分级超时（ms，对齐 daemon 参考实现 CODEGRAPH_TIMEOUTS_MS 档位；本变更消费面只用 status/affected/files） */
++export const CODEGRAPH_TIMEOUTS_MS = Object.freeze({
++  version: 5_000,
++  status: 5_000,
++  query: 10_000,
++  affected: 15_000,
++  sync: 60_000,
++})
++
++/** affected 受影响测试清单硬上限：CLI 无 limit 参数，本层截断并置 truncated（防大仓输出失控） */
++export const AFFECTED_TESTS_LIMIT = 200
++
++/** 大仓 query/affected 输出可能远超 execFile 默认 1MB（daemon 参考 32MB 档） */
++const MAX_BUFFER_BYTES = 32 * 1024 * 1024
++
++// ── Windows 命令解析（cmd-shim 轻量版，参考 daemon cmd-shim.ts 模式 1/2）──────────
++// 背景：npm 全局 bin 在 Windows 是 cmd-shim 生成的 .cmd 包装，execFile('codegraph') 无
++// PATHEXT 解析必 ENOENT（Node>=18.20 CVE-2024-27980 拒无 shell 调 .cmd）。解析出真实
++// node 入口后 execFile 参数数组执行，全程不经 shell。解析失败 fallback 裸名（让 ENOENT
++// 自然冒给探测层判 available:false——fail-safe 方向正确）。
++
++/** 模块级解析缓存：探测在整个 scan 生命周期只需解析一次 */
++let resolvedCmdCache = null
++
++/**
++ * 解析 Windows .cmd 包装文件内容，返回真实可执行入口。
++ * @param {string} cmdPath .cmd 文件绝对路径
++ * @returns {{exe: string, prependArgs: string[]}|null} 非 Windows / 读失败 / 无匹配 → null
++ */
++export function parseCmdShim(cmdPath) {
++  let content
++  try {
++    content = readFileSync(cmdPath, 'utf-8')
++  } catch {
++    return null
++  }
++  const dp0 = dirname(cmdPath)
++  const expand = (s) => s.replace(/%dp0%/gi, dp0)
++  // 模式 1（node + js，cmd-shim 标准）：`"%_prog%"  "...\codegraph.js" %*`
++  const m1 = /"%_prog%"\s+"([^"]+)"\s+%\*/.exec(content)
++    ?? /"([^"]+)"\s+"([^"]+)"\s+%\*/.exec(content)
++  if (m1) {
++    const target = expand(m1[1])
++    const localNode = `${dp0}\\node.exe`
++    const exe = existsSync(localNode) ? localNode : process.execPath
++    return { exe, prependArgs: [target] }
++  }
++  // 模式 2（原生 exe）：`"%dp0%\...\codegraph.exe"   %*`
++  const m2 = /"([^"]+)"\s+%\*/.exec(content)
++  if (m2) {
++    const exe = expand(m2[1])
++    if (!/%[A-Za-z0-9_]+%/.test(exe)) return { exe, prependArgs: [] }
++  }
++  return null
++}
++
++/**
++ * 跨平台命令解析（可注入测试 mock）。
++ * @returns {{command: string, baseArgs: string[]}} exe 后固定的前置参数，用户参数追加其后
++ */
++export function resolveCodegraphCommand() {
++  if (process.platform === 'win32') {
++    if (!resolvedCmdCache) {
++      let cmdPath = null
++      try {
++        // where 是系统 exe（非 .cmd），execFileSync 数组形式不经 shell；PATH 首个命中即 .cmd 包装
++        const out = execFileSync('where', ['codegraph'], { encoding: 'utf-8', timeout: 3_000, windowsHide: true })
++        cmdPath = out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.toLowerCase().endsWith('.cmd')) || null
++      } catch { /* where 失败 → fallback 裸名 */ }
++      if (cmdPath) {
++        const parsed = parseCmdShim(cmdPath)
++        if (parsed) resolvedCmdCache = { command: parsed.exe, baseArgs: parsed.prependArgs }
++      }
++    }
++    if (resolvedCmdCache) return resolvedCmdCache
++  }
++  return { command: 'codegraph', baseArgs: [] }
++}
++
++/** 测试专用：清空命令解析缓存 */
++export function _resetCodegraphCommandCache() {
++  resolvedCmdCache = null
++}
++
++// ── 底层执行（可注入）────────────────────────────────────────────────────────
++
++/**
++ * 执行一条 codegraph 命令（参数数组，env 注入，cwd=root，分级超时）。
++ * @private
++ * @param {{execFile?: Function, env?: object, timeouts?: object}} deps 可注入（测试 mock）
++ */
++async function runCodegraph(root, userArgs, timeoutMs, { execFile, env, timeouts } = {}) {
++  const doExec = execFile || promisify(cpExecFile)
++  const resolved = resolveCodegraphCommand()
++  const mergedEnv = { ...(env === undefined ? process.env : env), ...CODEGRAPH_ENV }
++  const t = timeouts || CODEGRAPH_TIMEOUTS_MS
++  const { stdout } = await doExec(resolved.command, [...resolved.baseArgs, ...userArgs], {
++    cwd: root,
++    env: mergedEnv,
++    timeout: t[timeoutKey(userArgs)] || timeoutMs,
++    maxBuffer: MAX_BUFFER_BYTES,
++    windowsHide: true,
++  })
++  return stdout
++}
++
++/** 按命令首 token 映射超时键（status→status、files→query 档、affected→affected） */
++function timeoutKey(userArgs) {
++  const first = String(userArgs[0] || '')
++  if (first === 'status' || first === 'version') return first
++  if (first === 'query' || first === 'files' || first === 'callers' || first === 'callees') return 'query'
++  if (first === 'affected' || first === 'impact') return 'affected'
++  if (first === 'sync') return 'sync'
++  return null
++}
++
++/** 防御式 JSON 提取：输出混入 npm 噪声行（前缀警告/空行）时截取首个 { 或 [ 到末个 } 或 ] 的段落再解析；失败 → null（不 throw） */
++function parseJsonLoose(stdout) {
++  if (typeof stdout !== 'string' || !stdout) return null
++  const objStart = stdout.indexOf('{')
++  const arrStart = stdout.indexOf('[')
++  let start = -1
++  if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) start = objStart
++  else if (arrStart !== -1) start = arrStart
++  if (start === -1) return null
++  const objEnd = stdout.lastIndexOf('}')
++  const arrEnd = stdout.lastIndexOf(']')
++  let end = -1
++  if (objEnd !== -1 && (arrEnd === -1 || objEnd > arrEnd)) end = objEnd
++  else if (arrEnd !== -1) end = arrEnd
++  if (end <= start) return null
++  try {
++    return JSON.parse(stdout.slice(start, end + 1))
++  } catch {
++    return null
++  }
++}
++
++// ── 对外探测/映射 API ───────────────────────────────────────────────────────
++
++/**
++ * 探测三态：索引是否可用（fail-soft——任何异常返回 available:false，绝不抛出）。
++ * @param {string} root 项目根（cwd；索引落在 root/.sillyspec-codegraph）
++ * @param {{execFile?: Function, env?: object, timeouts?: object}} deps 可注入
++ * @returns {Promise<{available: boolean, reason: string, status?: object}>}
++ */
++export async function probeCodegraph(root, deps = {}) {
++  try {
++    const out = await runCodegraph(root, ['status', root, '-j'], CODEGRAPH_TIMEOUTS_MS.status, deps)
++    const st = parseJsonLoose(out)
++    if (!st || typeof st !== 'object') {
++      return { available: false, reason: 'codegraph status 输出不可解析（非 JSON 或字段缺失）' }
++    }
++    if (st.initialized !== true) return { available: false, reason: 'codegraph 索引未初始化（initialized=false）', status: st }
++    if (!st.index || st.index.state !== 'complete') {
++      return { available: false, reason: `codegraph 索引未完成（state=${st.index ? st.index.state : '缺失'}）`, status: st }
++    }
++    return { available: true, reason: '索引就绪', status: st }
++  } catch (e) {
++    const msg = String((e && e.message) || e)
++    if (/ENOENT/i.test(msg)) return { available: false, reason: '未安装 codegraph（命令不存在）' }
++    if (/ETIMEDOUT|timed?\s*out/i.test(msg)) return { available: false, reason: 'codegraph 探测超时' }
++    return { available: false, reason: `codegraph 探测失败（${msg.split('\n')[0].slice(0, 120)}）` }
++  }
++}
++
++/**
++ * 索引全量文件清单（对账数据源）。
++ * @returns {Promise<Array<{path: string, language: string, nodeCount: number, size: number}>|null>} 失败/形状不符 → null
++ */
++export async function listIndexFiles(root, deps = {}) {
++  try {
++    const out = await runCodegraph(root, ['files', '-p', root, '--format', 'flat', '-j'], CODEGRAPH_TIMEOUTS_MS.query, deps)
++    const arr = parseJsonLoose(out)
++    if (!Array.isArray(arr)) return null
++    // 防御式映射：逐项取字段，缺字段的项跳过（不 throw）；全部无效 → null
++    const files = []
++    for (const it of arr) {
++      if (!it || typeof it.path !== 'string') continue
++      files.push({
++        path: it.path.replace(/\\/g, '/'),
++        language: typeof it.language === 'string' ? it.language : '',
++        nodeCount: Number.isFinite(it.nodeCount) ? it.nodeCount : 0,
++        size: Number.isFinite(it.size) ? it.size : 0,
++      })
++    }
++    return files.length > 0 ? files : null
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 受影响测试清单（截断 AFFECTED_TESTS_LIMIT 并置 truncated）。
++ * @param {string[]} files 变更源码文件（仓库相对 POSIX）
++ * @returns {Promise<{affectedTests: string[], truncated: boolean}|null>} 失败 → null
++ */
++export async function affectedTests(root, files, deps = {}) {
++  if (!Array.isArray(files) || files.length === 0) return { affectedTests: [], truncated: false }
++  try {
++    const out = await runCodegraph(root, ['affected', '-p', root, '-j', ...files], CODEGRAPH_TIMEOUTS_MS.affected, deps)
++    const obj = parseJsonLoose(out)
++    if (!obj || !Array.isArray(obj.affectedTests)) return null
++    const list = obj.affectedTests.filter((t) => typeof t === 'string')
++    return {
++      affectedTests: list.slice(0, AFFECTED_TESTS_LIMIT),
++      truncated: list.length > AFFECTED_TESTS_LIMIT,
++    }
++  } catch {
++    return null
++  }
++}
+diff --git a/src/scan-facts.js b/src/scan-facts.js
+index d162a54d..e922de60 100644
+--- a/src/scan-facts.js
++++ b/src/scan-facts.js
+@@ -82,12 +82,26 @@ function collectEndpointFacts(cwd, root) {
+   }
+ }
+ 
++/** scope 前缀命中（`src/**` 形 glob 展开为 src 前缀；与 scan-incremental inScope 同口径内联） */
++function inScopePrefix(p, scopes) {
++  const norm = p.replace(/\\/g, '/')
++  return scopes.some((s) => {
++    const pre = s.replace(/\\/g, '/').replace(/\/+$/, '')
++    const trimmed = pre.endsWith('/**') ? pre.slice(0, -3) : pre
++    if (!trimmed) return false
++    return norm === trimmed || norm.startsWith(trimmed + '/')
++  })
++}
++
+ /**
+  * 确定性收集 scan 机械事实（纯同步，不写盘）。
+- * @param {{ cwd: string, projectPath?: string|null }} opts cwd：仓库根（引用解析锚）；projectPath：子项目相对路径（缺省主项目）
++ * @param {{ cwd: string, projectPath?: string|null, scope?: string[]|null }} opts
++ *   cwd：仓库根（引用解析锚）；projectPath：子项目相对路径（缺省主项目）；
++ *   scope：POSIX 路径前缀数组（可选，2026-11-14-scan-incremental D-011）——非空时端点抽取
++ *   限定在命中前缀的源文件内（manifest/规模等项目级事实保留全量口径）。
+  * @returns {object} facts（renderScanFactsMd 的输入）
+  */
+-export function collectScanFacts({ cwd, projectPath = null }) {
++export function collectScanFacts({ cwd, projectPath = null, scope = null }) {
+   const root = projectPath ? join(cwd, projectPath) : cwd
+   const manifest = readManifestFacts(root)
+   const size = (() => { try { return estimateSourceSize(root) } catch { return { fileCount: 0, sourceBytes: 0 } } })()
+@@ -98,9 +112,10 @@ export function collectScanFacts({ cwd, projectPath = null }) {
+     : manifest.manifests.includes('go.mod') ? 'go'
+     : manifest.manifests.includes('Cargo.toml') ? 'rust'
+     : 'generic'
+-  return {
++  const facts = {
+     generatedAt: toWallClock(new Date()),
+     projectPath,
++    scopeApplied: Array.isArray(scope) && scope.length > 0 ? true : undefined,
+     type,
+     pkgName: manifest.pkgName,
+     gitHead: git && git.value ? git.value.trim() : null,
+@@ -109,8 +124,20 @@ export function collectScanFacts({ cwd, projectPath = null }) {
+     depsTruncated: manifest.depsTruncated,
+     scripts: manifest.scripts,
+     size,
+-    endpoints: collectEndpointFacts(cwd, root),
++    endpoints: (() => {
++      const ep = collectEndpointFacts(cwd, root)
++      if (!Array.isArray(scope) || scope.length === 0) return ep
++      // scope 限定（D-011）：端点只留 source 命中前缀的（ref 形如 `path:line`，取 path 段匹配）
++      const hit = (e) => inScopePrefix(String(e.ref).split(':')[0], scope)
++      return {
++        backend: ep.backend.filter(hit),
++        backendTotal: ep.backend.filter(hit).length,
++        frontend: ep.frontend.filter(hit),
++        frontendTotal: ep.frontend.filter(hit).length,
++      }
++    })(),
+   }
++  return facts
+ }
+ 
+ /**
+@@ -124,7 +151,7 @@ export function renderScanFactsMd(facts) {
+   const lines = []
+   lines.push(`# scan 事实底稿（CLI 确定性抽取）`)
+   lines.push('')
+-  lines.push(`> 生成：sillyspec scan facts · ${facts.generatedAt} · 范围：${scope} · git HEAD：${facts.gitHead || '（不可用）'}`)
++  lines.push(`> 生成：sillyspec scan facts · ${facts.generatedAt} · 范围：${scope} · git HEAD：${facts.gitHead || '（不可用）'}${facts.scopeApplied ? ' · ⚡ 增量模式：端点抽取限定受影响面（manifest/规模为项目级全量口径）' : ''}`)
+   lines.push('> 本文件由 CLI 机器生成（零 AI token）。子代理**禁止重新 grep 发现**下列机械事实，只做解读与成文；与源码冲突时以本底稿为准并标注差异。')
+   lines.push('')
+   lines.push('## 项目类型与清单')
+@@ -164,8 +191,8 @@ export function renderScanFactsMd(facts) {
+  * @param {{ cwd: string, specDir: string, projectName: string, projectPath?: string|null }} opts
+  * @returns {{ outPath: string, facts: object }}
+  */
+-export function buildAndWriteScanFacts({ cwd, specDir, projectName, projectPath = null }) {
+-  const facts = collectScanFacts({ cwd, projectPath })
++export function buildAndWriteScanFacts({ cwd, specDir, projectName, projectPath = null, scope = null }) {
++  const facts = collectScanFacts({ cwd, projectPath, scope })
+   const outDir = join(specDir, 'docs', projectName, 'scan')
+   mkdirSync(outDir, { recursive: true })
+   const outPath = join(outDir, '_facts.md')
+diff --git a/src/scan-incremental.js b/src/scan-incremental.js
+new file mode 100644
+index 00000000..943163c0
+--- /dev/null
++++ b/src/scan-incremental.js
+@@ -0,0 +1,333 @@
++/**
++ * scan-incremental — 增量 scan 计划计算层（change: 2026-11-14-scan-incremental / task-02）。
++ *
++ * 定位：把「scan 基线..HEAD 变化集」换算成「受影响模块集 + 篇章重生成/跳过集 +
++ * _module-map 对账报告 + guard 白名单 + 软门回退判定」（design.md Phase 2）。
++ * 消费方：run/stage.js scan 启动段（探测+路径判定+guard 握手，task-03）。
++ *
++ * 单源复用（D-001 禁双写）：parseSourceCommit（scan-staleness）/ parseNameStatus（scan-diff）/
++ *   matchFilesToModules（docs-debt）/ parseModuleMapSimple（modules）/ SCAN_REQUIRED_DOCS（constants）。
++ * 基线聚合锚（落后最多）与 scope 内联口径与 scan-diff/scan-refresh 同语义——两处先例均选择
++ * 内联防双向耦合（src/scan-refresh.js:270 注释），本模块同例。
++ *
++ * 回退链（D-002/D-007，全 fail-soft 不抛）：无 scan 目录 / 无基线 / git 失败 / 非祖先基线 /
++ *   任一基线载体 scan_depth:quick（浅文档应全量升级，与 refresh quick-depth 硬门同语义）/
++ *   软门超限（scope 内变更 >100 文件或落后 >200 commit，对齐 REFRESH_SOFT_GATE，
++ *   forceIncremental 可越并留痕）→ mode:'full' + 中文 reason。
++ * 秒级预算（C4）：除 probe/listIndexFiles/affectedTests 三个 codegraph 调用外零子进程；
++ *   unmapped hint 用目录邻居启发（D-010 执行期裁决），不用 query。
++ */
++import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { safeGit as defaultSafeGit } from './git-helper.js'
++import { parseSourceCommit } from './scan-staleness.js'
++import { parseNameStatus } from './scan-diff.js'
++import { matchFilesToModules } from './docs-debt.js'
++import { parseModuleMapSimple } from './modules.js'
++import { SCAN_REQUIRED_DOCS } from './constants.js'
++import { probeCodegraph as defaultProbe, listIndexFiles as defaultListFiles, affectedTests as defaultAffected } from './scan-codegraph.js'
++import { writeAtomicSync as defaultWrite } from './fs-atomic.js'
++
++/** 软门阈值（对齐 REFRESH_SOFT_GATE src/scan-refresh.js:41 同值，design Phase 2.7） */
++export const INCREMENTAL_SOFT_GATE = Object.freeze({ maxDriftFiles: 100, maxBehindCommits: 200 })
++
++const GIT_TIMEOUT_MS = 10_000
++
++/**
++ * 对账/变化集排除前缀与目录名（D-008 三层隔离之一；源集合与 estimateSourceSize skipDirs
++ * 同源 src/run/scan-profile.js:28-37 + '.sillyspec-codegraph/' 索引目录自身）。
++ * 单点导出供 task-03（stage.js 启动段变化集过滤）共用。
++ */
++export const INCREMENTAL_EXCLUDE_DIRS = Object.freeze(new Set([
++  'node_modules', '.git', 'dist', 'build', 'out', 'target',
++  '__pycache__', '.venv', 'venv',
++  '.next', '.nuxt', '.output', '.svelte-kit', '.astro', '.turbo', '.parcel-cache',
++  'coverage', '.nyc_output', '.vitest', '.cache',
++  'vendor', 'bower_components',
++  'dist-types',
++  '.sillyspec', '.claude',
++  'tmp', 'temp', '.tmp', 'logs',
++  '.sillyspec-codegraph', '.codegraph',
++]))
++
++/** 路径是否被排除（任一路径段命中排除目录名，或以排除前缀开头） */
++export function isExcludedPath(p) {
++  if (typeof p !== 'string' || !p) return true
++  const posix = p.replace(/\\/g, '/')
++  return posix.split('/').some((seg) => INCREMENTAL_EXCLUDE_DIRS.has(seg))
++}
++
++/** 路由特征（路由信号判定：路径段或文件名含路由语义 token → INTEGRATIONS 篇章需重生成） */
++const ROUTE_TOKENS = /(routes?|router|endpoint|controller|api|handler)s?\b/i
++
++/**
++ * 计算增量计划。
++ * @param {{ projectRoot: string, specBase: string, projectName: string, forceIncremental?: boolean,
++ *   deps?: { safeGit?, probeCodegraph?, listIndexFiles?, affectedTests?, writeFile? } }} opts
++ *   deps 全部可注入（测试 mock；缺省用真实现）
++ * @returns {Promise<object>} IncrementalPlan：
++ *   { ok, mode:'incremental'|'full', reason, base, head, headShort, behindCommits,
++ *     affectedModules:[{id, doc, files:[{path,status}], added, deleted, modified}],
++ *     unmappedFiles:[{path, status, hint}], docsToRegenerate, docsToSkip,
++ *     audit:{uncoveredFiles, totalIndexed, coverageRatio}|null,
++ *     affectedTests:{list, truncated}|null, guardDocs, warnings }
++ *   ok:false 仅参数缺失；增量不可行一律 mode:'full'（不抛，D-002 fail-soft）
++ */
++export async function computeIncrementalPlan(opts = {}) {
++  const { projectRoot, specBase, projectName, forceIncremental = false } = opts
++  const deps = opts.deps || {}
++  const safeGit = deps.safeGit || defaultSafeGit
++  const probeCodegraph = deps.probeCodegraph || defaultProbe
++  const listIndexFiles = deps.listIndexFiles || defaultListFiles
++  const affectedTests = deps.affectedTests || defaultAffected
++  const writeFile = deps.writeFile || defaultWrite
++  const warnings = []
++  const scanDir = join(specBase, 'docs', projectName, 'scan')
++
++  if (!projectRoot || !specBase || !projectName) {
++    return { ok: false, mode: 'full', reason: '参数缺失（projectRoot/specBase/projectName 必填）', warnings }
++  }
++  const full = (reason) => ({
++    ok: true, mode: 'full', reason, base: null, head: null, headShort: null, behindCommits: null,
++    affectedModules: [], unmappedFiles: [], docsToRegenerate: [], docsToSkip: [...SCAN_REQUIRED_DOCS],
++    audit: null, affectedTests: null, guardDocs: [], warnings,
++  })
++
++  // ── 基线载体收集（只认 SCAN_REQUIRED_DOCS；_ 前缀报告/底稿不是载体——refresh 同口径）──
++  if (!existsSync(scanDir)) return full('无 scan 文档目录（绿地项目）——先跑全量 scan 建基线')
++  const docEntries = [] // { file, base(7位), depth }
++  for (const f of readdirSync(scanDir)) {
++    if (!SCAN_REQUIRED_DOCS.includes(f)) continue
++    let content = ''
++    try { content = readFileSync(join(scanDir, f), 'utf8') } catch { continue }
++    const base = parseSourceCommit(content)
++    if (!base) return full(`scan 文档 ${f} 无 source_commit（旧版生成）——不可增量`)
++    const dm = content.match(/^scan_depth:\s*(\S+)\s*$/m)
++    docEntries.push({ file: f, base: base.slice(0, 7), depth: dm ? dm[1] : null })
++  }
++  if (docEntries.length === 0) return full('scan 目录内无基线载体文档')
++
++  // ── quick 深度回退（D-007：任一基线载体是浅文档 → 全量升级；统一 bump 语义要求如此）──
++  const quickDoc = docEntries.find((e) => e.depth === 'quick')
++  if (quickDoc) return full(`基线载体 ${quickDoc.file} 是 scan_depth:quick 浅文档——应全量升级（--deep --force-rescan）`)
++
++  // ── HEAD 解析（fail-soft：git 失败不抛，Review Focus #3）──
++  const headRes = safeGit(projectRoot, ['rev-parse', 'HEAD'], { timeout: GIT_TIMEOUT_MS })
++  if (headRes.error || !headRes.value) return full(`git rev-parse HEAD 失败（${String(headRes.error || '无输出').split('\n')[0]}）——非 git 仓或 git 异常`)
++  const head = headRes.value.trim()
++  const headShort = head.slice(0, 7)
++
++  // ── 祖先校验（分支切换/rebase 脱锚 → full，refresh 硬门②同语义）──
++  for (const e of docEntries) {
++    const anc = safeGit(projectRoot, ['merge-base', '--is-ancestor', e.base, head], { timeout: GIT_TIMEOUT_MS })
++    if (anc.error) return full(`基线 ${e.base} 不在当前分支历史（分支切换/rebase）——增量窗口脱锚`)
++  }
++
++  // ── 聚合锚：落后最多（保守漂移窗，scan-staleness D-003@v2 同口径）──
++  let base = docEntries[0].base
++  let behindCommits = 0
++  for (const e of docEntries) {
++    const r = safeGit(projectRoot, ['rev-list', '--count', `${e.base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++    const n = r.error ? null : parseInt(r.value, 10)
++    if (n !== null && !Number.isNaN(n) && n >= behindCommits) { behindCommits = n; base = e.base }
++  }
++
++  // ── 软门 behind 轴前置（C4 秒级预算，2026-11-14 task-06 真机实测驱动：大漂移仓 4233 commit
++  // 落后时 git diff --name-status 跑出 40s+——behind 单轴已可判软门（或关系），非 force 时
++  // 跳过 diff 直接回退，判定压回秒级。force 越过时才需要完整 diff 做收窄面。──
++  if (behindCommits > INCREMENTAL_SOFT_GATE.maxBehindCommits && !forceIncremental) {
++    return full(`漂移过大（落后 ${behindCommits} commit，阈值 ${INCREMENTAL_SOFT_GATE.maxDriftFiles}/${INCREMENTAL_SOFT_GATE.maxBehindCommits}）——增量收益消失，建议全量 sillyspec run scan --standard --force-rescan`)
++  }
++
++  // ── 变化集（全量变更文件；排除前缀过滤与对账同源 D-008）──
++  const diffRes = safeGit(projectRoot, ['diff', '--name-status', '--find-renames', `${base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++  if (diffRes.error) return full(`git diff ${base}..HEAD 失败（${String(diffRes.error).split('\n')[0]}）`)
++  const changed = parseNameStatus(diffRes.value).filter((it) => !isExcludedPath(it.path))
++
++  // ── codegraph 探测（fail-soft：不可用只降级补强面，不回退增量本身）──
++  const probe = await probeCodegraph(projectRoot)
++  if (!probe.available) warnings.push(`codegraph 不可用（${probe.reason}）——对账/受影响测试清单降级跳过，增量判定不受影响`)
++
++  // ── 索引目录隔离提示（D-008 第②层：索引目录存在但未进 .gitignore → warnings 建议登记，
++  //    不自动改写用户 .gitignore；第③层本仓登记见 .gitignore，第①层排除常量见 isExcludedPath）──
++  if (existsSync(join(projectRoot, '.sillyspec-codegraph'))) {
++    let ignored = false
++    try {
++      const gi = readFileSync(join(projectRoot, '.gitignore'), 'utf8')
++      ignored = /^\.sillyspec-codegraph\/?\s*$/m.test(gi) || gi.includes('.sillyspec-codegraph')
++    } catch { /* 无 .gitignore 或读失败 → 未 ignore */ }
++    if (!ignored) warnings.push('索引目录 .sillyspec-codegraph/ 存在但未进 .gitignore——建议登记一行（防索引文件污染 git diff/对账清单），本仓治理见变更 2026-11-14-scan-incremental D-008')
++  }
++
++  // ── module-map 加载与 scope ──
++  const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
++  let moduleIndex = null
++  if (existsSync(mapPath)) {
++    try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) } catch { moduleIndex = null }
++  }
++  const scope = collectScope(moduleIndex)
++  if (scope.length === 0) warnings.push('module-map 缺失/为空——变化文件无法归模块（全部 unmapped），建议先跑全量 scan 建映射')
++
++  // ── 软门（scope 内变更计数 + 落后数；forceIncremental 可越并留痕）──
++  const scopeDrift = changed.filter((it) => scope.length === 0 || inScope(it.path, scope)).length
++  if (scopeDrift > INCREMENTAL_SOFT_GATE.maxDriftFiles || behindCommits > INCREMENTAL_SOFT_GATE.maxBehindCommits) {
++    const msg = `漂移过大（scope 内 ${scopeDrift} 文件 / 落后 ${behindCommits} commit，阈值 ${INCREMENTAL_SOFT_GATE.maxDriftFiles}/${INCREMENTAL_SOFT_GATE.maxBehindCommits}）——增量收益消失`
++    if (!forceIncremental) return full(msg)
++    warnings.push(`软门已 --force-incremental 越过：${msg}`)
++  }
++
++  // ── 归属（matchFilesToModules 单源；A/D/M/R 状态聚合同 scan-diff 模式）──
++  const allFiles = changed.map((it) => it.path)
++  const statusOf = new Map(changed.map((it) => [it.path, it.status]))
++  let byModule = new Map()
++  let unmapped = allFiles
++  if (allFiles.length > 0 && moduleIndex) {
++    try {
++      const matched = matchFilesToModules(allFiles, moduleIndex, { cardsDir: join(specBase, 'docs', projectName, 'modules') })
++      byModule = matched.byModule
++      unmapped = matched.unmapped
++    } catch { warnings.push('matchFilesToModules 归属失败（降级全部 unmapped）') }
++  }
++
++  const affectedModules = []
++  for (const [id, entry] of byModule) {
++    let a = 0, d = 0, m = 0
++    for (const f of entry.files) {
++      const s = statusOf.get(f)
++      if (s === 'A') a++
++      else if (s === 'D') d++
++      else m++
++    }
++    affectedModules.push({ id, doc: entry.doc || '', files: entry.files.map((f) => ({ path: f, status: statusOf.get(f) || 'M' })), added: a, deleted: d, modified: m })
++  }
++
++  // ── unmapped hint：目录邻居启发（D-010，纯本地零子进程）──
++  const hintByDir = new Map() // 目录前缀 → 模块 id（由已归属文件聚合）
++  for (const [id, entry] of byModule) {
++    for (const f of entry.files) {
++      const dir = f.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
++      if (dir && !hintByDir.has(dir)) hintByDir.set(dir, id)
++    }
++  }
++  const unmappedFiles = unmapped.map((p) => {
++    const dir = p.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
++    const hint = []
++    let cur = dir
++    while (cur && hint.length < 3) {
++      if (hintByDir.has(cur)) hint.push(hintByDir.get(cur))
++      if (!cur.includes('/')) break
++      cur = cur.split('/').slice(0, -1).join('/')
++    }
++    return { path: p, status: statusOf.get(p) || 'M', hint }
++  })
++
++  // ── 篇章影响映射（design Phase 2.6 保守规则）──
++  const docsToRegenerate = new Set()
++  const structuralSignal = unmappedFiles.length > 0 || affectedModules.some((m) => m.deleted > 0)
++  if (structuralSignal) {
++    docsToRegenerate.add('STRUCTURE.md')
++    docsToRegenerate.add('ARCHITECTURE.md')
++  }
++  const routeSignal = changed.some((it) => ROUTE_TOKENS.test(it.path))
++  if (routeSignal) docsToRegenerate.add('INTEGRATIONS.md')
++  const docsToRegenerateList = [...docsToRegenerate]
++  const docsToSkip = SCAN_REQUIRED_DOCS.filter((d) => !docsToRegenerate.has(d))
++
++  // ── 对账（codegraph available 时；报告落盘 _module-map-audit.md）──
++  let audit = null
++  if (probe.available && scope.length > 0) {
++    const files = await listIndexFiles(projectRoot)
++    if (files) {
++      const effective = files.filter((f) => !isExcludedPath(f.path))
++      const uncovered = effective.filter((f) => !inScope(f.path, scope)).map((f) => f.path)
++      audit = {
++        uncoveredFiles: uncovered,
++        totalIndexed: effective.length,
++        coverageRatio: effective.length > 0 ? Math.round(((effective.length - uncovered.length) / effective.length) * 100) / 100 : null,
++      }
++      writeAuditReport({ specBase, projectName, headShort, audit, writeFile })
++    } else {
++      warnings.push('codegraph files 清单获取失败——对账跳过')
++    }
++  }
++
++  // ── 受影响测试清单（补强面：重生成子代理的回归提示）──
++  let affected = null
++  if (probe.available && allFiles.length > 0) {
++    const r = await affectedTests(projectRoot, allFiles)
++    if (r) affected = { list: r.affectedTests, truncated: r.truncated }
++  }
++
++  // ── guard 白名单（task-03 guard 握手消费；新增文件无哈希=计划内新建放行由 guard 分支处理）──
++  // 模块卡路径归一：map 的 doc 字段是 `modules/<id>.md`（相对 modules 目录），转 specBase 相对完整路径
++  const scanRel = (f) => `docs/${projectName}/scan/${f}`
++  const cardRel = (m) => {
++    const d = typeof m.doc === 'string' && m.doc ? m.doc : `modules/${m.id}.md`
++    return d.startsWith('docs/') ? d : `docs/${projectName}/${d.replace(/^\/+/, '')}`
++  }
++  const guardDocs = [
++    ...docsToRegenerateList.map(scanRel),
++    ...affectedModules.map(cardRel),
++    `docs/${projectName}/modules/_module-map.yaml`,
++    `docs/${projectName}/scan/_module-map-audit.md`,
++    `docs/${projectName}/scan/_facts.md`,
++  ].map((p) => p.replace(/\\/g, '/'))
++
++  return {
++    ok: true, mode: 'incremental', reason: `基线 ${base}..${headShort}（落后 ${behindCommits} commit）`,
++    base, head, headShort, behindCommits,
++    affectedModules, unmappedFiles, docsToRegenerate: docsToRegenerateList, docsToSkip,
++    audit, affectedTests: affected, guardDocs, warnings,
++  }
++}
++
++// ── 内部工具 ───────────────────────────────────────────────────────────────
++
++/** module-map 全部 paths 去重归一（scan-diff/scan-refresh 同口径内联先例，防双向耦合） */
++function collectScope(moduleIndex) {
++  const set = new Set()
++  for (const m of Object.values(moduleIndex || {})) {
++    if (!Array.isArray(m.paths)) continue
++    for (const raw of m.paths) {
++      if (typeof raw !== 'string' || !raw) continue
++      set.add(raw.replace(/\\/g, '/').replace(/\/+$/, ''))
++    }
++  }
++  return [...set]
++}
++
++/** 路径是否落在范围（精确相等或目录前缀；`src/**` 形 glob 展开为 src 前缀匹配） */
++function inScope(filePath, scope) {
++  const p = filePath.replace(/\\/g, '/')
++  return scope.some((s) => {
++    const norm = s.replace(/\\/g, '/').replace(/\/+$/, '')
++    const prefix = norm.endsWith('/**') ? norm.slice(0, -3) : norm
++    if (!prefix) return false
++    return p === prefix || p.startsWith(prefix + '/')
++  })
++}
++
++/** 对账报告落盘（_ 前缀非基线载体；frontmatter 带 source_commit=HEAD——staleness 收集读到它取 max 口径无实害） */
++function writeAuditReport({ specBase, projectName, headShort, audit, writeFile }) {
++  try {
++    const dir = join(specBase, 'docs', projectName, 'scan')
++    mkdirSync(dir, { recursive: true })
++    const lines = [
++      '---',
++      `source_commit: ${headShort}`,
++      `updated_at: ${new Date().toISOString()}`,
++      'generator: sillyspec-scan-incremental',
++      '---',
++      '',
++      '# _module-map 对账报告（Module Map Audit）',
++      '',
++      `索引全量文件 ${audit.totalIndexed} 个（排除 .sillyspec/node_modules/构建产物等非源码面与 .sillyspec-codegraph/ 索引目录后），模块 paths 覆盖率 ${(audit.coverageRatio ?? '?') * 100}%。`,
++      `未归属文件 ${audit.uncoveredFiles.length} 个——这些文件不在任何模块的 paths 覆盖集内，是映射盲区（新模块落地或 paths 过窄）：`,
++      '',
++      ...audit.uncoveredFiles.map((f) => `- \`${f}\``),
++      '',
++      '> 由 sillyspec scan-incremental 自动生成；归属判断归 agent（补扫时判断新文件归属，勿自动改 map）。',
++    ]
++    writeFile(join(dir, '_module-map-audit.md'), lines.join('\n') + '\n')
++  } catch { /* 对账报告写失败不阻断计划（advisory 面） */ }
++}
+diff --git a/src/stages/scan.js b/src/stages/scan.js
+index 2aaaef53..5d5d16d4 100644
+--- a/src/stages/scan.js
++++ b/src/stages/scan.js
+@@ -68,7 +68,9 @@ export const definition = {
+     {
+       name: '构建环境探测',
+       perProject: true,
+-      prompt: `生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。
++      prompt: `⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 \`.sillyspec/.runtime/scan-incremental-plan.json\` 中本项目条目——\`sillyspec scan facts\` 照常执行，但 _env-detect.md 的补充线索只写受影响模块（plan.affectedModules）相关内容；_facts.md 为 CLI 产物直接沿用。
++
++生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。
+ 
+ ### 操作
+ 对扫描列表中的每个项目重复以下操作：
+@@ -101,7 +103,9 @@ export const definition = {
+     {
+       name: '深度扫描 — 7 份文档（子代理并行）',
+       perProject: true,
+-      prompt: `按照 \`{WORKFLOWS_ROOT}/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
++      prompt: `⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：读取 \`.sillyspec/.runtime/scan-incremental-plan.json\` 中本项目条目——只为 \`docsToRegenerate\` 命中的篇章启动子代理；\`docsToSkip\` 篇章**跳过不碰**（⛔ 未受影响篇章零触碰——worktree-guard 也会拦白名单外的编辑），在输出中逐份报「跳过（增量判定未受影响）」；受影响测试清单（plan 内 affectedTests 如有）注入子代理作回归提示。
++
++按照 \`{WORKFLOWS_ROOT}/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
+ 
+ **你必须使用子代理执行，不要自己写文档。**
+ **对扫描列表中的每个项目分别执行以下流程。**
+@@ -229,7 +233,9 @@ local.yaml 生成结果（已存在/已生成 + project.type + agent 补充的
+     {
+       name: '生成模块映射',
+       perProject: true,
+-      prompt: `生成当前项目的模块索引文件 \`_module-map.yaml\`。
++      prompt: `⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**压制下方「已存在则跳过」规则**——_module-map.yaml 已存在时不整体跳过，改为增量更新：读取 \`.sillyspec/.runtime/scan-incremental-plan.json\`，只重抽受影响模块（affectedModules）的 paths/entrypoints/main_symbols，其余模块条目原样保留；unmappedFiles（含 hint 归属线索）逐个给出归属**建议**（你判断后写入，勿盲从 hint——索引只供结构事实）；顺带读 \`scan/_module-map-audit.md\` 对账报告核对盲区。
++
++生成当前项目的模块索引文件 \`_module-map.yaml\`。
+ 
+ ### ⚠️ 重要：这个文件是唯一的结构化索引源
+ 所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。
+@@ -350,7 +356,9 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
+       conditionalWait: true,
+       waitReason: '检测到已有模块文档覆盖风险',
+       waitOptions: ['只生成缺失', '全部重新生成', '跳过'],
+-      prompt: `根据当前项目的 \`_module-map.yaml\` 生成模块卡片文档。
++      prompt: `⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用，否则忽略本段按下方常规指引执行）：**覆盖等待豁免**——增量重生成已获授权（授权链=启动时路径判定输出已明示重生成面+guard 白名单放行边界），下方 conditionalWait 覆盖检测**不触发等待**；只为 \`.sillyspec/.runtime/scan-incremental-plan.json\` 中受影响模块（affectedModules）重生成模块卡（人工备注区 MANUAL_NOTES 块从旧卡原样迁移）；未受影响模块卡**零触碰**（⛔ 越界编辑会被 worktree-guard 拦截）。
++
++根据当前项目的 \`_module-map.yaml\` 生成模块卡片文档。
+ 
+ ### ⚠️ 重要：模块卡片只负责人类语义说明
+ 结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。
+diff --git a/test/scan-codegraph.test.mjs b/test/scan-codegraph.test.mjs
+new file mode 100644
+index 00000000..08cd0f46
+--- /dev/null
++++ b/test/scan-codegraph.test.mjs
+@@ -0,0 +1,177 @@
++/**
++ * scan-codegraph 单测（change: 2026-11-14-scan-incremental / task-01）。
++ * 纯 mock 注入（execFile / env 可替换），不真 spawn codegraph——探测三态×降级路径、
++ * 形状映射防御式（污染输出/缺字段）、cmd-shim 解析、env 注入断言、截断标记。
++ * 形状夹具 = 2026-11-14 本机实测 codegraph 1.6.2 发布包输出（design.md Phase 1 实测口径）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import {
++  probeCodegraph, listIndexFiles, affectedTests, resolveCodegraphCommand,
++  parseCmdShim, CODEGRAPH_ENV, CODEGRAPH_TIMEOUTS_MS, AFFECTED_TESTS_LIMIT,
++  _resetCodegraphCommandCache,
++} from '../src/scan-codegraph.js'
++
++// ── 夹具 ─────────────────────────────────────────────────────────────────────
++
++/** 实测 status -j 形状（2026-11-14 multi-agent-platform 仓真实输出裁剪） */
++const STATUS_OK = JSON.stringify({
++  initialized: true, version: '1.6.2', projectPath: 'C:\\repo',
++  fileCount: 4099, nodeCount: 75484, edgeCount: 236603,
++  pendingChanges: { added: 0, modified: 0, removed: 0 },
++  index: { builtWithVersion: '1.6.2', state: 'complete', reindexRecommended: false, pendingRefs: 0 },
++})
++
++const STATUS_NOT_INIT = JSON.stringify({ initialized: false, fileCount: 0, index: null })
++const STATUS_INCOMPLETE = JSON.stringify({ initialized: true, fileCount: 100, index: { state: 'indexing', reindexRecommended: false } })
++
++/** mock execFile 工厂：按序返回/抛错，并记录调用参数 */
++function mockExecFile(results) {
++  const calls = []
++  const fn = async (cmd, args, opts) => {
++    calls.push({ cmd, args, opts })
++    const r = results.shift()
++    if (r instanceof Error) throw r
++    return { stdout: r, stderr: '' }
++  }
++  fn.calls = calls
++  return fn
++}
++
++const ROOT = 'C:\\proj'
++
++// ── probeCodegraph 探测三态 × 降级路径（fail-soft 零 throw）──────────────────
++
++test('probeCodegraph：索引就绪 → available:true 且 status 保留', async () => {
++  const ex = mockExecFile([STATUS_OK])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, true)
++  assert.equal(r.status.fileCount, 4099)
++  // cmd 可能是裸名（fallback）或 Windows cmd-shim 解析出的 node 入口（真机环境 where 命中）——
++  // 不锁裸名，断言用户参数完整追加在 baseArgs 之后（末 3 项恒为 status/-j 形态）
++  assert.ok(typeof ex.calls[0].cmd === 'string' && ex.calls[0].cmd.length > 0)
++  assert.deepEqual(ex.calls[0].args.slice(-3), ['status', ROOT, '-j'])
++})
++
++test('probeCodegraph：命令不存在（ENOENT）→ available:false 中文原因', async () => {
++  const ex = mockExecFile([Object.assign(new Error('spawn codegraph ENOENT'), { code: 'ENOENT' })])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /未安装 codegraph/)
++})
++
++test('probeCodegraph：未初始化（initialized=false）→ available:false', async () => {
++  const ex = mockExecFile([STATUS_NOT_INIT])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /未初始化/)
++  assert.equal(r.status.initialized, false)
++})
++
++test('probeCodegraph：索引未完成（state!=complete）→ available:false', async () => {
++  const ex = mockExecFile([STATUS_INCOMPLETE])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /未完成/)
++})
++
++test('probeCodegraph：超时（ETIMEDOUT）→ available:false 不抛', async () => {
++  const ex = mockExecFile([Object.assign(new Error('execution timed out ETIMEDOUT'), { code: 'ETIMEDOUT' })])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /超时/)
++})
++
++test('probeCodegraph：纯非 JSON 输出 → available:false（不可解析），不 throw', async () => {
++  const ex = mockExecFile(['npm warn config global `--global`\nno json here'])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /不可解析/)
++})
++
++test('probeCodegraph：输出混 npm 噪声前缀行但含完整 JSON → 仍解析成功（Review Focus #1）', async () => {
++  const ex = mockExecFile([`npm warn something\n${STATUS_OK}\nnpm notice tail`])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, true)
++})
++
++test('probeCodegraph：JSON 缺 index 字段 → available:false（防御式不崩）', async () => {
++  const ex = mockExecFile([JSON.stringify({ initialized: true, fileCount: 1 })])
++  const r = await probeCodegraph(ROOT, { execFile: ex })
++  assert.equal(r.available, false)
++  assert.match(r.reason, /未完成/)
++})
++
++// ── 形状映射：files flat / affected ─────────────────────────────────────────
++
++test('listIndexFiles：实测 flat 形状映射 + 反斜杠归一 + 缺 path 项跳过', async () => {
++  const raw = JSON.stringify([
++    { path: 'src\\a.js', language: 'javascript', nodeCount: 5, size: 100 },
++    { path: 'b.py', language: 'python', nodeCount: 0, size: 50 },
++    { nodeCount: 3 }, // 缺 path → 跳过
++  ])
++  const ex = mockExecFile([raw])
++  const files = await listIndexFiles(ROOT, { execFile: ex })
++  assert.equal(files.length, 2)
++  assert.equal(files[0].path, 'src/a.js') // POSIX 归一
++  assert.deepEqual(ex.calls[0].args.slice(-5), ['files', '-p', ROOT, '--format', 'flat', '-j'].slice(-5))
++})
++
++test('listIndexFiles：失败/非数组 → null 不抛', async () => {
++  assert.equal(await listIndexFiles(ROOT, { execFile: mockExecFile([new Error('boom ENOENT')]) }), null)
++  assert.equal(await listIndexFiles(ROOT, { execFile: mockExecFile(['{"not":"array"}']) }), null)
++})
++
++test('affectedTests：超限截断 200 + truncated 标记', async () => {
++  const list = Array.from({ length: 250 }, (_, i) => `t${i}.test.ts`)
++  const ex = mockExecFile([JSON.stringify({ changedFiles: ['a.ts'], affectedTests: list })])
++  const r = await affectedTests(ROOT, ['a.ts'], { execFile: ex })
++  assert.equal(r.affectedTests.length, AFFECTED_TESTS_LIMIT)
++  assert.equal(r.truncated, true)
++  // 同上：baseArgs 前缀不定（真机解析/裸名 fallback），断言用户参数尾部
++  assert.deepEqual(ex.calls[0].args.slice(-4), ['affected', '-p', ROOT, '-j', 'a.ts'].slice(-4))
++})
++
++test('affectedTests：空文件清单 → 空结果零调用', async () => {
++  const ex = mockExecFile([])
++  const r = await affectedTests(ROOT, [], { execFile: ex })
++  assert.deepEqual(r, { affectedTests: [], truncated: false })
++  assert.equal(ex.calls.length, 0)
++})
++
++// ── env 注入 / 超时分级 / 禁携带参数（exec 选项断言）────────────────────────
++
++test('exec 选项：env 三键恒定覆盖 + cwd=root + status 5s 超时 + 32MB buffer + 无禁携带参数', async () => {
++  const ex = mockExecFile([STATUS_OK])
++  await probeCodegraph(ROOT, { execFile: ex, env: { PATH: 'x', CODEGRAPH_DIR: 'should-be-overridden' } })
++  const o = ex.calls[0].opts
++  assert.equal(o.cwd, ROOT)
++  assert.equal(o.env.CODEGRAPH_DIR, CODEGRAPH_ENV.CODEGRAPH_DIR)
++  assert.equal(o.env.CODEGRAPH_TELEMETRY, '0')
++  assert.equal(o.env.DO_NOT_TRACK, '1')
++  assert.equal(o.env.PATH, 'x') // 基底 env 保留
++  assert.equal(o.timeout, CODEGRAPH_TIMEOUTS_MS.status)
++  assert.equal(o.maxBuffer, 32 * 1024 * 1024)
++  assert.ok(!ex.calls[0].args.includes('--local-only'))
++  assert.ok(!ex.calls[0].args.includes('--no-telemetry'))
++})
++
++test('exec 选项：affected 命令走 15s 档超时', async () => {
++  const ex = mockExecFile([JSON.stringify({ changedFiles: [], affectedTests: [] })])
++  await affectedTests(ROOT, ['x.ts'], { execFile: ex })
++  assert.equal(ex.calls[0].opts.timeout, CODEGRAPH_TIMEOUTS_MS.affected)
++})
++
++// ── cmd-shim 解析（parseCmdShim 直接单测，mock 文件内容经 cmdPath 读不到 → 用真实临时文件）──
++
++test('parseCmdShim：不存在路径 → null', () => {
++  assert.equal(parseCmdShim('C:\\definitely\\not\\exist\\codegraph.cmd'), null)
++})
++
++test('resolveCodegraphCommand：返回形状恒合法（裸名 fallback 或解析成功），不依赖环境', () => {
++  _resetCodegraphCommandCache()
++  const r = resolveCodegraphCommand()
++  assert.equal(typeof r.command, 'string')
++  assert.ok(r.command.length > 0)
++  assert.ok(Array.isArray(r.baseArgs))
++})
+diff --git a/test/scan-facts.test.mjs b/test/scan-facts.test.mjs
+index c74e0b49..52c0533b 100644
+--- a/test/scan-facts.test.mjs
++++ b/test/scan-facts.test.mjs
+@@ -152,5 +152,28 @@ console.log('\n=== Test 6: generatedAt 本地墙钟形 ===')
+   clean(cwd)
+ }
+ 
++// ── 7: scope 限定参数（2026-11-14-scan-incremental D-011）──
++console.log('\n=== Test 7: scope 限定参数（端点抽取按前缀过滤，缺省零变化） ===')
++{
++  const cwd = setup('t7')
++  writeFileSync(join(cwd, 'package.json'), '{"name":"ts"}')
++  // 两份"端点源"文件：src/inscope.js 命中 scope，other/out.js 不命中——用后端路由形态让扫描器各抽到 1 条
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  mkdirSync(join(cwd, 'other'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'inscope.js'), "router.get('/a', h)\n")
++  writeFileSync(join(cwd, 'other', 'out.js'), "router.get('/b', h)\n")
++  const full = collectScanFacts({ cwd })
++  const scoped = collectScanFacts({ cwd, scope: ['src/**'] })
++  assert(full.endpoints.backendTotal >= 1, '全量口径两文件端点均抽取（前提）')
++  assert(scoped.scopeApplied === true, 'scope 生效标记在场')
++  assert(full.scopeApplied === undefined, '缺省 scope 无标记（行为零变化）')
++  assert(scoped.endpoints.backend.every((e) => String(e.ref).split(':')[0].startsWith('src/')), 'scope 后端点只含命中前缀文件')
++  assert(!JSON.stringify(scoped.endpoints.backend).includes('other/out.js'), 'scope 外文件端点被过滤')
++  const md = renderScanFactsMd(scoped)
++  assert(md.includes('⚡ 增量模式'), 'md 头部带增量模式标注')
++  clean(cwd)
++}
++passed++
++
+ console.log(`\n结果: ${passed} passed, ${failed} failed`)
+ if (failed > 0) process.exit(1)
+diff --git a/test/scan-incremental-wiring.test.mjs b/test/scan-incremental-wiring.test.mjs
+new file mode 100644
+index 00000000..9eb3c158
+--- /dev/null
++++ b/test/scan-incremental-wiring.test.mjs
+@@ -0,0 +1,125 @@
++/**
++ * scan-incremental 接线单测（change: 2026-11-14-scan-incremental / task-03）。
++ * 三块：worktree-guard mode='scan-incremental' 白名单内放行/外拦截（D-006 核心行为）、
++ * bumpScanDocBaselines generator 透传与统一推进机制（FR-05）、CLI 帮助文本新 flag（FR-07）。
++ * stage.js 启动段探测/guard 写入与 finalize 增量分支属集成面，由 task-06 跨仓实测覆盖。
++ */
++import { test, before, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++import { shouldBlockWrite } from '../src/hooks/worktree-guard.js'
++import { bumpScanDocBaselines } from '../src/scan-postcheck.js'
++import { SCAN_REQUIRED_DOCS } from '../src/constants.js'
++import { fileURLToPath } from 'node:url'
++
++let tmp
++before(() => { tmp = mkdtempSync(join(tmpdir(), 'scan-wire-')) })
++after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch {} })
++
++function mkSpec({ guard, docs = true } = {}) {
++  const specRoot = join(tmp, 'spec')
++  const scanDir = join(specRoot, 'docs', 'proj', 'scan')
++  mkdirSync(scanDir, { recursive: true })
++  mkdirSync(join(specRoot, 'docs', 'proj', 'modules'), { recursive: true })
++  if (docs) {
++    for (const d of ['ARCHITECTURE.md', 'PROJECT.md']) {
++      writeFileSync(join(scanDir, d), `---\nsource_commit: aaaaaaa\nupdated_at: 2020-01-01T00:00:00.000Z\n---\n\n# ${d}\n`)
++    }
++  }
++  if (guard) {
++    const stateDir = join(specRoot, '.runtime', 'state')
++    mkdirSync(stateDir, { recursive: true })
++    writeFileSync(join(stateDir, 'scan-guard.json'), JSON.stringify(guard, null, 2))
++  }
++  return { specRoot, scanDir }
++}
++
++const OLD_BASE_DOC = `---\nsource_commit: aaaaaaa\nupdated_at: 2020-01-01T00:00:00.000Z\n---\n\n# 文档\n`
++
++// ── D-006：worktree-guard mode='scan-incremental' 白名单分支 ────────────────
++
++test('guard 白名单内（重生成篇章文档）→ 放行（source_commit 落后也不拦）', () => {
++  const { specRoot } = mkSpec({
++    guard: {
++      name_zh: '增量扫描守卫', mode: 'scan-incremental',
++      incrementalDocs: ['docs/proj/scan/ARCHITECTURE.md', 'docs/proj/modules/mod-a.md'],
++      docHashes: {}, sourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
++      startedAt: new Date().toISOString(), forceRescan: false,
++    },
++  })
++  // 文档 frontmatter 基线 aaa << guard bbb——无白名单本应拦截（覆盖保护）
++  const r = shouldBlockWrite(join(specRoot, 'docs', 'proj', 'scan', 'ARCHITECTURE.md'), tmp)
++  assert.deepEqual(r, { blocked: false })
++})
++
++test('guard 白名单内（新增模块卡，磁盘不存在旧文件）→ 放行（membership 即凭据，Review Focus #2）', () => {
++  const { specRoot } = mkSpec({
++    guard: {
++      mode: 'scan-incremental',
++      incrementalDocs: ['docs/proj/modules/new-mod.md'],
++      sourceCommit: 'bbbbbbbb', forceRescan: false, startedAt: new Date().toISOString(),
++    },
++  })
++  const r = shouldBlockWrite(join(specRoot, 'docs', 'proj', 'modules', 'new-mod.md'), tmp)
++  assert.deepEqual(r, { blocked: false })
++})
++
++test('guard 白名单外（未受影响文档）→ 照常拦截（增量模式保护更强，D-006）', () => {
++  const { specRoot } = mkSpec({
++    guard: {
++      mode: 'scan-incremental',
++      incrementalDocs: ['docs/proj/scan/ARCHITECTURE.md'],
++      sourceCommit: 'bbbbbbbb', forceRescan: false, startedAt: new Date().toISOString(),
++    },
++  })
++  // PROJECT.md 基线 aaa ≠ guard bbbb 且不在白名单 → 走原覆盖保护拦截
++  const r = shouldBlockWrite(join(specRoot, 'docs', 'proj', 'scan', 'PROJECT.md'), tmp)
++  assert.equal(r.blocked, true)
++  assert.match(r.reason, /覆盖保护/)
++})
++
++test('存量 guard（无 mode）+ 基线落后 → 原行为拦截不变（零回归）', () => {
++  const { specRoot } = mkSpec({
++    guard: { name_zh: '扫描守卫', sourceCommit: 'bbbbbbbb', forceRescan: false, startedAt: new Date().toISOString() },
++  })
++  const r = shouldBlockWrite(join(specRoot, 'docs', 'proj', 'scan', 'PROJECT.md'), tmp)
++  assert.equal(r.blocked, true)
++})
++
++test('mode=scan-incremental 但 incrementalDocs 非数组 → 不走白名单分支（fail-closed 回原保护）', () => {
++  const { specRoot } = mkSpec({
++    guard: { mode: 'scan-incremental', sourceCommit: 'bbbbbbbb', forceRescan: false, startedAt: new Date().toISOString() },
++  })
++  const r = shouldBlockWrite(join(specRoot, 'docs', 'proj', 'scan', 'PROJECT.md'), tmp)
++  assert.equal(r.blocked, true)
++})
++
++// ── FR-05：bumpScanDocBaselines 统一推进机制（generator 透传）──────────────
++
++test('bumpScanDocBaselines：docs=SCAN_REQUIRED_DOCS + generator=sillyspec-scan-incremental → 存在的载体统一推进', () => {
++  const { specRoot } = mkSpec({ guard: null }) // 无 guard——bump 是纯文档面操作
++  const r = bumpScanDocBaselines({
++    cwd: tmp, specDir: specRoot, project: 'proj',
++    docs: SCAN_REQUIRED_DOCS, headShort: 'ccccccc', generator: 'sillyspec-scan-incremental',
++  })
++  // fixture 只建了 2 份载体，其余 5 份跳过（读取失败）
++  assert.equal(r.bumped.length, 2)
++  assert.equal(r.skipped.length, 5)
++  const content = readFileSync(join(specRoot, 'docs', 'proj', 'scan', 'ARCHITECTURE.md'), 'utf8')
++  assert.match(content, /source_commit: ccccccc/)
++  assert.match(content, /generator: sillyspec-scan-incremental/)
++})
++
++// ── FR-07：CLI 帮助文本含新 flag（防「指引指向未登记 flag」死路）───────────
++
++test('command.js 双处登记：knownFlags 白名单 + printStageUsage 帮助文本（防未登记 flag 死路）', () => {
++  const src = readFileSync(fileURLToPath(new URL('../src/run/command.js', import.meta.url)), 'utf8')
++  // 白名单行（knownFlags Set 内）
++  assert.match(src, /'--incremental',\s*'--force-incremental'/)
++  // 帮助文本行（printStageUsage scan 专属段）
++  assert.match(src, /--incremental（显式请求增量，不可行时警告\+回退全量）/)
++  assert.match(src, /--force-incremental（越软门）/)
++})
+diff --git a/test/scan-incremental.test.mjs b/test/scan-incremental.test.mjs
+new file mode 100644
+index 00000000..89e00b49
+--- /dev/null
++++ b/test/scan-incremental.test.mjs
+@@ -0,0 +1,190 @@
++/**
++ * scan-incremental 单测（change: 2026-11-14-scan-incremental / task-02）。
++ * tmpdir fixture + safeGit/probe/listIndexFiles/affectedTests/writeFile 全 mock 注入——
++ * 六类 full 回退（fail-soft 零 throw）、归属/篇章映射、对账排除、软门/quick 回退、
++ * guardDocs 产出、目录邻居 hint（D-010）。
++ */
++import { test, before, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { computeIncrementalPlan, isExcludedPath, INCREMENTAL_SOFT_GATE } from '../src/scan-incremental.js'
++
++let tmp
++before(() => { tmp = mkdtempSync(join(tmpdir(), 'scan-incr-')) })
++after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch {} })
++
++const HEAD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
++const BASE = 'aaaaaaaa'
++
++/** 建 fixture：scan 基线载体 + module-map；返回 { projectRoot, specBase, projectName } */
++function mkFixture({ depth = 'standard', mapYaml = null, base = BASE } = {}) {
++  const projectRoot = join(tmp, 'proj')
++  const specBase = join(tmp, 'spec')
++  mkdirSync(join(specBase, 'docs', 'proj', 'scan'), { recursive: true })
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  const fm = [`---`, `source_commit: ${base}`]
++  if (depth) fm.push(`scan_depth: ${depth}`)
++  fm.push('---', '', '# 文档', '')
++  writeFileSync(join(specBase, 'docs', 'proj', 'scan', 'ARCHITECTURE.md'), fm.join('\n'))
++  writeFileSync(join(specBase, 'docs', 'proj', 'scan', 'PROJECT.md'), fm.join('\n'))
++  if (mapYaml !== null) writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), mapYaml)
++  return { projectRoot, specBase, projectName: 'proj' }
++}
++
++const MAP = `schema_version: 2
++project: proj
++modules:
++  mod-a:
++    status: active
++    doc: modules/mod-a.md
++    paths:
++      - src/**
++      - lib/helper.js
++`
++
++/** mock safeGit：按子命令分派（rev-parse/merge-base/rev-list/diff 各自可覆盖） */
++function mockGit({ head = HEAD, headErr = false, ancestorErr = false, count = '5', diff = '' } = {}) {
++  return (cwd, args) => {
++    const a = String(args[0] || '')
++    if (a === 'rev-parse') return headErr ? { error: 'fatal: not a git repository' } : { value: head + '\n' }
++    if (a === 'merge-base') return ancestorErr ? { error: 'not ancestor' } : { value: '' }
++    if (a === 'rev-list') return { value: count + '\n' }
++    if (a === 'diff') return { value: diff }
++    return { error: 'unexpected ' + a }
++  }
++}
++
++const probeOk = async () => ({ available: true, reason: '索引就绪', status: {} })
++const probeNo = async () => ({ available: false, reason: '未安装 codegraph（命令不存在）' })
++
++// ── 六类 full 回退（fail-soft 零 throw，Review Focus #3）────────────────────
++
++test('绿地（无 scan 目录）→ mode full', async () => {
++  const r = await computeIncrementalPlan({ projectRoot: tmp, specBase: tmp, projectName: 'nope', deps: { safeGit: mockGit(), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /绿地/)
++})
++
++test('无基线（source_commit 缺失）→ mode full', async () => {
++  const d = join(tmp, 'green'); mkdirSync(join(d, 'docs', 'p2', 'scan'), { recursive: true })
++  writeFileSync(join(d, 'docs', 'p2', 'scan', 'ARCHITECTURE.md'), '# 无 frontmatter\n')
++  const r = await computeIncrementalPlan({ projectRoot: tmp, specBase: d, projectName: 'p2', deps: { safeGit: mockGit(), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /无 source_commit/)
++})
++
++test('git rev-parse 失败（非 git 仓）→ mode full 留痕不抛（Review Focus #3）', async () => {
++  const f = mkFixture()
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ headErr: true }), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /git rev-parse HEAD 失败/)
++})
++
++test('非祖先基线（分支切换/rebase）→ mode full', async () => {
++  const f = mkFixture()
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ ancestorErr: true }), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /脱锚|不在当前分支历史/)
++})
++
++test('quick 浅文档 → mode full（统一 bump 语义要求全量升级）', async () => {
++  const f = mkFixture({ depth: 'quick' })
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit(), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /quick/)
++})
++
++test('软门超限（落后 >200 commit）→ mode full；forceIncremental 越过 → incremental+warning', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  const deps = { safeGit: mockGit({ count: '250', diff: 'M\tsrc/a.js\n' }), probeCodegraph: probeNo }
++  const r1 = await computeIncrementalPlan({ ...f, deps })
++  assert.equal(r1.mode, 'full'); assert.match(r1.reason, /漂移过大/)
++  const r2 = await computeIncrementalPlan({ ...f, forceIncremental: true, deps })
++  assert.equal(r2.mode, 'incremental')
++  assert.ok(r2.warnings.some((w) => w.includes('force-incremental')))
++})
++
++test('软门超限（scope 内变更 >100 文件）→ mode full', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  const diff = Array.from({ length: INCREMENTAL_SOFT_GATE.maxDriftFiles + 1 }, (_, i) => `M\tsrc/f${i}.js`).join('\n') + '\n'
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ diff }), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'full'); assert.match(r.reason, /漂移过大/)
++})
++
++// ── 正常增量：归属 / 篇章映射 / guardDocs / hint ────────────────────────────
++
++test('增量计划：归属+篇章映射+guardDocs 产出', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  const diff = 'M\tsrc/a.js\nA\tnewdir/b.js\nM\troutes/api.ts\nM\tnode_modules/junk.js\n'
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ diff }), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'incremental')
++  // 归属：src/a.js → mod-a；node_modules 已被排除；newdir/b.js unmapped
++  const modA = r.affectedModules.find((m) => m.id === 'mod-a')
++  assert.ok(modA, 'mod-a 受影响')
++  assert.equal(modA.modified, 1)
++  // 篇章映射：unmapped 非空（newdir/b.js）→ STRUCTURE+ARCHITECTURE；路由文件 → INTEGRATIONS
++  assert.deepEqual([...r.docsToRegenerate].sort(), ['ARCHITECTURE.md', 'INTEGRATIONS.md', 'STRUCTURE.md'])
++  assert.ok(r.docsToSkip.includes('CONVENTIONS.md'))
++  // guardDocs：篇章 + 模块卡 + map + audit + facts
++  assert.ok(r.guardDocs.includes('docs/proj/scan/ARCHITECTURE.md'))
++  assert.ok(r.guardDocs.includes('docs/proj/modules/mod-a.md'))
++  assert.ok(r.guardDocs.includes('docs/proj/modules/_module-map.yaml'))
++  assert.ok(r.guardDocs.includes('docs/proj/scan/_facts.md'))
++  // codegraph 不可用 → warning + audit null + 增量仍成立（补强面降级）
++  assert.equal(r.audit, null)
++  assert.ok(r.warnings.some((w) => w.includes('codegraph 不可用')))
++})
++
++test('无结构信号（模块内 M 文件、无 unmapped、无路由）→ 篇章全跳过', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }), probeCodegraph: probeNo } })
++  assert.equal(r.mode, 'incremental')
++  assert.deepEqual(r.docsToRegenerate, [])
++  assert.equal(r.docsToSkip.length, 7)
++})
++
++test('目录邻居 hint（D-010）：unmapped 文件同目录已归属 → hint 非空', async () => {
++  // map 用精确文件 lib/helper.js（非 src/** glob——glob 会把同前缀新文件一并吞进归属）
++  const mapB = `schema_version: 2\nproject: proj\nmodules:\n  mod-a:\n    status: active\n    doc: modules/mod-a.md\n    paths:\n      - lib/helper.js\n`
++  const f = mkFixture({ mapYaml: mapB })
++  const diff = 'M\tlib/helper.js\nA\tlib/other.js\n'
++  const r = await computeIncrementalPlan({ ...f, deps: { safeGit: mockGit({ diff }), probeCodegraph: probeNo } })
++  const u = r.unmappedFiles.find((x) => x.path === 'lib/other.js')
++  assert.ok(u, 'lib/other.js unmapped')
++  assert.ok(u.hint.includes('mod-a'), `hint 应含目录邻居 mod-a：${JSON.stringify(u.hint)}`)
++})
++
++// ── 对账排除（D-008 / Review Focus）────────────────────────────────────────
++
++test('isExcludedPath：索引目录/node_modules/构建产物排除', () => {
++  assert.ok(isExcludedPath('.sillyspec-codegraph/db.sqlite'))
++  assert.ok(isExcludedPath('node_modules/x/index.js'))
++  assert.ok(isExcludedPath('packages/app/node_modules/y.js')) // 任一段命中
++  assert.ok(isExcludedPath('.sillyspec/changes/x/flow-state.yaml'))
++  assert.ok(!isExcludedPath('src/scan-codegraph.js'))
++})
++
++test('对账：listIndexFiles mock（含索引目录与 node_modules 样本）→ uncovered 不含被排除项，报告落盘', async () => {
++  const f = mkFixture({ mapYaml: MAP })
++  const files = [
++    { path: 'src/a.js', language: 'javascript', nodeCount: 1, size: 1 },       // in scope
++    { path: 'lib/helper.js', language: 'javascript', nodeCount: 1, size: 1 },  // in scope
++    { path: 'orphan/z.py', language: 'python', nodeCount: 1, size: 1 },        // uncovered
++    { path: '.sillyspec-codegraph/db.sqlite', language: '', nodeCount: 0, size: 1 }, // 排除
++    { path: 'node_modules/j/i.js', language: 'javascript', nodeCount: 1, size: 1 },  // 排除
++  ]
++  const writes = []
++  const writeFile = (p, c) => writes.push({ p, c })
++  const r = await computeIncrementalPlan({ ...f, deps: {
++    safeGit: mockGit({ diff: 'M\tsrc/a.js\n' }),
++    probeCodegraph: probeOk,
++    listIndexFiles: async () => files,
++    writeFile,
++  } })
++  assert.equal(r.mode, 'incremental')
++  assert.equal(r.audit.totalIndexed, 3)
++  assert.deepEqual(r.audit.uncoveredFiles, ['orphan/z.py'])
++  assert.equal(r.audit.coverageRatio, 0.67)
++  // 报告落盘（mock 写）且含未归属清单与 frontmatter
++  const rep = writes.find((w) => String(w.p).includes('_module-map-audit.md'))
++  assert.ok(rep, 'audit 报告已写')
++  assert.match(rep.c, /orphan\/z\.py/)
++  assert.match(rep.c, /source_commit: bbbbbbb/)
++})
+diff --git a/test/scan-paths.test.mjs b/test/scan-paths.test.mjs
+index 08a9593c..3c91f7a6 100644
+--- a/test/scan-paths.test.mjs
++++ b/test/scan-paths.test.mjs
+@@ -60,6 +60,31 @@ if (content.includes('{PROJECTS_ROOT}/')) {
+   failed = true
+ }
+ 
++// ── 增量注入段四要素（2026-11-14-scan-incremental task-04/D-009）──
++// 注入段是条件前缀（「仅当本次 scan 启动输出过⚡增量路径」才生效）——非增量会话子代理行为不变；
++// 文本断言：四步骤的增量纪律 token（跳过集/压制声明/豁免声明/计划读取）各在源文件中在场。
++{
++  const incrTokens = [
++    '⚡ 增量模式（仅当本次 scan 启动输出过「⚡ 增量路径」行时适用',
++    'scan-incremental-plan.json',
++    'docsToRegenerate',
++    'docsToSkip',
++    '压制下方「已存在则跳过」规则',
++    'unmappedFiles',
++    '覆盖等待豁免',
++    'MANUAL_NOTES',
++    '零触碰',
++  ]
++  for (const token of incrTokens) {
++    if (content.includes(token)) {
++      console.log(`✅ PASS: scan.js 注入段含「${token}」`)
++    } else {
++      console.error(`❌ FAIL: scan.js 注入段缺「${token}」`)
++      failed = true
++    }
++  }
++}
++
+ if (failed) {
+   console.error('\n💥 有测试失败！scan.js 路径占位符可能被回退为硬编码。')
+   throw new Error("test failed")

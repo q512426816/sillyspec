@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "reviewedAgainst": "66a47c0e9a42f5accb891df92479e8ae5556cd61",
+  "reviewer": "claude-flow-fixes（主会话自审·轻量道）",
+  "reviewerNotes": "task-01 豁免集 {scan,explore} effectiveChange 置空（源码断言+本仓活环境集成用例 3/3）；task-02 quick/archive 不在豁免集（变更锚定语义保持）；task-03 真机 multi-agent-platform（turn-watchdog 活跃变更在场）run scan --standard 直接执行——5 项目全量路径判定+Step 2/11 推进，零 ⛔ 拦截零 libuv 崩溃（实测后已 --reset 清理该仓 scan 进度）。",
+  "findings": [],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-11-15T08:45:00.000Z"
+}

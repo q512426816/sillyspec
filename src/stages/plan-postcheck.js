@@ -1586,6 +1586,13 @@ export function validateTaskcardsCli({ changeDir, projectRoot = null }) {
               break
             }
           }
+        } else if (fm.provides !== undefined && fm.provides !== null && typeof fm.provides === 'object') {
+          // 映射形态拦截（坑 2026-11-20-taskcard-provides-map-form-silent-then-misleading）：
+          // provides 按最自然的契约名→细节映射写（git_submodule_list_rpc: {method,...}）——
+          // Array.isArray=false 时上方整段跳过（静默过校验），parseTaskContracts（:401）同口径
+          // 返回空列表 → plan --done 报「未声明此契约」与真因完全脱节。此处显性拦。
+          const pkeys = Object.keys(fm.provides)
+          errors.push(`${id2}: provides 是映射形态（${pkeys.slice(0, 3).join('、')}${pkeys.length > 3 ? ' 等' : ''}）——应为数组：- contract: <名> / fields: [a, b]；契约细节放 YAML 注释（fields 与 needs 做集合包含比对，额外键不读取）`)
         }
         if (fm.expects_from && typeof fm.expects_from === 'object' && !Array.isArray(fm.expects_from)) {
           for (const [prov, contracts] of Object.entries(fm.expects_from)) {

@@ -1,0 +1,156 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index bd0e8432..dcf38f9f 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -63,6 +63,7 @@ modules:
+       - src/local-register.js
+       - src/commit-suggest.js
+       - src/flow.js
++      - src/change-identity.js
+       - src/flow-state.js
+       - src/flow-draft.js
+       - src/flow-review.js
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 53288638..88b7e30c 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -117,3 +117,4 @@
+ | 2026-11-11 | 2026-11-11-deps-hub-symbol-narrow | 枢纽模块回归面按触达导出符号收敛 |
+ | 2026-11-11 | 2026-11-11-push-shell-token-tolerance | push 命令容忍 shell 残留并透出完整错误 |
+ | 2026-11-12 | 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall |
++| 2026-11-15 | 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index b5906057..d782c51c 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -94,3 +94,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-11-09-archive-landing-visibility | 归档落库终态可见性与 doctor 残留检查
+ - 2026-11-12-freeze-decision-recall | 2026-11-12-freeze-decision-recall
+ - 2026-11-14-wait-ask-tool-and-selfcheck-output | 等待点询问工具化与方案自检入产物
++- 2026-11-15-change-key-visibility | 变更创建时向用户展示完整 key 与名称
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.changelog.md b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+index abcd0eee..ee063ebc 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+@@ -24,3 +24,4 @@
+ - 2026-11-04-sync-push-chunking | spec 同步推送分批化根治大积压超时
+ - 2026-11-07-sync-proposed-no-revive | 同步候选复活缺陷修复——平台已审条目不再回推
+ - 2026-11-08-hindsight-tasks-ratio-retire | route-hindsight 任务改写率指标退役
++- 2026-11-15-sentinel-evidence-channel | 修复哨兵 review 证据通道死代码并增轻量道第三通道
+diff --git a/src/run/command.js b/src/run/command.js
+index 17b98162..d31072b9 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -31,6 +31,8 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
+ import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+ import { runStage } from './stage.js'
+ import { sanitizeDesc, deriveShortChangeTitle } from '../quicklog.js'
++// 变更身份行单一来源（2026-11-15-change-key-visibility）：净新建与 brainstorm 自动创建两处接线
++import { renderChangeIdentityLine } from '../change-identity.js'
+ import { ProgressManager, resolveSessionIdentity } from '../progress.js'
+ import { validateChangeExists, checkTransition } from '../stage-contract.js'
+ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
+@@ -1322,7 +1324,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       // 优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
+       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
+       // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
+-      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
++      const _netFreshTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange
++      progress = pm.initChange(cwd, autoChange, { title: _netFreshTitle })
++      // 变更身份行（2026-11-15-change-key-visibility）：净新建注册成功即输出 key+名称+必须转述
++      // 指令——brainstorm 显式 --change 入口走此路径；title 为创建时点临时值（后续由真实标题刷新）
++      console.log(renderChangeIdentityLine(autoChange, _netFreshTitle))
+     } else if (isAuxiliary) {
+       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
+       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
+@@ -1371,7 +1377,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
+         const date = new Date().toISOString().slice(0, 10)
+         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+-        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        const _autoTitle = inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName
++        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: _autoTitle })
+         if (!claim.created) {
+           const activeChanges = claim.activeChanges || []
+           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
+@@ -1381,6 +1388,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+           process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
+         }
+         console.log(`🔄 自动创建变更：${autoName}`)
++        // 变更身份行（2026-11-15-change-key-visibility）：自动创建后 key+名称+必须转述指令；
++        // 无 --input 时 title 兜底=autoName（名称与 key 同值，如实展示）
++        console.log(renderChangeIdentityLine(autoName, _autoTitle))
+         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
+         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
+         progress = claim.progress
+@@ -1422,7 +1432,18 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   }
+ 
+   // 确保 progress 有 currentChange
+-  const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot)
++  // ── 无变更归属辅助阶段豁免吸附（2026-11-15-auxiliary-scan-no-stick FR-01）──
++  // scan/explore 是辅助阶段（definition.auxiliary，无变更归属）——原实现无 --change 时
++  // resolveChangeName 兜底吸附仓内活跃变更，随后混跑回退块把「在轻量跑道变更上跑 run <stage>」
++  // 当升厚意图拦进 --upgrade-thick 同意门：任一活跃变更在场即整仓跑不了 scan（变更越忙、
++  // 文档越需要重扫的时刻通道恰好被锁死；且 currentChange 指向谁取决于并行会话推进，行为
++  // 状态敏感不可预测——2026-11-14 端到端在 multi-agent-platform 实证被拦+libuv 崩溃）。
++  // quick/archive 虽在 AUXILIARY_STAGES 但有变更归属语义（quick 会话/archive 收口锚定变更），
++  // 不豁免；status/doctor 走 READONLY_AUXILIARY_STAGES 分流不受影响。
++  const NO_CHANGE_AUXILIARY_STAGES = new Set(['scan', 'explore'])
++  const effectiveChange = NO_CHANGE_AUXILIARY_STAGES.has(stageName)
++    ? null
++    : (changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot))
+ 
+   // ── Q7：quick --done 不带 --change 时 fallback 读 current-quick-run-id 可能命中他者会话 ──
+   // 并发两 quick 会话：B 后启动覆盖 A 的 id（last-writer-wins），A 的 --done 不带 --change → 读到 B 的 sessionId
+diff --git a/test/auxiliary-scan-no-stick.test.mjs b/test/auxiliary-scan-no-stick.test.mjs
+new file mode 100644
+index 00000000..5a7e69f6
+--- /dev/null
++++ b/test/auxiliary-scan-no-stick.test.mjs
+@@ -0,0 +1,45 @@
++/**
++ * 辅助阶段豁免变更吸附（2026-11-15-auxiliary-scan-no-stick）。
++ * FR-01/FR-02：源码断言（豁免集边界）+ 本仓活环境集成（活跃变更在场跑 scan 不再被
++ * 轻量跑道升厚门拦截——本测试运行时本仓通常有活跃变更在场，恰是回归环境）。
++ * FR-03（multi-agent-platform 真机）走 flow done 集成回执，不在此文件。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { execFileSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++
++const cmdSrc = readFileSync(fileURLToPath(new URL('../src/run/command.js', import.meta.url)), 'utf8')
++
++test('scan/explore 豁免吸附：effectiveChange 置空（源码断言）', () => {
++  const m = cmdSrc.match(/NO_CHANGE_AUXILIARY_STAGES = new Set\(\[([^\]]*)\]\)/)
++  assert.ok(m, '豁免集常量在场')
++  const set = m[1]
++  assert.match(set, /'scan'/)
++  assert.match(set, /'explore'/)
++  // 豁免生效点：effectiveChange 三元分支引用豁免集
++  assert.match(cmdSrc, /NO_CHANGE_AUXILIARY_STAGES\.has\(stageName\)\s*\n\s*\?\s*null/)
++})
++
++test('quick/archive 不豁免：路由行为零变化（豁免集不含二者）', () => {
++  const m = cmdSrc.match(/NO_CHANGE_AUXILIARY_STAGES = new Set\(\[([^\]]*)\]\)/)
++  const set = m[1]
++  assert.ok(!set.includes("'quick'"), 'quick 保持变更吸附（会话锚定语义）')
++  assert.ok(!set.includes("'archive'"), 'archive 保持变更吸附（收口锚定语义）')
++})
++
++test('本仓活跃变更在场跑 run scan --status 不再被 ⛔ 升厚门拦截（活环境集成）', () => {
++  const bin = fileURLToPath(new URL('../bin/sillyspec.js', import.meta.url))
++  let out = ''
++  let code = 0
++  try {
++    out = execFileSync(process.execPath, [bin, 'run', 'scan', '--status'], { encoding: 'utf8', timeout: 30_000, cwd: fileURLToPath(new URL('../', import.meta.url)) })
++  } catch (e) {
++    out = String((e && e.stdout) || '') + String((e && e.stderr) || '')
++    code = e.status ?? 1
++  }
++  // 修复前（活跃变更在场）：⛔ 本变更在轻量跑道上 + exit 2；修复后：scan 状态输出（exit 0 或正常非 2）
++  assert.ok(!out.includes('本变更在轻量跑道上'), '不再输出升厚门拦截')
++  assert.notEqual(code, 2, '不再 exit 2 拒跑')
++})

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-12-baseline-own-declared-skip",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-01",
+      "tests": [
+        "test/baseline-own-declared-skip.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-baseline-own-declared-skip"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-02",
+      "tests": [
+        "test/baseline-overlay-isolation.test.mjs",
+        "test/baseline-own-declared-skip.test.mjs「无声明命中 → ownDeclaredFiles 为空（旧行为）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-baseline-own-declared-skip"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-03",
+      "tests": [
+        "test/change-ownership-guards.test.mjs「⑦a worktree 有未 apply 交付面 → 归档阻断」",
+        "test/change-ownership-guards.test.mjs「⑦a2 --skip-apply 留痕」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-baseline-own-declared-skip"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-12-baseline-own-declared-skip:flow:测试绑定FR-04",
+      "tests": [
+        "test/archive-baseline-entry.test.mjs",
+        "test/baseline-own-declared-skip.test.mjs",
+        "test/cross-repo-baseline-anchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-12-baseline-own-declared-skip"
+    }
+  ]
+}

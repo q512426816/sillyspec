@@ -1,0 +1,205 @@
+{
+  "change": "2026-11-14-scan-incremental",
+  "baseline": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+  "head": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+  "files": [
+    ".claude/skills/sillyspec-scan/SKILL.md",
+    ".gitignore",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/scan.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "meta.json",
+    "src/hooks/worktree-guard.js",
+    "src/run/command.js",
+    "src/run/scan-profile.js",
+    "src/run/stage.js",
+    "src/scan-codegraph.js",
+    "src/scan-facts.js",
+    "src/scan-incremental.js",
+    "src/stages/scan.js",
+    "test/scan-codegraph.test.mjs",
+    "test/scan-facts.test.mjs",
+    "test/scan-incremental-wiring.test.mjs",
+    "test/scan-incremental.test.mjs",
+    "test/scan-paths.test.mjs"
+  ],
+  "totals": {
+    "files": 19,
+    "additions": 1362,
+    "deletions": 35
+  },
+  "savedAt": "2026-11-14T15:40:08.685Z",
+  "note": "execute --done 时点冻结（沉淀资产面：主仓实改行投影——thin flow done 对等；治理工件目录与其后 verify/archive 演进不在内）",
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+    "totals": {
+      "files": 19,
+      "additions": 1362,
+      "deletions": 35
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-scan/SKILL.md",
+        "additions": 8,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".gitignore",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/scan.md",
+        "additions": 8,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "meta.json",
+        "additions": 20,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/scan-profile.js",
+        "additions": 29,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 119,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/scan-codegraph.js",
+        "additions": 238,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/scan-facts.js",
+        "additions": 34,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/scan-incremental.js",
+        "additions": 333,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/scan.js",
+        "additions": 12,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scan-codegraph.test.mjs",
+        "additions": 177,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scan-facts.test.mjs",
+        "additions": 23,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/scan-incremental-wiring.test.mjs",
+        "additions": 125,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scan-incremental.test.mjs",
+        "additions": 190,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scan-paths.test.mjs",
+        "additions": 25,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "execute --done 时点冻结（本文件落盘时采集）",
+    "closedBy": "execute --done"
+  },
+  "patchSha256": "b76e26f6628945df1cd439513758be3bfad4660a5baf5086e12c4f1b1c183903",
+  "patchStatus": "ok"
+}

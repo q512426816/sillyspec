@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-15-change-key-visibility",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-15-change-key-visibility:flow:测试绑定FR-01",
+      "tests": [
+        "test/change-identity-line.test.mjs「FR-01 flow start 新建横幅含变更身份行（key+名称+转述指令）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-change-key-visibility"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-15-change-key-visibility:flow:测试绑定FR-02",
+      "tests": [
+        "test/change-identity-line.test.mjs「FR-02 adopt 收编输出含变更身份行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-change-key-visibility"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-15-change-key-visibility:flow:测试绑定FR-03",
+      "tests": [
+        "test/change-identity-line.test.mjs「FR-03 run brainstorm 自动创建输出含变更身份行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-change-key-visibility"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-15-change-key-visibility:flow:测试绑定FR-04",
+      "tests": [
+        "test/change-identity-line.test.mjs「FR-04 run brainstorm 显式 --change 净新建输出含变更身份行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-change-key-visibility"
+    }
+  ]
+}

@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-14-scan-incremental",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-01:acc-0-9f7b2ce5",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-01:acc-1-4fb14b3b",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-01:acc-2-c859e0e2",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-01:acc-3-db64c863",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-02:acc-0-6a3a7202",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-02:acc-1-524d1407",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-02:acc-2-59558f82",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-02:acc-3-3cc64a1d",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-03:acc-0-4b195515",
+      "tests": [
+        "test/scan-incremental-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-03:acc-1-f89d3799",
+      "tests": [
+        "test/scan-incremental-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-03:acc-2-a9deac6b",
+      "tests": [
+        "test/scan-incremental-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-03:acc-3-8dd021a5",
+      "tests": [
+        "test/scan-incremental-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-03:acc-4-adabce5d",
+      "tests": [
+        "test/scan-incremental-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-14-scan-incremental:task-04:acc-0-0baaebbb",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-14-scan-incremental:task-04:acc-1-891d7576",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-14-scan-incremental:task-04:acc-2-2a12b226",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-14-scan-incremental:task-04:acc-3-2fe0f954",
+      "tests": [
+        "test/scan-facts.test.mjs",
+        "test/scan-paths.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-06:acc-0-41102c32",
+      "tests": [
+        "test/agent-session-log.test.mjs",
+        "test/align-execute-review-gate.test.mjs",
+        "test/apply-stash-conflict-scan.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/brainstorm-exit-thin-default.test.mjs",
+        "test/brainstorm-solution-constraint-gate.test.mjs",
+        "test/change-exists-validation.test.mjs",
+        "test/change-ownership-guards.test.mjs",
+        "test/change-title-flow.test.mjs",
+        "test/cli-top-level-aliases.test.mjs",
+        "test/config-known-failures.test.mjs",
+        "test/continue-idempotent.test.mjs",
+        "test/decision-caliber-unify.test.mjs",
+        "test/default-no-dir-and-affinity.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/doctor-anchor-batch.test.mjs",
+        "test/doctor-local-yaml.test.mjs",
+        "test/done-heartbeat.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-06:acc-1-e385b173",
+      "tests": [
+        "test/agent-session-log.test.mjs",
+        "test/align-execute-review-gate.test.mjs",
+        "test/apply-stash-conflict-scan.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/brainstorm-exit-thin-default.test.mjs",
+        "test/brainstorm-solution-constraint-gate.test.mjs",
+        "test/change-exists-validation.test.mjs",
+        "test/change-ownership-guards.test.mjs",
+        "test/change-title-flow.test.mjs",
+        "test/cli-top-level-aliases.test.mjs",
+        "test/config-known-failures.test.mjs",
+        "test/continue-idempotent.test.mjs",
+        "test/decision-caliber-unify.test.mjs",
+        "test/default-no-dir-and-affinity.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/doctor-anchor-batch.test.mjs",
+        "test/doctor-local-yaml.test.mjs",
+        "test/done-heartbeat.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-06:acc-2-140cf9e2",
+      "tests": [
+        "test/agent-session-log.test.mjs",
+        "test/align-execute-review-gate.test.mjs",
+        "test/apply-stash-conflict-scan.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/brainstorm-exit-thin-default.test.mjs",
+        "test/brainstorm-solution-constraint-gate.test.mjs",
+        "test/change-exists-validation.test.mjs",
+        "test/change-ownership-guards.test.mjs",
+        "test/change-title-flow.test.mjs",
+        "test/cli-top-level-aliases.test.mjs",
+        "test/config-known-failures.test.mjs",
+        "test/continue-idempotent.test.mjs",
+        "test/decision-caliber-unify.test.mjs",
+        "test/default-no-dir-and-affinity.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/doctor-anchor-batch.test.mjs",
+        "test/doctor-local-yaml.test.mjs",
+        "test/done-heartbeat.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-14-scan-incremental:task-06:acc-3-a01a9738",
+      "tests": [
+        "test/agent-session-log.test.mjs",
+        "test/align-execute-review-gate.test.mjs",
+        "test/apply-stash-conflict-scan.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/brainstorm-exit-thin-default.test.mjs",
+        "test/brainstorm-solution-constraint-gate.test.mjs",
+        "test/change-exists-validation.test.mjs",
+        "test/change-ownership-guards.test.mjs",
+        "test/change-title-flow.test.mjs",
+        "test/cli-top-level-aliases.test.mjs",
+        "test/config-known-failures.test.mjs",
+        "test/continue-idempotent.test.mjs",
+        "test/decision-caliber-unify.test.mjs",
+        "test/default-no-dir-and-affinity.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/doctor-anchor-batch.test.mjs",
+        "test/doctor-local-yaml.test.mjs",
+        "test/done-heartbeat.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "active",
+      "discovery": "machine",
+      "confirmed_by": "agent",
+      "confirmed_at": "c2191f4eb1ce08a5280de2545bcbcd783860ac24",
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-14-scan-incremental"
+    }
+  ]
+}

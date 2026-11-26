@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-11-push-shell-token-tolerance",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-01",
+      "tests": [
+        "test/push-plan.test.mjs「parsePushArgs：容忍代执行残留的 shell 重定向 token」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-02",
+      "tests": [
+        "test/push-plan.test.mjs「parsePushArgs：管道/链式控制符截断其后参数」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-03",
+      "tests": [
+        "test/push-plan.test.mjs「parsePushArgs：默认 by-change；one 必须带 --change；未知/互斥 fail-closed」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-04",
+      "tests": [
+        "test/push-cli.test.mjs「human 模式 pre-push 失败错误含 hook stderr」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-05",
+      "tests": [
+        "test/push-cli.test.mjs「human 模式转发 git 输出、--json stdout 纯净」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-11-push-shell-token-tolerance:flow:测试绑定FR-06",
+      "tests": [
+        "test/push-plan.test.mjs「parsePushArgs：容忍代执行残留的 shell 重定向 token」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-11-push-shell-token-tolerance"
+    }
+  ]
+}

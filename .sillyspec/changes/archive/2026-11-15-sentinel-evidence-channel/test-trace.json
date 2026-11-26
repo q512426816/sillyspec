@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-15-sentinel-evidence-channel",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-15-sentinel-evidence-channel:flow:测试绑定FR-01",
+      "tests": [
+        "test/sentinel-unified-evidence.test.mjs「FR-01 execute-runs 真实路径证据复活（specBase/.runtime 层级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-sentinel-evidence-channel"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-15-sentinel-evidence-channel:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-unified-evidence.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-sentinel-evidence-channel"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-15-sentinel-evidence-channel:flow:测试绑定FR-03",
+      "tests": [
+        "test/sentinel-unified-evidence.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-15-sentinel-evidence-channel"
+    }
+  ]
+}
