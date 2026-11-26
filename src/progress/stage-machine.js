@@ -189,6 +189,52 @@ export class StageMachine {
     console.log(`✅ 阶段 ${stage} 已标记为完成（不自动推进，下一步由你决定）`);
   }
 
+  /**
+   * 退役阶段 legacy 盖戳（2026-11-26-verify-stage-retire task-09 / D-004）：
+   * verify 阶段已从阶段机注销（VALID_STAGES 与 TRANSITION 均无 verify），存量在途变更
+   * （stages 表 verify 行未 completed）会卡在四阶段流转外。本方法走底层直写**绕过**
+   * VALID_STAGES 拦截（completeStage 的三处前置校验之一），一次写两态：
+   *   verify 行 status=completed + 全 steps completed + changes.current_stage='archive'
+   * 不为存量加 verify→archive 的 TRANSITION 幽灵边（map 保持四阶段形态）。
+   * 幂等：已 completed 且 current_stage 已为 archive → applied=false reason='already-completed'。
+   * @returns {{cwd: string, changeName: string|null, applied: boolean, reason: string|null, steps?: number}}
+   */
+  legacyCompleteRetiredStage(cwd, changeName = null) {
+    const db = this.pm._ensureDB(cwd);
+    const now = new Date().toISOString();
+    let cn = changeName;
+    if (!cn) {
+      const active = this.pm.listChanges(cwd);
+      if (active.length === 1) cn = active[0];
+      if (!cn) return { cwd, changeName: null, applied: false, reason: 'need-change-name' };
+    }
+    const result = { cwd, changeName: cn, applied: false, reason: null, steps: 0 };
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      const changeRow = sqlDb.prepare('SELECT id, current_stage FROM changes WHERE name = ?').get(cn);
+      if (changeRow === undefined) { result.reason = 'change-not-found'; return; }
+      const stageRow = sqlDb.prepare("SELECT id, status FROM stages WHERE change_id = ? AND stage = 'verify'").get(changeRow.id);
+      if (stageRow === undefined) { result.reason = 'no-verify-stage-row'; return; }
+      if (stageRow.status === 'completed' && changeRow.current_stage === 'archive') {
+        result.reason = 'already-completed';
+        return;
+      }
+      sqlDb.prepare("UPDATE stages SET status = 'completed', completed_at = ? WHERE id = ?").run(now, stageRow.id);
+      const upd = sqlDb.prepare(
+        "UPDATE steps SET status = 'completed', completed_at = ? WHERE stage_id = ? AND status IN ('pending','in-progress','stale','waiting','blocked')"
+      ).run(now, stageRow.id);
+      result.steps = upd.changes;
+      sqlDb.prepare('UPDATE changes SET current_stage = ?, last_active = ? WHERE id = ?').run('archive', now, changeRow.id);
+      result.applied = true;
+    });
+    if (result.applied) {
+      this.pm._appendAuditLog(cwd, { action: 'legacy-complete-retired-stage', stage: 'verify', change: cn, steps: result.steps });
+      console.log(`✅ legacy 盖戳：${cn} 的 verify 阶段已标记完成（${result.steps} 步），current_stage → archive`);
+      console.log('   下一步：sillyspec run archive --change ' + cn);
+    }
+    return result;
+  }
+
   show(cwd, changeName = null, opts = {}) {
     // 如果指定了变更名，只显示该变更
     if (changeName) {

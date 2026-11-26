@@ -349,7 +349,7 @@ export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, cw
   L.push('### 探针 metrics 摘要（验证结论表的机器半边）')
   L.push('')
   if (!verifyFacts || !verifyFacts.probes) {
-    L.push(`（无 verify-facts.json：${join(changeDir || '?', 'verify-facts.json')} 不存在或不可解析——探针指标快照缺位，可跑 sillyspec verify-probes --change ${change} --init 补）`)
+    L.push(`（无 verify-facts.json：${join(changeDir || '?', 'verify-facts.json')} 不存在或不可解析——探针指标快照缺位，verify 阶段已退役，探针快照不再产生（历史归档件只读））`)
   } else {
     if (verifyFacts.generatedAt) L.push(`快照时刻：${verifyFacts.generatedAt}`)
     const order = ['probe1', 'probe3', 'probe5', 'probe6']

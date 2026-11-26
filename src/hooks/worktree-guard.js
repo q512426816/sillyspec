@@ -65,7 +65,7 @@ const STAGE_HINTS = {
     '',
     '  成功标准：',
     '  - <可验证标准>"',
-    '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
+    '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → archive（verify 已退役）',
     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
     '',
     '若在头脑风暴阶段做真原型（变更 key 已出）：sillyspec worktree create <变更名> 进隔离树写原型，',
@@ -79,14 +79,6 @@ const STAGE_HINTS = {
   'plan': [
     '当前在 plan（计划制定）阶段，这个阶段只写计划文档和任务蓝图，不写代码。',
     '完成 plan 后，运行 sillyspec run execute 进入执行阶段。',
-  ],
-  'verify': [
-    '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
-    '如需修改，请先回到 execute 阶段，或收口后开轻量变更（--input 引号内换行合法，可照抄）：',
-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景',
-    '',
-    '  成功标准：',
-    '  - <可验证标准>"',
   ],
   'archive': [
     '当前在 archive（归档）阶段，不修改源码。',

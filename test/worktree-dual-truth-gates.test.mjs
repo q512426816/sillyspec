@@ -28,7 +28,7 @@ import { WorktreeManager } from '../src/worktree.js'
 import { applyWorktree } from '../src/worktree-apply.js'
 import { collectWorktreeChangedFiles } from '../src/task-review.js'
 import { autoCheckPlanFromReviews } from '../src/run/complete.js'
-import { reconcileTargetFiles, runVerifyRequiredEvidenceCheck } from '../src/verify-postcheck.js'
+import { reconcileTargetFiles } from '../src/verify-postcheck.js'
 
 function sh(cmd, cwd) { execSync(cmd, { cwd, stdio: 'pipe' }) }
 function gitOut(cmd, cwd) { return execSync(cmd, { cwd, encoding: 'utf8' }).trim() }
@@ -418,51 +418,3 @@ test('FR-04 归因面：同文件双 task 全归属（suspectTask join 成 strin
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 组5 FR-05：required-evidence 消费侧双根核验（D-005@v1）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** evidence 双根 fixture：主仓 + 真 worktree（可选 meta）+ 证据账/报告槽 */
-function makeEvidenceFx({ withMeta }) {
-  const d = makeRepo({ 'src/code.js': 'old\n' })
-  const cn = 'c1'
-  const wt = addWorktree(d, cn)
-  // 证据文件只存在于 worktree（apply 前新文件形态）
-  writeFileSync(join(wt, 'src', 'wt-only.js'), 'new\n')
-  const specBase = join(d, '.sillyspec')
-  const changeDir = join(specBase, 'changes', cn)
-  mkdirSync(changeDir, { recursive: true })
-  // design created_at 设过去（R-05 fallback 宽容基准——mtime 核验不误判）
-  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2020-01-01T00:00:00\n---\n\n# d\n')
-  writeFileSync(join(changeDir, 'verify-required-evidence.json'),
-    JSON.stringify({ generatedAt: '2026-09-15T00:00:00', schemaVersion: 1, items: [{ task: 'task-02', verdict: 'cannot_verify', evidence: ['x'] }] }))
-  writeFileSync(join(changeDir, 'verify-result.md'),
-    ['# 报告', '## 证据账（cannot_verify 任务）', '[层：人工判断——CLI 核验]', '', '- task-02: satisfied | verifiedFiles: src/wt-only.js', ''].join('\n'))
-  if (withMeta) {
-    const base = gitOut('git rev-parse HEAD', d)
-    writeMeta(wt, { changeName: cn, branch: `sillyspec/${cn}`, baseHash: base, baselineCommit: base, worktreePath: wt })
-  }
-  return { d, cn, wt, specBase }
-}
-
-test('FR-05 正向：wt-only 新文件双根核验不再误报「文件不存在」（root 命中 worktree）', () => {
-  const fx = makeEvidenceFx({ withMeta: true })
-  try {
-    const r = runVerifyRequiredEvidenceCheck({ cwd: fx.d, specBase: fx.specBase, changeName: fx.cn })
-    assert.equal(r.status, 'passed', `双根核验通过（实际 ${JSON.stringify(r.detailed)}）`)
-    const v = r.detailed[0].verification[0]
-    assert.equal(v.filesExist, true, '任一根存在即 filesExist=true（不再误报不存在）')
-    assert.equal(v.root, fx.wt, `命中根=worktree（实际 ${v.root}）`)
-    assert.equal(v.diffHit, true, 'worktree porcelain 并入 diff 集，代码类交集命中')
-  } finally { cleanupRepo(fx.d, fx.wt) }
-})
-
-test('FR-05 零回归：meta 缺失退单根——wt-only 文件仍报不存在（blocked）', () => {
-  const fx = makeEvidenceFx({ withMeta: false })
-  try {
-    const r = runVerifyRequiredEvidenceCheck({ cwd: fx.d, specBase: fx.specBase, changeName: fx.cn })
-    assert.equal(r.status, 'blocked', '单根现状：主仓无该文件 → blocked')
-    const v = r.detailed[0].verification[0]
-    assert.equal(v.filesExist, false, '单查主仓 filesExist=false')
-    assert.match(v.reason, /不存在/, '误报「文件不存在」形态保持（零回归锚）')
-    assert.equal(v.root, null, '无命中根')
-  } finally { cleanupRepo(fx.d, fx.wt) }
-})

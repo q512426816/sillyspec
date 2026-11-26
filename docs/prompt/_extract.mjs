@@ -65,7 +65,7 @@ async function main() {
   const out = {}
 
   // ── 静态阶段（definition.steps 直接定义）──
-  const staticStages = ['brainstorm', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
+  const staticStages = ['brainstorm', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
   for (const name of staticStages) {
     const mod = await import(stageUrl(name))
     out[name] = extractDef(mod.definition, AUX.includes(name), {

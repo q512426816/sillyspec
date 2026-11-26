@@ -13,7 +13,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readRunnerFlags, readDepsRegressCap, readVerifyPyFlags } from '../src/verify-postcheck.js'
+import { readRunnerFlags, readDepsRegressCap } from '../src/verify-postcheck.js'
 import { flatKeys, renderExample } from '../src/config-schema.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -42,7 +42,6 @@ test('① readRunnerFlags 嵌套映射/未知类别/别名/缺省', () => {
     })
   withYaml('py_runner_flags: "-q -n 4"\r\n', (specBase) => {
     assert.equal(readRunnerFlags(specBase).py, '-q -n 4', '旧单键别名→py（CRLF）')
-    assert.equal(readVerifyPyFlags(specBase), '-q -n 4', 'readVerifyPyFlags 别名读口等价')
   })
 })
 

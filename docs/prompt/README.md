@@ -13,7 +13,6 @@
 | [brainstorm](./brainstorm.md) | 头脑风暴 | 主流程 | 8 | 资深架构师 | `src/stages/brainstorm.js` |
 | [plan](./plan.md) | 实现计划 | 主流程 | 5（动态） | 技术项目经理 | `src/stages/plan.js` |
 | [execute](./execute.md) | 波次执行 | 主流程 | 12（动态） | 高级工程师 | `src/stages/execute.js` |
-| [verify](./verify.md) | 验证 | 主流程 | 7 | QA 专家 | `src/stages/verify.js` |
 | [scan](./scan.md) | 项目扫描 | 辅助 | 11 | — | `src/stages/scan.js` |
 | [quick](./quick.md) | 快速任务（通道已退役 v3.30.0——仅存量会话收尾，新工作走 flow start） | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
 | [explore](./explore.md) | 自由探索 | 辅助 | 1 | 技术探索伙伴 | `src/stages/explore.js` |
@@ -21,7 +20,7 @@
 | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
 | [doctor](./doctor.md) | 自检 | 辅助 | 6 | — | `src/stages/doctor.js` |
 
-> 主流程阶段（brainstorm → plan → execute → verify）通过 `sillyspec run <stage>` 推进，有进度状态机。
+> 主流程阶段（brainstorm → plan → execute → archive，verify 已退役）通过 `sillyspec run <stage>` 推进，有进度状态机。
 > 辅助阶段（scan/quick/explore/archive/status/doctor）在 `stages/index.js` 标记 `auxiliary: true`，无活跃变更时也可执行。
 
 ---
@@ -44,7 +43,7 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
    ---
    ```
 2. **persona**（仅 step 0 注入）— 见下表。
-3. **全局护栏 `_globalGuardrails`**（仅 verify 有）— 首步全文注入，后续步注入一行精简提醒 `⛔ 本阶段护栏生效中（禁止破坏性操作，详见首步护栏）`。
+3. **全局护栏 `_globalGuardrails`**（当前无阶段声明——原 verify 护栏随阶段退役）。
 4. **模块上下文**（仅 brainstorm / plan / execute）— 基于 `_module-map.yaml` 匹配任务命中的模块，注入 `### 📦 模块上下文` 段（模块职责/风险等级/核心文件/依赖）。
 5. **修订上下文**（仅 revision 模式）— `### 🔄 Revision Context`，提示已有产物需更新而非重建。
 6. **平台模式 directives**（仅平台模式 `platformOpts.specRoot`）— 路径约束 / Write 工具规则 / workflow yaml 占位符映射；scan 阶段每步注入，其余仅**首个 agent 可见步**（`firstRenderableIdx`——step0 为 noAI 时顺延，2026-09-07 起）。
@@ -59,14 +58,13 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
 
 ### persona 表（逐字，仅 step 0 注入）
 
-> 源：`src/run/prompt.js` `personas` 对象。只对 brainstorm / plan / execute / verify / quick / explore 这 6 个阶段注入。
+> 源：`src/run/prompt.js` `personas` 对象。只对 brainstorm / plan / execute / quick / explore 这 5 个阶段注入（verify 已退役）。
 
 | 阶段 | persona 文案 |
 |---|---|
 | brainstorm | `### 🎯 你的角色：资深架构师`<br>你是一位有 15 年经验的系统架构师。先理解业务本质，再设计技术方案。决策附理由，方案列 trade-off。不确定就说不确定，不猜。 |
 | plan | `### 📋 你的角色：技术项目经理`<br>你是一位经验丰富的技术项目经理。任务拆解粒度均匀，依赖关系明确。每个任务有完成标准，Wave 间有依赖说明。条理清晰，不做模糊描述。 |
 | execute | `### 💻 你的角色：高级工程师`<br>你是一位严谨的高级工程师。先读规范再写代码，严格遵循 CONVENTIONS.md 和 plan.md。**你不是设计师，是执行者——按 plan 搬砖，禁止发散思维。** 发现 plan 不合理就停下来反馈，不要自己改方案。代码有清晰职责划分，边界处理完善。少说多做，遇到规范冲突优先问。 |
-| verify | `### 🔍 你的角色：QA 专家`<br>你是一位吹毛求疵的 QA 专家。假设所有代码都有 bug，用最坏情况测试。关注边界、异常、并发。有问题直说，用证据说话，不写"看起来没问题"。 |
 | quick | `### 💻 你的角色：全栈老兵`<br>你是一位实战经验丰富的全栈工程师。不纠结架构和流程，理解需求就直接干。不确定的地方先问清楚再动手，先读后写，改完就收。问题排查思路开阔，前端报错不一定是前端问题——可能是后端数据、浏览器兼容、甚至设备硬件。解决方案实用接地气，用户描述有误敢于直接指出。 |
 | explore | `### 🧭 你的角色：技术探索伙伴`<br>你帮助用户澄清问题、调查代码库、比较方案和暴露风险。探索阶段不写实现代码，不安装依赖，不把讨论强行推进成开发。 |
 

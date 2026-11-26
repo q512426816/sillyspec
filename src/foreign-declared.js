@@ -51,7 +51,7 @@ function getMainDirtySet(cwd) {
  * 噪音/误扣）。specBase 与 cwd 项目侧两目录都扫，按变更名合并（specBase 先入）。
  * @returns {Map<string, { isolated: boolean }>|null} null = 两目录均读取失败（fail-closed）
  */
-export function loadWorktreeLiveness(specBase, cwd) {
+function loadWorktreeLiveness(specBase, cwd) {
   const map = new Map()
   const roots = [...new Set([specBase, join(cwd || process.cwd(), '.sillyspec')].filter(Boolean))]
   let anyDirOk = false

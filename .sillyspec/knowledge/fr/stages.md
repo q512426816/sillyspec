@@ -533,3 +533,81 @@ created_at: 2026-09-20T15:18:10.810Z
 - 场景：默认场景 — When 变更测试面运行；Then scan-diff / scan-staleness / scan-refresh / scan-postcheck 既有测试零改动零失败；scan-refre
 全文：.sillyspec/changes/archive/2026-11-14-scan-incremental/requirements.md#FR-08
 最近确认：c2191f4e
+
+## FR-stages-029 verify 阶段删除与四阶段流转
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 本变更合入后；When agent 执行完整流程；Then 阶段序列为 brainstorm → plan → execute → archive；`run verify` 报「阶段已退役」并指路 `run archiv
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-01
+最近确认：3bfdbd8c
+
+## FR-stages-030 archive 前置收口实测门（机制保留、本仓关闭态）
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-005@v1、D-008@v1
+场景正文：
+- 场景：默认场景 — Given 变更 execute 完成、agent 调 `run archive`；When archive 第一个（noAI）步骤执行；Then 机制上 CLI 亲跑 `commands.test`（动态子集三源推断+指纹缓存，verify-quality-scan.js 更名 archive-quali
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-02
+最近确认：3bfdbd8c
+
+## FR-stages-031 PID 登记/回收机制随阶段退役
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-008@v1
+场景正文：
+- 场景：默认场景 — Given 阶段删除后 PID 登记源头（verify prompt）消失；When 本变更合入；Then `reapVerifyServices` 与 pids 文件读逻辑一并删除（不留死码）；execute 不新增登记指引；存量 `.runtime/verify-
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-03
+最近确认：3bfdbd8c
+
+## FR-stages-032 verify.mode 开关退役
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 存量 local.yaml 残留 `verify: { mode: skip }`；When 本变更合入后任意命令运行；Then 键无消费者、读到忽略不报错；`src/verify-mode.js` 及其全部 import 清零；config-schema 注册项移除。
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-04
+最近确认：3bfdbd8c
+
+## FR-stages-033 在途 verify 变更 legacy 完成路径
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-004@v1
+场景正文：
+- 场景：默认场景 — Given 升级时进度库存在 stage 停在 verify 的活跃变更；When 运行 `sillyspec doctor`（或阶段入口探测）；Then 检测到在途 verify 变更并提示一次性 legacy 盖完成戳（显式确认后 verify:in-progress → completed，随后走 archi
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-05
+最近确认：3bfdbd8c
+
+## FR-stages-034 不发 npm 版本
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-003@v1
+场景正文：
+- 场景：默认场景 — Given 本变更合入；Then package.json 版本号不变（D-003）；版本面留给后续发版批次（届时建议 semver major + 迁移说明）。
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-06
+最近确认：3bfdbd8c
+
+## FR-stages-035 验收范式降级显式声明
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+依据决策：D-007@v1
+场景正文：
+- 场景：默认场景 — Given 完整流程验收强度与轻量道实测门趋同；When 任何人查阅本变更档案；Then D-007 + R-05 明示「完整流程独特价值＝plan 编排 + archive 文档同步/蒸馏，不再含更强验收」为刻意取舍（source=user），非疏
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-07
+最近确认：3bfdbd8c
+
+## FR-stages-036 消费面清理护栏清零
+变更：2026-11-26-verify-stage-retire
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 52 个 src 消费面迁移完成；When 收口验证执行 `grep -rn "verify-result\|verify-probes\|'verify'" src --include=*.js`；Then 命中仅剩白名单（归档区历史读取、历史注释），其余清零。
+全文：.sillyspec/changes/archive/2026-11-26-verify-stage-retire/requirements.md#FR-08
+最近确认：3bfdbd8c

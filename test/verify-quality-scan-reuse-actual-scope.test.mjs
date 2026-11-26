@@ -1,7 +1,7 @@
 /**
  * 快照口径复用闸「实际口径」收敛回归锁（2026-10-09-verify-reuse-friction FR-01 / D-003@v1）。
  *
- * 死循环机制（multi-agent-platform 2026-10-09 tombstone 取证）：executeVerifyQualityScan
+ * 死循环机制（multi-agent-platform 2026-10-09 tombstone 取证）：runArchiveCloseGate
  * 原先在快照创建**之前**以 plannedSnapshot（env 常量，默认 true）判复用，而快照创建慢性
  * 失败时记录 usedSnapshot 恒 false → `snapshot-scope-changed` 永久失配 → 每次 step --done
  * 全量重跑（4 轮 × 3.5min 纯浪费）。修复：先建快照后判复用，plannedSnapshot 参数接收
@@ -18,10 +18,10 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
 import {
-  executeVerifyQualityScan,
+  runArchiveCloseGate,
   loadLastQualityScanRecord,
   storeQualityScan,
-} from '../src/run/verify-quality-scan.js'
+} from '../src/run/archive-quality-scan.js'
 
 function makeFixtureRepo(tag) {
   const dir = mkdtempSync(join(tmpdir(), `vqs-scope-${tag}-`))
@@ -70,7 +70,7 @@ test('快照慢性失败（usedSnapshot=false）下 passed 幂等闸第二轮收
     const specBase = join(dir, '.sillyspec')
     touchFlip(dir)
     // 第一轮：真跑（绿）→ 记录落盘
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     const rec = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
     assert.ok(rec, '第一轮记录落盘')
     assert.ok(rec.testResult.status === 'passed', '第一轮绿')
@@ -78,7 +78,7 @@ test('快照慢性失败（usedSnapshot=false）下 passed 幂等闸第二轮收
     const c1 = counterOf(dir)
     assert.ok(c1 >= 1, '第一轮真跑计数')
     // 第二轮：码态零变化 + 快照再次失败（同 fixture）→ 实际口径 false == 记录 false → 必须命中复用
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     assert.equal(counterOf(dir), c1, '第二轮零执行（死循环断根——旧代码此处 snapshot-scope-changed 永久失配必真跑）')
   } finally {
     try { rmSync(dir, { recursive: true, force: true }) } catch {}
@@ -95,7 +95,7 @@ test('口径真实切换（记录 usedSnapshot=true vs 本轮实际 false）仍�
     storeQualityScan({ specBase, cwd: dir, changeName: 'c1', testResult: PASSED_TEST, lintResult: PASSED_LINT, usedSnapshot: true })
     const c0 = counterOf(dir)
     // 本轮快照建不成（实际 false）≠ 记录 true → 必须真跑
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     assert.equal(counterOf(dir), c0 + 1, '口径切换失配 → 真跑一次（不得吞口径差异）')
   } finally {
     try { rmSync(dir, { recursive: true, force: true }) } catch {}
@@ -113,7 +113,7 @@ test('failed 失败签名去重闸同口径收敛：快照慢性失败下命中�
     const c0 = counterOf(dir)
     // 码态零变化 + 实际口径 false == 记录 usedSnapshot=false → 失败签名闸命中：throw 且零执行
     await assert.rejects(
-      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} }),
+      () => runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} }),
       (e) => String(e.message).includes('复用上次失败'),
     )
     assert.equal(counterOf(dir), c0, '失败签名闸命中轮零执行（旧代码同死循环：口径失配必重跑失败）')

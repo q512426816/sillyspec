@@ -12,8 +12,7 @@
  *   1. HANDOFF.json 存在 → 交接恢复
  *   2. 活跃变更（changes/ 非 archive）逐个推断：
  *      无文件→补 proposal / 无 design.md→brainstorm / 无 tasks.md→brainstorm 末步 /
- *      无 plan.md→plan / tasks.md 有未勾→execute / 全勾无 verify-result.md→verify /
- *      有 verify-result.md→archive
+ *      无 plan.md→plan / tasks.md 有未勾→execute / 全勾→archive（verify 已退役）
  *   3. 有 docs/<p>/scan/ 无活跃变更 → brainstorm（已扫描待开变更）
  *   4. 有 REQUIREMENTS.md/ROADMAP.md 无变更 → brainstorm（绿地已有需求）
  *   5. 什么都没有 → init（新项目）或 scan（棕地）
@@ -21,7 +20,6 @@
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { resolveSpecDir } from './shared.js'
-import { readVerifyMode } from '../verify-mode.js'
 
 /**
  * 数 tasks.md checkbox：返回 { checked, total }（无文件 → {checked:0,total:0}）
@@ -81,14 +79,8 @@ function inferChange(changeDir, name, specBase) {
       evidence: [ev('plan.md'), ev('tasks.md')],
     }
   }
-  if (!has('verify-result.md')) {
-    // verify.mode=skip 仓级关停（2026-11-26-verify-skip-switch）：不再指向一个会被跳过的阶段
-    if (readVerifyMode(specBase) === 'skip') {
-      return { state: `${name}：task 全勾（verify 已按配置跳过），待归档`, next: `sillyspec run archive --change ${name}`, evidence: [ev('tasks.md'), ev('plan.md')] }
-    }
-    return { state: `${name}：task 全勾，待验证`, next: `sillyspec run verify --change ${name}`, evidence: [ev('tasks.md'), ev('plan.md')] }
-  }
-  return { state: `${name}：已验证，待归档`, next: `sillyspec run archive --change ${name}`, evidence: [ev('verify-result.md')] }
+  // verify 阶段已退役（2026-11-26-verify-stage-retire）：task 全勾即待归档
+  return { state: `${name}：task 全勾，待归档`, next: `sillyspec run archive --change ${name}`, evidence: [ev('tasks.md'), ev('plan.md')] }
 }
 
 /**

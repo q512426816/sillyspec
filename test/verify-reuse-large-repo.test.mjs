@@ -21,8 +21,7 @@ const u = (p) => new URL('file:///' + p.replace(/\\/g, '/').replace(/^\/*/, ''))
 const load = async (rel) => await import(u(join(ROOT, rel).replace(/\\/g, '/')))
 
 const { computeCodeTreeKey } = await load('src/run/code-face-key.js')
-const { computeQualityScanFingerprint, computeQualityScanDedupKey, consultFailedScanReuse, synthesizeReusedFailedCheck, qualityScanRecordPath } = await load('src/run/verify-quality-scan.js')
-const { isVerifyBatchEligible, detectVerifyBatchFinish } = await load('src/run/complete.js')
+const { computeQualityScanFingerprint, computeQualityScanDedupKey, consultFailedScanReuse, synthesizeReusedFailedCheck, qualityScanRecordPath } = await load('src/run/archive-quality-scan.js')
 
 function makeRepo(withSpec = true) {
   const dir = mkdtempSync(join(tmpdir(), 'vrlr-'))
@@ -78,76 +77,6 @@ test('大仓（ls-tree>1MB）computeCodeTreeKey 非 null——maxBuffer 回归',
   } finally {
     try { rmSync(dir, { recursive: true, force: true }) } catch {}
   }
-})
-
-// ── FR-02：批量资格纯判定矩阵 + detectVerifyBatchFinish 等价 ─────────────────
-function makeBatchFixture({ report = true, conclusion = true, facts = true } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'vbe-'))
-  const specBase = join(dir, '.sillyspec')
-  const changeDir = join(specBase, 'changes', 'demo-change')
-  mkdirSync(changeDir, { recursive: true })
-  if (report) {
-    const body = conclusion ? '# 验证报告\n\n- 结论枚举：`PASS`\n' : '# 验证报告\n\n（结论未填）\n'
-    writeFileSync(join(changeDir, 'verify-result.md'), body)
-  }
-  if (facts) writeFileSync(join(changeDir, 'verify-facts.json'), '{}')
-  return { dir, specBase, changeName: 'demo-change' }
-}
-
-const stepsFrom = (statuses) => statuses.map((s) => ({ name: s, status: s }))
-
-test('isVerifyBatchEligible 纯资格判定矩阵（不 mutating）', () => {
-  const pendingTail = stepsFrom(['completed', 'completed', 'pending', 'pending', 'pending', 'pending', 'pending'])
-  const mk = (opts) => makeBatchFixture(opts)
-  let f
-  f = mk({ report: false })
-  try {
-    assert.equal(isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: pendingTail }).eligible, false, '报告缺席不资格')
-    assert.equal(isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: pendingTail }).reason, 'verify-result.md 缺席（报告未写不批量）')
-  } finally { rmSync(f.dir, { recursive: true, force: true }) }
-  f = mk({ conclusion: false })
-  try {
-    const r = isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: pendingTail })
-    assert.equal(r.eligible, false)
-    assert.equal(r.reason, '结论枚举未填（待填占位不批量）')
-  } finally { rmSync(f.dir, { recursive: true, force: true }) }
-  f = mk({ facts: false })
-  try {
-    const r = isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: pendingTail })
-    assert.equal(r.eligible, false)
-    assert.equal(r.reason, 'verify-facts.json 缺席（探针未跑不批量）')
-  } finally { rmSync(f.dir, { recursive: true, force: true }) }
-  f = mk({})
-  try {
-    const anchored = stepsFrom(['completed', 'pending', 'pending', 'pending', 'pending', 'pending', 'pending'])
-    assert.equal(isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: anchored }).eligible, false, '锚定步未过不资格')
-    assert.equal(isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: stepsFrom(Array(7).fill('completed')) }).eligible, false, '无剩余 step 不资格')
-    const snapshot = pendingTail.map((s) => ({ ...s }))
-    const r = isVerifyBatchEligible({ changeName: 'demo-change', specBase: f.specBase, steps: snapshot })
-    assert.equal(r.eligible, true, '报告齐 + 锚定过 + 有 pending → 资格成立')
-    assert.deepEqual(snapshot, pendingTail, '纯判定不 mutating 步骤状态')
-    assert.equal(isVerifyBatchEligible({ changeName: null, specBase: f.specBase, steps: pendingTail }).eligible, false, '无 changeName 不资格')
-  } finally { rmSync(f.dir, { recursive: true, force: true }) }
-})
-
-test('detectVerifyBatchFinish 行为等价（理由串保留；资格成立照旧 mutating 批量）', () => {
-  const f = makeBatchFixture({ report: false })
-  try {
-    const steps = stepsFrom(['completed', 'completed', 'pending', 'pending'])
-    const r = detectVerifyBatchFinish({ changeName: 'demo-change', specBase: f.specBase, steps })
-    assert.equal(r.batched, false)
-    assert.equal(r.reason, 'verify-result.md 缺席（报告未写不批量）', '不资格理由串与既有口径逐字一致')
-    assert.deepEqual(steps.map((s) => s.status), ['completed', 'completed', 'pending', 'pending'], '不资格不 mutating')
-  } finally { rmSync(f.dir, { recursive: true, force: true }) }
-  const g = makeBatchFixture({})
-  try {
-    const steps = stepsFrom(['completed', 'completed', 'pending', 'in-progress', 'pending'])
-    const r = detectVerifyBatchFinish({ changeName: 'demo-change', specBase: g.specBase, steps })
-    assert.equal(r.batched, true)
-    assert.equal(r.aligned, 3, '剩余 pending/in-progress 全部批量对齐')
-    assert.ok(steps.slice(2).every((s) => s.status === 'completed' && s._batchAligned === true), '本次对齐步乐观预标戳保留（rollback 面）')
-    assert.ok(!('_batchAligned' in steps[0]) && !('_batchAligned' in steps[1]), '批量前已完成的步不打预标戳')
-  } finally { rmSync(g.dir, { recursive: true, force: true }) }
 })
 
 // ── FR-03：失败签名复用矩阵（命中/键失配/TTL/RERUN）+ 合成结果披露 ────────────

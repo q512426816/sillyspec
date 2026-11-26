@@ -3,15 +3,15 @@
 
 export const SPEC_DIR_NAME = '.sillyspec';
 
-// 合法阶段名（含辅助阶段 scan/quick/explore）
-export const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
+// 合法阶段名（含辅助阶段 scan/quick/explore）——verify 已退役（2026-11-26-verify-stage-retire：
+// 完整流程四阶段，execute→archive 直连；存量 verify 在途行由 doctor legacy 盖戳处理）
+export const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'archive', 'quick', 'explore'];
 
 // 阶段展示文案
 export const STAGE_LABELS = {
   brainstorm: '🧠 需求探索',
   plan: '📐 实现计划',
   execute: '⚡ 波次执行',
-  verify: '🔍 验证确认',
   scan: '🔍 代码扫描',
   quick: '⚡ 快速任务',
   explore: '🧭 自由探索',
@@ -23,12 +23,12 @@ export const STAGE_LABELS = {
 };
 
 // 完整阶段顺序（含 scan），仅用于展示/迭代顺序
-export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive'];
+export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'archive'];
 // 主流程阶段（不含 scan/quick/explore 等辅助阶段）—— 用于下游 cascade / 一致性上下游判定。
 // scan 是 auxiliary（AUXILIARY_STAGES，按需显式跑、可 failed_post_check、永不要求 completed），
 // 把它算进主流程上下游会让「scan stale/revising」误报 brainstorm/plan/execute 不该 completed
 // （consistency-doctor 坑 + prompt-control-debt plan-c 同根因）。
-export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
+export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'archive'];
 
 // progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8；
 // v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1；

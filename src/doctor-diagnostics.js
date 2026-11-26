@@ -131,6 +131,17 @@ function probeDb(dbPath) {
       })(),
       last_active: pick('SELECT MAX(last_active) FROM changes'),
       execute_status_by_change: pickExecuteStatusByChange(),
+      // 退役阶段在途检测（2026-11-26-verify-stage-retire）：verify 行 status 映射
+      verify_status_by_change: (() => {
+        try {
+          const rows = db.prepare(
+            `SELECT c.name, s.status FROM changes c
+             LEFT JOIN stages s ON s.change_id = c.id AND s.stage = 'verify'
+             WHERE c.status = 'active'`
+          ).all();
+          return Object.fromEntries(rows.map((r) => [r.name, r.status || null]));
+        } catch { return {}; }
+      })(),
     };
   } catch (e) {
     return { ...base, readable: false, reason: `打开失败: ${e.message}` };
@@ -243,6 +254,8 @@ function detectMultiDb(cwd, pointer) {
       active_changes: d.readable ? (d.active_changes || []) : [],
       // SS-2b：name → last_active 映射随摘要透传，供 D4 空壳判定（时间门槛）消费。
       active_last_active: d.readable ? (d.active_last_active || {}) : {},
+      // 退役阶段在途检测（2026-11-26-verify-stage-retire）：verify 行 status 映射随摘要透传
+      verify_status_by_change: d.readable ? (d.verify_status_by_change || {}) : {},
     })),
   };
 }
@@ -421,6 +434,38 @@ function isStaleLastActive(lastActive, now = Date.now()) {
   if (!lastActive) return false;
   const ts = Date.parse(lastActive);
   return Number.isFinite(ts) && (now - ts) > GHOST_EMPTY_DIR_STALE_MS;
+}
+
+/**
+ * 退役阶段在途检测（2026-11-26-verify-stage-retire task-09 / D-004）：
+ * verify 阶段已注销，存量进度库中 stage=verify 未完成的活跃变更会卡在四阶段流转外
+ * （TRANSITION 无 verify 边，run archive 也会被前置校验拦下）。本维度只读列出，并给
+ * legacy 盖戳出路（sillyspec doctor --legacy-complete-verify --change <名> --confirm）。
+ * 无 verify 在途 → pass: true 零噪音（存量库常见形态）。
+ */
+function detectRetiredVerifyInFlight(pointer, multiDb) {
+  const dim = { name: 'retired-verify-in-flight', label: '退役阶段在途（verify）', pass: true, severity: null, findings: [], safe_actions: [] };
+  const auth = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
+  if (!auth || !auth.readable) {
+    dim.findings.push('无权威 db，跳过');
+    return dim;
+  }
+  const byChange = auth.verify_status_by_change || {};
+  const stuck = Object.entries(byChange)
+    .filter(([, status]) => status !== null && status !== 'completed')
+    .map(([name]) => name);
+  if (stuck.length === 0) {
+    dim.findings.push('无 verify 阶段在途变更');
+    return dim;
+  }
+  dim.pass = false;
+  dim.severity = CHECK_SEVERITY.WARNING;
+  dim.findings.push(
+    `verify 阶段已退役，但 ${stuck.length} 个活跃变更仍停在 verify：${stuck.slice(0, 10).join(', ')}${stuck.length > 10 ? ' …' : ''}——` +
+    '按新的四阶段流转无法继续（TRANSITION 无 verify 边）'
+  );
+  dim.safe_actions.push('sillyspec doctor --legacy-complete-verify --change <名>（dry-run）→ 加 --confirm 盖戳后 run archive');
+  return dim;
 }
 
 function detectChangeDbConsistency(cwd, pointer, multiDb) {
@@ -1753,6 +1798,7 @@ export async function runDoctorDiagnostics({ cwd }) {
   const multiDb = detectMultiDb(cwd, pointer);
   const pointerHealth = detectPointerHealth(pointer, cwd);
   const changesSplit = detectChangesSplit(cwd, pointer);
+  const retiredVerify = detectRetiredVerifyInFlight(pointer, multiDb);
   const changeDb = detectChangeDbConsistency(cwd, pointer, multiDb);
 
   // 权威 specDir（用于 D5 execute-progress-plan-mismatch 读 plan.md）
@@ -1804,7 +1850,7 @@ export async function runDoctorDiagnostics({ cwd }) {
   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
   // 2026-11-09-archive-landing-visibility FR-02：归档提交残留（只读 WARNING）
   const archiveCommitResidue = detectArchiveCommitResidue(cwd)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
+  const dimensions = [multiDb, pointerHealth, changesSplit, retiredVerify, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
 
   return {
     dimensions,

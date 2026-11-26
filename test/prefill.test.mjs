@@ -27,11 +27,6 @@ import {
   hasUnconfirmedPrefill,
   runPrefillRefresh,
 } from '../src/prefill.js'
-import {
-  runProbe10PrefillNoteClearance,
-  runVerifyProbes,
-  renderVerifyProbesReport,
-} from '../src/verify-probes.js'
 import { ProgressManager } from '../src/progress.js'
 import { makeRepo, initChange, seedStage, runCLI, runStage, cleanup, report } from './_cli-step-harness.mjs'
 
@@ -234,137 +229,16 @@ console.log('\n=== 5. runPrefillRefresh：已确认槽（注已删=人工内容�
 // ═══════════════════════════════════════════════════════════════════════════
 // 6 组·注清零双态（hasUnconfirmedPrefill + 探针 10 输出形态 + 门双态 CLI 层）
 // ═══════════════════════════════════════════════════════════════════════════
-console.log('\n=== 6a. hasUnconfirmedPrefill + 探针 10（runProbe10PrefillNoteClearance）===\n')
+console.log('\n=== 6. hasUnconfirmedPrefill 双态（探针 10 与 verify error 门已随 verify 阶段退役——2026-11-26-verify-stage-retire）===\n')
 {
   const fx = makeChangeFixture('pf-probe10-', {
     design: `# d\n\n## 决策追踪\n| 决策 | 覆盖点 | 状态 |\n|---|---|---|\n| D-001@v1 | x | 待确认 ${PREFILL_NOTE} |\n`,
-    tasks: {
-      'task-01.md': `---\nid: task-01\nrequirement_ids: [FR-001]  # ${PREFILL_NOTE}\n---\n`,
-      'task-02.md': '---\nid: task-02\nrequirement_ids: [FR-001]\n---\n',
-    },
   })
   const withNote = join(fx.changeDir, 'design.md')
-  const cleanFile = join(fx.changeDir, 'tasks', 'task-02.md')
   assert(hasUnconfirmedPrefill(withNote) === true, '注在场 → true（未确认）')
-  assert(hasUnconfirmedPrefill(cleanFile) === false, '注不在场 → false（确认态）')
   assert(hasUnconfirmedPrefill(join(fx.changeDir, 'no-such.md')) === false, '文件缺失 → false（无注可删不误报）')
-
-  const p = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: fx.changeName })
-  assert(p.applicable === true && p.checkedFiles === 3, `在检文件 3（design.md+两 task 卡）（got ${JSON.stringify(p)}）`)
-  assert(deepEq(p.unclearedFiles, ['design.md', 'tasks/task-01.md']),
-    `unclearedFiles=changeDir 相对正斜杠、design 在前 task 卡按名序（got ${JSON.stringify(p.unclearedFiles)}）`)
-
-  const probes = runVerifyProbes({ cwd: fx.root, changeName: fx.changeName, specDir: fx.specBase })
-  const md = renderVerifyProbesReport(probes)
-  const p10sec = md.slice(md.indexOf('#### 探针 10'))
-  assert(p10sec.includes('#### 探针 10：预填注清零（error 门）'), '探针 10 段标题（error 门口径）')
-  assert(p10sec.includes('❌ 预填注未清 2 处') && p10sec.includes('`design.md` 仍含未删预填注') && p10sec.includes('`tasks/task-01.md` 仍含未删预填注'),
-    '❌ 面：未清文件逐名列出（verify-result.md 探针段形态）')
-
-  // 清零态：删净注 → 探针 ✅ 过
-  writeFileSync(withNote, readAll(withNote).split(PREFILL_NOTE).join('').replace('待确认  |', '已落实 |'))
-  writeFileSync(join(fx.changeDir, 'tasks', 'task-01.md'), `---\nid: task-01\nrequirement_ids: [FR-001]\n---\n`)
-  const pClean = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: fx.changeName })
-  assert(pClean.applicable === true && pClean.unclearedFiles.length === 0, '注删净 → unclearedFiles 空（error 门过）')
-  const mdClean = renderVerifyProbesReport(runVerifyProbes({ cwd: fx.root, changeName: fx.changeName, specDir: fx.specBase }))
-  const secClean = mdClean.slice(mdClean.indexOf('#### 探针 10'))
-  assert(secClean.includes('✅ 预填注清零'), '✅ 面形态（删净过门）')
-
-  const pMiss = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: 'no-such' })
-  assert(pMiss.applicable === false && pMiss.notes.length > 0, '变更目录缺失 → 不适用+注记（纯骨架零红门禁）')
 }
 
-console.log('\n=== 6b. 门双态（CLI 层）：brainstorm --done advisory / verify --done error ===\n')
-// ── brainstorm --done：注在场 → advisory warning 不阻断（旧路径零新硬门）──
-const BRAINSTORM_STEPS = ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']
-async function seedBrainstormToLast(cwd, specBase, cn) {
-  const pm = await initChange(cwd, specBase, cn)
-  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
-  return seedStage(pm, cwd, cn, 'brainstorm',
-    BRAINSTORM_STEPS.map((name, i) => ({ name, status: i < BRAINSTORM_STEPS.length - 1 ? 'completed' : 'pending' })))
-}
-function writeCompleteArtifacts(specBase, cn, cwd) {
-  const changeDir = join(specBase, 'changes', cn)
-  writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
-  writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 模块域核验\n')
-  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
-  writeFileSync(join(changeDir, 'design.md'),
-    `# 设计文档（Design）— ${cn}\n\n## 背景\n决策模块域需核验。\n\n## 总体方案\ndesign-facts 纯函数核验。\n\n## 决策\nD-001@v1: 模块域登记。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a/x.js | a 改动 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n`)
-  writeFileSync(join(changeDir, 'decisions.md'), '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: mod-a\n')
-  mkdirSync(join(cwd, 'src', 'a'), { recursive: true })
-  writeFileSync(join(cwd, 'src', 'a', 'x.js'), '// fixture stub')
-  const mapDir = join(specBase, 'docs', 'pfmap', 'modules')
-  mkdirSync(mapDir, { recursive: true })
-  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  mod-a:\n    paths:\n      - src/a/\n')
-}
-{
-  const { cwd, specBase } = makeRepo('pf-gate-adv-')
-  const cn = '2026-09-18-pf-adv'
-  await seedBrainstormToLast(cwd, specBase, cn)
-  writeCompleteArtifacts(specBase, cn, cwd)
-  mkdirSync(join(specBase, 'changes', cn, 'tasks'), { recursive: true })
-  writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-01.md'), `---\nid: task-01\nrequirement_ids: [FR-001]  # ${PREFILL_NOTE}\n---\n`)
-  const r = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认' })
-  assert(r.status === 0, `注在场 --done exit 0（advisory 不阻断；实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
-  assert(r.combined.includes('⚠️ 预填注未清') && r.combined.includes('tasks/task-01.md'),
-    'advisory 文案：点名列出未清文件+核对语义')
-  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.brainstorm.status === 'completed', 'advisory 路径阶段正常 completed（忘删注=提示非阻断）')
-
-  // 清零态：无注 → 无 warning 正常完成
-  const { cwd: cwd2, specBase: sb2 } = makeRepo('pf-gate-adv-clean-')
-  const cn2 = '2026-09-18-pf-adv-clean'
-  await seedBrainstormToLast(cwd2, sb2, cn2)
-  writeCompleteArtifacts(sb2, cn2, cwd2)
-  mkdirSync(join(sb2, 'changes', cn2, 'tasks'), { recursive: true })
-  writeFileSync(join(sb2, 'changes', cn2, 'tasks', 'task-01.md'), '---\nid: task-01\nrequirement_ids: [FR-001]\n---\n')
-  const r2 = runStage('brainstorm', cn2, cwd2, { done: true, output: '生成规范完成', answer: '确认' })
-  assert(r2.status === 0 && !r2.combined.includes('预填注未清'), '注删净 → 无 advisory 噪音、正常完成')
-}
-// ── verify --done：注在场 → error 阻断（归档前注清零收口）；删净 → 过 ──
-const VERIFY_STEPS = ['状态检查', '加载规范并锚定', '逐项检查任务', '对照设计检查', '任务蓝图验收', '运行测试和质量扫描', '输出验证报告']
-async function seedVerifyToLast(cwd, specBase, cn) {
-  const pm = await initChange(cwd, specBase, cn)
-  try {
-    const db = pm._ensureDB(cwd)
-    db.getDb().prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?").run(cn)
-  } catch { /* 存量豁免回填失败不阻断（ir-hardening 同款 fail-open） */ }
-  runCLI(['--dir', cwd, 'run', 'verify', '--change', cn], { cwd })
-  return seedStage(pm, cwd, cn, 'verify', VERIFY_STEPS.map((name, i) => ({ name, status: i < VERIFY_STEPS.length - 1 ? 'completed' : 'pending' })))
-}
-function writeVerifyDocs(changeDir, extraDesign = '') {
-  writeFileSync(join(changeDir, 'design.md'),
-    '# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序 |\n' + extraDesign)
-  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
-  writeFileSync(join(changeDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n所有任务通过。\n')
-}
-{
-  const { cwd, specBase } = makeRepo('pf-gate-err-')
-  const cn = '2026-09-18-pf-err'
-  await seedVerifyToLast(cwd, specBase, cn)
-  writeVerifyDocs(join(specBase, 'changes', cn), `\n<!-- 槽状态：待确认 ${PREFILL_NOTE} -->\n`)
-  const r = runStage('verify', cn, cwd, { done: true, output: '报告已输出' })
-  assert(r.combined.includes('❌ verify 阶段被阻断：预填注清零校验未过'),
-    `注在场 → error 阻断（输出尾：${r.combined.slice(-150)}）`)
-  assert(r.combined.includes('design.md') && r.combined.includes('删注=确认动作'),
-    'error 文案：点名未清文件+删注=确认动作指引')
-  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.verify.status !== 'completed' && after.stages.verify.steps[after.stages.verify.steps.length - 1].status === 'pending',
-    '阻断回滚：阶段不 completed、末步回退 pending（归档前置守死）')
-
-  const { cwd: cwd2, specBase: sb2 } = makeRepo('pf-gate-err-clean-')
-  const cn2 = '2026-09-18-pf-err-clean'
-  await seedVerifyToLast(cwd2, sb2, cn2)
-  writeVerifyDocs(join(sb2, 'changes', cn2))
-  const r2 = runStage('verify', cn2, cwd2, { done: true, output: '报告已输出' })
-  assert(r2.status === 0 && r2.combined.includes('验证通过'), '注删净 → verify 正常完成（error 门过）')
-  const after2 = await new ProgressManager({ specDir: sb2 }).read(cwd2, cn2)
-  assert(after2.stages.verify.status === 'completed', '清零态阶段 completed')
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 7 组·定向生成器回归（design-init 决策表注行 / taskcard ids 直填三态）
-// ═══════════════════════════════════════════════════════════════════════════
 console.log('\n=== 7. 定向生成器回归：design-init 注行 + taskcard ids 直填 ===\n')
 {
   // design-init：决策追踪表行带来源注（task-02 接线；design-facts L552/L576 同格式）

@@ -35,7 +35,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        stage: { type: 'string', enum: ['brainstorm', 'plan', 'execute', 'verify', 'archive'], description: '目标阶段' },
+        stage: { type: 'string', enum: ['brainstorm', 'plan', 'execute', 'archive'], description: '目标阶段（verify 已退役——完整流程四阶段：brainstorm/plan/execute/archive；收口实测随 run archive）' },
         change: { type: 'string', description: '变更名（必填）' },
         spec_dir: { type: 'string' },
       },

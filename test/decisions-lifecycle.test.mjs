@@ -588,18 +588,19 @@ describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为�
     const { definition } = await import('../src/stages/archive.js')
     const names = definition.steps.map(s => s.name)
     assert.deepEqual(names, [
+      '收口实测门',
       'decision-distill 决策提炼',
       'extract-module-impact 与归档语义收尾',
       '确认归档',
-    ], '三步名序列（任务完成度检查/extract-module-impact/sync-module-docs/更新路线图和提交经 migratedFrom 合并）')
+    ], '四步名序列（2026-11-26-verify-stage-retire 首步收口实测门 + 原三步）')
     const i = names.indexOf('decision-distill 决策提炼')
-    assert.equal(i, 0, 'distill 前置（noAI 先跑，needsWait 早暴露）')
-    assert.deepEqual(definition.steps[1].migratedFrom,
+    assert.equal(i, 1, 'distill 位于收口实测门之后（noAI 先跑，needsWait 早暴露）')
+    assert.deepEqual(definition.steps[2].migratedFrom,
       ['任务完成度检查', 'extract-module-impact', 'sync-module-docs', '更新路线图和提交'],
       '合并步 migratedFrom 全列（按名吸收存量进度：全 completed 才继承）')
-    assert.equal(definition.steps[1].conditionalWait, true, '合并步保留 conditionalWait（sync-module-docs 先例）')
-    assert.ok(definition.steps[1].name.includes('extract-module-impact'), '名含 extract-module-impact（workflow post_check 按名内含零改动）')
-    assert.equal(definition.steps[2].requiresConfirm, true, '确认归档 requiresConfirm（diff 注视点，§2 边界）')
+    assert.equal(definition.steps[2].conditionalWait, true, '合并步保留 conditionalWait（sync-module-docs 先例）')
+    assert.ok(definition.steps[2].name.includes('extract-module-impact'), '名含 extract-module-impact（workflow post_check 按名内含零改动）')
+    assert.equal(definition.steps[3].requiresConfirm, true, '确认归档 requiresConfirm（diff 注视点，§2 边界）')
     // P0-4 安全变体（noai-ir-roadmap §3）：conditionalWait 三段式退役，改 noAI + _cliAction
     // ——needsWait 人工裁决收敛到「确认归档 --confirm」（归档用户裁决本就归那里）。
     assert.equal(definition.steps[i].noAI, true, 'distill 步 noAI 化（提炼本体是 CLI 纯函数）')
@@ -629,8 +630,8 @@ describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为�
         `stageArchiveArtifacts 候选含 knowledge/decisions/（实际 ${JSON.stringify(r.skipped)}）`)
     } finally { rmSync(mk, { recursive: true, force: true }) }
     assert.deepEqual(names,
-      ['decision-distill 决策提炼', 'extract-module-impact 与归档语义收尾', '确认归档'],
-      '三步名与顺序（确认归档精确名匹配，四旧步经合并步 migratedFrom 吸收）')
+      ['收口实测门', 'decision-distill 决策提炼', 'extract-module-impact 与归档语义收尾', '确认归档'],
+      '四步名与顺序（确认归档精确名匹配，四旧步经合并步 migratedFrom 吸收）')
   })
 })
 

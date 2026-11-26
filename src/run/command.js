@@ -312,6 +312,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.env.SILLYSPEC_RUN_META = '1'
   }
 
+  if (stageName === 'verify') {
+    // verify 阶段已退役（2026-11-26-verify-stage-retire）：完整流程四阶段，execute 完成后直接归档
+    console.error('❌ verify 阶段已退役：完整流程现为 brainstorm → plan → execute → archive 四阶段。')
+    console.error('   下一步：execute 完成后运行 sillyspec run archive --change <变更名>（收口实测门随归档执行）。')
+    console.error('   存量在途：进度停在 verify 的旧变更请运行 sillyspec doctor --change <变更名>，走 legacy 盖戳后归档。')
+    process.exit(2)
+  }
   if (!stageRegistry[stageName] && stageName !== 'auto') {
     console.error(`❌ 未知阶段: ${stageName}`)
     console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
@@ -1115,7 +1122,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 平台模式/显式 --spec-dir 跳过(已明确指定,与 line~285 warn / quick 守卫条件对齐)。
   // 其他漂移(下方 changeMissing 守卫 / quick session drift 守卫)非副本场景,仍 exit(2) 不自动纠正。
   if (!platformOpts.specRoot && !specDir
-      && ['plan', 'execute', 'verify', 'archive'].includes(stageName)) {
+      && ['plan', 'execute', 'archive'].includes(stageName)) {
     const wt = detectWorktreeSpecDrift(specBase)
     if (wt) {
       specBase = wt.mainSpecBase
@@ -2034,10 +2041,10 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
 }
 
 /**
- * auto 模式：自动推进 brainstorm → plan → execute → verify
+ * auto 模式：自动推进 brainstorm → plan → execute → archive（verify 已退役）
  */
 async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = {}) {
-  const flowStages = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
+  const flowStages = ['brainstorm', 'plan', 'execute', 'archive']
   const isDone = flags.includes('--done')
   // F4 守卫（坑 raw-flag-value-bypass，与 runCommand getFlagValue 同款）：裸 flags[idx+1] 会把
   // 漏值后紧跟的 flag 名当值（--output --done → outputText="--done" 污染落盘 output）。
@@ -2417,7 +2424,7 @@ function printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase) {
     } catch { /* 勾选读取 fail-soft */ }
     // 产物存在清单
     const changeDirArt = join((specBase || join(cwd, '.sillyspec')), 'changes', changeName)
-    const artifacts = ['proposal.md', 'design.md', 'tasks.md', 'plan.md', 'verify-result.md', 'delta.md']
+    const artifacts = ['proposal.md', 'design.md', 'tasks.md', 'plan.md', 'close-receipt.md', 'delta.md']
     const found = artifacts.filter(a => existsSync(join(changeDirArt, a)))
     if (found.length > 0) console.log(`   📁 产物：${found.join('、')}`)
     // last-delta 模块清单（sidecar 缺失跳过）

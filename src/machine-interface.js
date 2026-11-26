@@ -180,6 +180,23 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     }
 
     const currentStage = progress.currentStage || '';
+    // verify 阶段已退役（2026-11-26-verify-stage-retire）：gate verify 全族下线，指路四阶段。
+    if (stage === 'verify') {
+      return {
+        envelope: buildEnvelope({
+          command: 'gate',
+          stage,
+          change: changeName,
+          ok: false,
+          errors: [
+            'verify 阶段已退役：完整流程为 brainstorm → plan → execute → archive 四阶段。',
+            '收口实测门随 run archive 执行（archive 首步）；存量在途 verify 变更请 sillyspec doctor --legacy-complete-verify --change <名> --confirm。',
+          ],
+          codes: ['stage_retired'],
+        }),
+        exitCode: EXIT_UNKNOWN,
+      };
+    }
     const checks = [];
 
     // W4-G (D-008)：execute 阶段预计算 code evidence 一次，供 artifacts check（经 runValidators
@@ -193,14 +210,6 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     // 此处以同一解析器实况解析 design.md 经 context 注入 validator（与 --done backfill 产物同形
     // 同源，零落盘守 D-002 只读契约）；design.md 缺失/不可读 helper 返 null、解析异常 fail-soft
     // ——两种态都不注入，退回 facts 口径（现状行为；评审 P1：空面注入会覆写有效 facts 反致误阻断）。──
-    let apiFaceLive = null;
-    if (stage === 'verify') {
-      try {
-        const { computeApiFaceFromDesign } = await import('./verify-probes.js');
-        apiFaceLive = computeApiFaceFromDesign(join(specRoot, 'changes', changeName, 'design.md'));
-      } catch { /* fail-soft：不注入退回 facts 口径 */ }
-    }
-
     // ── a. artifacts：阶段产物校验（全部阶段）──
     const r = runValidators(stage, cwd, changeName, {
       projectName: progress.project,
@@ -326,179 +335,15 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       });
     }
 
-    // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
-    // docsOnly 预检档（2026-10-06-verify-docs-prefill task-01）：纯文档契约缺项（visual-evidence/
-    // 结论槽/移交项等）毫秒级可查，却因 gate verify 含测试执行而整体变贵（postmortem 实证
-    // --json 超时转后台）——本档跳过 test/lint 执行（informational 占位明示），其余检查照跑；
-    // 测试客观核验仍以完整 gate verify / verify --done 为准。
-    if (stage === 'verify' && docsOnly) {
-      checks.push({
-        id: 'verify-test',
-        code: checkCode('verify-test'),
-        ok: true,
-        informational: true,
-        warnings: ['verify-test 跳过（--docs-only 预检档）——本档只核文档/契约面不执行测试；测试客观核验以完整 gate verify（不带 --docs-only）或 verify --done 为准'],
-        data: { status: 'docs-only-skip' },
-      });
-      checks.push({
-        id: 'verify-lint',
-        code: checkCode('verify-lint'),
-        ok: true,
-        informational: true,
-        warnings: ['verify-lint 跳过（--docs-only 预检档）——同上，lint 客观核验以完整 gate 或 verify --done 为准'],
-        data: { status: 'docs-only-skip' },
-      });
-    } else if (stage === 'verify') {
-      // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
-      let greenRoot = null;
-      try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
-      // 失败签名复用（2026-10-21-verify-reuse-large-repo FR-03）：真跑前咨询上次质量扫描失败——
-      // 同签名（代码指纹×豁免面）+ 快照口径一致（CLI 门主仓口径跑，plannedSnapshot=false）+
-      // 30min 窗口 → 不重跑，合成 failed（♻️ 披露 + 四出路）照常进 check not-ok 语义。
-      // gate verify 预检每轮整跑同签名失败 10~13.5 分钟的浪费由此消除（dsh 0ff6f1c8 取证）。
-      let vt = null;
-      try {
-        const { consultFailedScanReuse, synthesizeReusedFailedCheck } = await import('./run/verify-quality-scan.js');
-        const consult = consultFailedScanReuse({
-          specBase: specRoot, cwd, changeName, plannedSnapshot: false,
-          forceRerun: Boolean(process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN),
-        });
-        if (consult.reuse) vt = synthesizeReusedFailedCheck(consult.record);
-      } catch { /* 咨询异常 → 照旧 green-cache/真跑 */ }
-      if (vt == null) {
-        vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
-          () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
-          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
-      }
-      const vtWarnings = [];
-      if (vt.cached) vtWarnings.push(vt.reason);
-      if (vt.status === 'skipped') {
-        vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
-      }
-      // known_failures 豁免披露：本次 PASS 含豁免，driver 应提示人工复核清单是否过宽
-      // （quick-E，2026-09-20 报告问题 E：提示原不带清单位置，复核要先翻一遍才找到——带路径）
-      if (vt.exemptedCount > 0) {
-        vtWarnings.push(`⚠️ verify-test PASS 含 ${vt.exemptedCount} 个 known_failures 豁免（${vt.reason || ''}）；driver 应提示人工复核豁免清单是否过宽（避免误豁免本变更引入的真实失败）——清单位置：${join(specRoot, 'local.yaml')} 的 known_failures 键`);
-      }
-      // 全量 fallback 明示：跑了全量 commands.test 但非变更范围子集，失败可能含未变更
-      // 模块的预存错误——driver 不应据 exit 0 判定本次变更范围已客观测试（见 3.24 verify 坑1）。
-      if (vt.status !== 'skipped' && vt.mode === 'full' && vt.fallbackReason) {
-        vtWarnings.push(`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误，driver 不应据 exit 0 判定本次变更范围已测`);
-      }
-      checks.push({
-        id: 'verify-test',
-        code: checkCode('verify-test'),
-        ok: vt.status !== 'failed',
-        errors: vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [],
-        warnings: vtWarnings,
-        data: {
-          status: vt.status,
-          cached: vt.cached === true,
-          exitCode: vt.exitCode,
-          durationMs: vt.durationMs,
-          resultPath: vt.resultPath,
-          mode: vt.mode ?? null,
-          fallbackReason: vt.fallbackReason ?? null,
-        },
-      });
-
-      // ── d2. verify-lint（parity 补齐，2026-09-21 R4-S-F 实证）──
-      // gate verify 原先只查 test 不查 lint，而 verify --done 的 lint 隔离快照门会拦——
-      // gate PASS / --done FAIL 两套口径并存，误导 agent 诊断 16 分钟（对撞会话 db 实证）。
-      // 本检查与 --done 同引擎（runVerifyLintCheck + triageLintOwnership 归属降档）；口径差异
-      // 永久明示：gate 在工作树直跑 lint，--done 在隔离快照（HEAD+归属文件 overlay）跑——
-      // 不一致时以 --done 为准。lint 未配置/不可跑 → informational，不阻断只读查询。
-      try {
-        const { runVerifyLintCheck, triageLintOwnership, resolveVerifyChangedFiles } = await import('./verify-postcheck.js');
-        const lc = greenCachedCheck({ kind: 'lint', greenRoot, cwd, specBase: specRoot, changeName },
-          () => runVerifyLintCheck({ cwd, specBase: specRoot }),
-          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, failureFiles: [], cached: true, reason: greenCacheNotice(hit, 'verify-lint') }));
-        if (lc.status === 'skipped') {
-          checks.push({
-            id: 'verify-lint',
-            code: checkCode('verify-lint'),
-            ok: true,
-            informational: true,
-            warnings: [`verify-lint SKIPPED — ${lc.reason || 'local.yaml 未配置 commands.lint'}；本次 gate 结论不含 lint 客观核验`],
-            data: { status: lc.status },
-          });
-        } else {
-          const lcWarnings = [
-            '口径说明：gate verify 的 lint 在工作树直跑；verify --done 的 lint 在隔离快照（HEAD+归属文件 overlay）跑——两口径不一致时以 --done 为准。',
-          ];
-          if (lc.cached) lcWarnings.push(lc.reason);
-          let ownership = null;
-          let lintOk = lc.status !== 'failed';
-          if (lc.status === 'failed') {
-            const changed = resolveVerifyChangedFiles(cwd, changeName, null, { specBase: specRoot }) || [];
-            ownership = triageLintOwnership({ failureFiles: lc.failureFiles || [], changeFiles: changed });
-            if (ownership.verdict === 'pre-existing') {
-              lintOk = true; // 存量债不拦只读查询（与 --done 的 advisory 降档同口径）
-              lcWarnings.push('lint 失败文件与本变更零交集（HEAD 存量债）→ 本 check 降档放行；--done 同口径 advisory，建议顺手清偿解锁全仓 lint 门。');
-            }
-          }
-          checks.push({
-            id: 'verify-lint',
-            code: checkCode('verify-lint'),
-            ok: lintOk,
-            errors: !lintOk ? [`lint 失败（工作树口径）: ${lc.reason || ''}`] : [],
-            warnings: lcWarnings,
-            data: {
-              status: lc.status,
-              cached: lc.cached === true,
-              exitCode: lc.exitCode,
-              durationMs: lc.durationMs,
-              ownership: ownership ? ownership.verdict : null,
-              overlap: ownership ? ownership.overlap : [],
-            },
-          });
-        }
-      } catch (e) {
-        checks.push({
-          id: 'verify-lint',
-          code: checkCode('verify-lint'),
-          ok: true,
-          informational: true,
-          warnings: [`verify-lint 检查装配失败（fail-open）: ${e && e.message ? e.message : e}`],
-          data: { status: 'error' },
-        });
-      }
-    }
+    // ── d. verify-test / verify-lint：随 verify 阶段退役（2026-11-26-verify-stage-retire；
+    //    测试实测门已前移 archive 首步 = runArchiveCloseGate）──
 
     // ── e. --full 只读预检档（P1 / FR-01 / D-002@batch3，2026-09-21-r5-efficiency-batch3 task-03）──
     // 覆盖 --done 独有的贵门（batch2 实证四类盲区：reconcile 两轮/stage review 缺失各吃一整 agent
     // 回合）：①target_files reconcile 只读跑（reconcileTargetFiles 纯计算不落盘，--done 的写结果
     // 文件在其调用方）；②stage review 在场探测（marker+review.json——缺则报预期路径，同 --done
     // Stage Review Gate 口径，只报缺不生成）。全只读零副作用；未传 full 零行为变化。
-    if (full && (stage === 'verify' || stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
-      // e1. reconcile（verify --done 的 target_files 对账门）
-      if (stage === 'verify') {
-        try {
-          const { reconcileTargetFiles } = await import('./verify-postcheck.js');
-          const rec = reconcileTargetFiles({ cwd, specBase: specRoot, changeName });
-          const recOk = rec.status !== 'missing_declared';
-          checks.push({
-            id: 'full-target-files-reconcile',
-            code: checkCode('full-target-files-reconcile') || 'full_target_files_reconcile',
-            ok: recOk,
-            errors: !recOk
-              ? (rec.missing || []).map((m) => `task-${m.task || '?'}: ${m.path} 声明未做（②类计划落空）——补做交付或按声明修正通道改卡（与 review 结论一致）`)
-              : [],
-            warnings: (rec.undeclared || []).length > 0
-              ? [`${(rec.undeclared || []).length} 个未声明文件（warning 级，${(rec.undeclared || []).slice(0, 3).map((u) => u.path).join('、')}${(rec.undeclared || []).length > 3 ? ' 等' : ''}）——并行会话归因噪音或漏声明，verify 报告须裁决`]
-              : [],
-            data: { status: rec.status, matched: (rec.matched || []).length, missing: (rec.missing || []).length, undeclared: (rec.undeclared || []).length },
-          });
-        } catch (e) {
-          checks.push({
-            id: 'full-target-files-reconcile',
-            code: 'full_target_files_reconcile',
-            ok: true,
-            informational: true,
-            warnings: [`--full reconcile 检查装配失败（fail-open）: ${e && e.message ? e.message : e}`],
-          });
-        }
-      }
+    if (full && (stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
       // e2. stage review 在场探测（Stage Review Gate 拦截面的 --full 预检——brainstorm/plan/execute
       // 三阶段与 gates.js Stage Review Gate 实拦范围逐字对齐；verify 不在其列，坑
       // stage-review-verify-enum-gap 2026-10-11：register 枚举亦无 verify，verify 阶段不产
@@ -700,32 +545,14 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
         break;
       }
 
-      // ── b. verify-test：真实执行测试命令并取证 ──
+      // ── b. verify-test：随 verify 阶段退役（2026-11-26-verify-stage-retire；收口实测门
+      //    改由 run archive 首步 runArchiveCloseGate 执行，derive 面不再提供）──
       case 'verify-test': {
-        let greenRoot = null;
-        try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
-        const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
-          () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
-          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
-        data = {
-          status: vt.status,
-          cached: vt.cached === true,
-          exitCode: vt.exitCode,
-          durationMs: vt.durationMs,
-          resultPath: vt.resultPath,
-          mode: vt.mode ?? null,
-          fallbackReason: vt.fallbackReason ?? null,
-        };
-        ok = vt.status !== 'failed';
-        errors = vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [];
-        warnings = vt.cached
-          ? [vt.reason]
-          : vt.status === 'skipped'
-          ? ['测试被跳过']
-          : (vt.mode === 'full' && vt.fallbackReason)
-            ? [`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误`]
-            : [];
-        exitCode = ok ? EXIT_OK : EXIT_BLOCKED;
+        data = { status: 'retired', reason: 'verify 阶段已退役，测试实测随 run archive 首步执行' };
+        ok = false;
+        errors = ['verify-test 已退役：请用 sillyspec run archive --change <名>（archive 首步为收口实测门）'];
+        warnings = [];
+        exitCode = EXIT_UNKNOWN;
         break;
       }
 
@@ -792,13 +619,6 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
       // facts.apiFace 唯一生产者是 --done backfill，derive 不回填 → 锚点核对恒空指；零落盘 +
       // fail-soft（缺失返 null/异常两态都不注入退回 facts 口径），守 D-002 只读契约。
       case 'artifacts': {
-        let apiFaceLive = null;
-        if (currentStage === 'verify') {
-          try {
-            const { computeApiFaceFromDesign } = await import('./verify-probes.js');
-            apiFaceLive = computeApiFaceFromDesign(join(specRoot, 'changes', changeName, 'design.md'));
-          } catch { /* fail-soft：不注入退回 facts 口径 */ }
-        }
         const r = runValidators(currentStage, cwd, changeName, {
           projectName: progress.project,
           specRoot,

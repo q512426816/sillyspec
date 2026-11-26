@@ -601,11 +601,11 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
     } else if (_cliAction === 'progressConfirm') {
       // 与 stage.js noAI 分支同语义（brainstorm/execute/verify step1 进度确认）
       executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
-    } else if (_cliAction === 'verifyRunQualityScan') {
-      // 与 stage.js noAI 分支同语义（P0-1 noai-ir-roadmap §3：verify 测试步实测提前 + 指纹复用；
-      // 失败 throw → completeStep 不推进，步骤保持 pending）
-      const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
-      await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+    } else if (_cliAction === 'archiveCloseGate') {
+      // 与 stage.js noAI 分支同语义（archive 收口实测门：测试实测 + 指纹复用；
+      // 失败 throw → completeStep 不推进，步骤保持 pending = 归档被阻断）
+      const { runArchiveCloseGate } = await import('./archive-quality-scan.js')
+      await runArchiveCloseGate({ cwd, specBase, changeName, platformOpts })
     } else if (_cliAction === 'archiveDistill') {
       // 与 stage.js noAI 分支同语义（P0-4 安全变体：distill 提炼 CLI 机械执行，needsWait 裁决
       // 收敛到「确认归档 --confirm」；全路径不抛）
@@ -727,47 +727,6 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
-    }
-  }
-
-  // verify 批量完成检测（P0-1 verify 尾巴瘦身，2026-09-20 对撞实验驱动）：报告产物齐
-  // （verify-result.md 结论枚举已填 + verify-facts.json 在场）且语义锚定步（step 1-2）
-  // 已过 → 剩余 step 一次性标 completed，本次 --done 直接进阶段完成分支——收尾门禁
-  // （测试对账/验收矩阵/module-impact 死信/PASS 封顶）照常全跑：批量省的是 --done
-  // 肥上下文往返，不省任何门。镜像 execute 批量模式（乐观预标戳 + 失败一并回滚）。
-  if (stageName === 'verify' && changeName) {
-    // 批量对齐前补亲测（cli-protocol-trust / R17 臂3 拦截⑥实证）：乐观对齐会把 noAI 亲测步
-    // （step4 verifyRunQualityScan）一并标 completed → 亲测永不执行 → 收尾 PASS 封顶门因
-    // integrationRan≠ran 拒 → gate_rollback → --reopen 四步绕行。对齐面含该步时先亲跑
-    // executeVerifyQualityScan（幂等+指纹复用——已有有效记录时秒回零重复实测），失败则放弃
-    // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
-    // 判定经 hasPendingVerifyScanStep：DB 步骤行只有 {name,status}（_cliAction 不持久化——评审
-    // P1 修复：初版直接读 s._cliAction 恒 false 死代码），按 stageRegistry 定义索引对齐判。
-    // 资格先行（2026-10-21-verify-reuse-large-repo FR-02）：isVerifyBatchEligible 纯判定（只查
-    // 不改）先于亲测——批量不会触发时（报告未就绪/锚定步未过）中间步 --done 不再预跑整轮实测
-    // （dsh 0ff6f1c8 取证：step 3/4/5 各烧一轮 10~13.5 分钟全量实测只为随后单步推进）。资格成立
-    // 时行为不变：先亲测后批量；detectVerifyBatchFinish 内部全量复检不消费本判定，无 TOCTOU。
-    let _skipBatch = false
-    const _batchEligible = isVerifyBatchEligible({ changeName, specBase, steps })
-    if (!_batchEligible.eligible && hasPendingVerifyScanStep(stageName, steps)) {
-      console.log(`   ℹ️ 批量对齐未就绪（${_batchEligible.reason}）——亲测归质量扫描步与收口门，本步不预跑`)
-    }
-    if (_batchEligible.eligible && hasPendingVerifyScanStep(stageName, steps)) {
-      try {
-        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
-        console.log('   🧪 批量对齐面含 noAI 亲测步——先亲测（幂等，有记录秒回）…')
-        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
-        console.log('   🧪 noAI 亲测完成（质量扫描记录落盘，亲测门不省）')
-      } catch (e) {
-        console.warn('   ⚠️ 亲测补跑失败——放弃批量对齐，保持单步推进（亲测步按 noAI 硬门走）：' + (e && e.message ? e.message : e))
-        _skipBatch = true
-      }
-    }
-    if (!_skipBatch) {
-      const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
-      if (_vb.batched && _vb.aligned > 0) {
-        console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
-      }
     }
   }
 
@@ -897,7 +856,7 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
     // ④（2026-09-23 R9 实证后）升级：同一会话连续完成 ≥2 阶段 → 肥上下文税升级告警
     // （带实测数据 + handoff 机器预览态接力段引用 + 动作主体写明用户/平台——CLI 只产信号
     // 不做编排，conventions 钉死的架构约束）。账本仿 wave-session-ledger（best-effort）。
-    if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
+    if (['brainstorm', 'plan', 'execute'].includes(stageName) && changeName) {
       let stageLedger = null
       let crossStage = false
       try {
@@ -923,17 +882,18 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
         console.log(`   2. 新会话/子代理：粘贴交接块 → run execute --change ${changeName}`)
         console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 逃生口）。`)
       } else if (stageName === 'execute') {
-        // 阶段断崖（2026-09-24 第一性原理落地）：execute→verify 是上下文最贵的跳变
-        // （R11 实测 verify 71 轮 × 300K/轮 = 21.3M，其中 ~17M 是 execute 历史重放税）。
-        // verify 的每一步输入都在盘上（design/tasks/review/verify-probes），零对话依赖。
+        // 阶段断崖（2026-09-24 第一性原理落地；2026-11-26-verify-stage-retire 起入口改 archive）：
+        // execute→archive 是上下文最贵的跳变（R11 实测旧 verify 段 71 轮 × 300K/轮 = 21.3M，
+        // 其中 ~17M 是 execute 历史重放税；archive 收口同理）。archive 的全部输入在盘上
+        // （design/tasks/review.json/change-patch），零对话依赖——建议换瘦会话续跑。
         // ⛔ directive 级——agent 看到应当执行 handoff 而非硬续。
         console.log(``)
-        console.log(`⛔ 阶段断崖：execute 已收口，verify 必须在新的瘦会话执行。`)
-        console.log(`   本会话上下文已含 execute 全部历史（R11 实测 verify 阶段因历史重放多付 ~17M token——占总 24%）。`)
-        console.log(`   verify 的全部输入在盘上（design.md/tasks/review.json/verify-probes），新会话零背景可续跑。`)
+        console.log(`⛔ 阶段断崖：execute 已收口，archive 建议在新的瘦会话执行。`)
+        console.log(`   本会话上下文已含 execute 全部历史（历史重放税实测占总 token 约 24%）。`)
+        console.log(`   archive 的全部输入在盘上（design.md/tasks/review.json/change-patch.json），新会话零背景可续跑。`)
         console.log(`   动作：`)
         console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，stage.wall=hard 下生成后墙自动放行）`)
-        console.log(`   2. 新会话/子代理：粘贴交接块 → run verify --change ${changeName}`)
+        console.log(`   2. 新会话/子代理：粘贴交接块 → run archive --change ${changeName}`)
         console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 应急逃生口）。`)
       } else if (crossStage && stageLedger) {
         console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
@@ -955,7 +915,7 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
     // 摩擦信号消费（friction-signal-hint task-03）：verify 收尾读一次 friction tally，非零打
     // 一行 advisory 引导补 postmortem（consume 内部提示后清零）；全零/读失败零输出——
     // 摩擦提示失败不影响收尾。
-    if (stageName === 'verify') {
+    if (stageName === 'archive') {
       try {
         const { consumeFrictionHint } = await import('../friction-tally.js')
         const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
@@ -986,7 +946,7 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
         console.log(`\n${summary}`)
       } catch (e) {
         // summary 失败不影响主流程
-        console.log(`\n👉 下一步：sillyspec run verify${changeName ? ` --change ${changeName}` : ''}（验证通过后才能归档）`)
+        console.log(`\n👉 下一步：sillyspec run archive${changeName ? ` --change ${changeName}` : ''}（execute 完成后直接归档——verify 已退役）`)
       }
     } else if (stageName === 'archive') {
       // 机械暂存 CLI 化（2026-09-05 全流程审计）：原步骤 6 的 3 条固定路径 git add agent 指令
@@ -997,9 +957,6 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
         if (r.staged.length > 0) console.log(`  📦 已暂存归档产物（${r.staged.length} 个路径，未提交，由统一提交工具处理）`)
       }
       console.log('\n👉 归档完成！现在可以提交了：git commit -m "..."')
-    } else if (stageName === 'verify') {
-      // verify 的"验证通过"提示延后到下方 validator 通过后才打印，
-      // 避免校验失败（FAIL / 缺 verify-result.md）时仍声称"验证通过可以归档"。
     } else if (stageName === 'brainstorm') {
       // brainstorm 下一步按 design.md 的 scale 分叉（2026-09-29-brainstorm-exit-thin-default：large→plan；small/未标→flow start 收编），
       // 不走下方 _getNextSuggestion —— 后者按全局状态机「第一个未完成且上游就绪的阶段」推荐，
@@ -1175,60 +1132,12 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
   }
 }
 
-/** verify 完成路径：读 execute 时点快照对比文件集差集，一行结论（行数不比——execute 形态 A 锚
- *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳）。
- *  审查 C-F01：current 侧 freshActual——settled 快照捷径会让本函数变成快照比快照恒「一致」 */
-async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit }) {
-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, freshActual: true })
-  const totals = result?.totals && typeof result.totals === 'object' ? result.totals : {}
-  const scopeLine = `变更范围：${totals.files ?? (Array.isArray(result?.rows) ? result.rows.length : 0)} 文件 +${totals.additions ?? 0}/-${totals.deletions ?? 0}`
-  if (result?.ok !== true) {
-    console.log(`   ⚠️ ${scopeLine}（对账降级：${result?.degradedReason || '实际侧文件集解析失败'}——advisory，不影响 verify 完成）`)
-    return
-  }
-  let snapshot = null
-  // 快照读取链（2026-10-09-close-trace-single-set）：change-patch.json.scopeAudit（单套
-  // 新形态）→ 旧 scope-audit.json（存量归档）→ .runtime/scope-audit-<change>.json（更早
-  // 存量兼容）——scopeAuditPathSet 只吃 rows，子对象与旧顶级形态同构直用
-  try {
-    const merged = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'change-patch.json'), 'utf8'))
-    if (merged && typeof merged.scopeAudit === 'object' && merged.scopeAudit) snapshot = merged.scopeAudit
-  } catch { /* 新形态缺失 → 旧名兜底 */ }
-  if (!snapshot) {
-    try {
-      snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
-    } catch {
-      try {
-        snapshot = JSON.parse(readFileSync(runtimeStatePath(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
-      } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
-    }
-  }
-  if (!snapshot || snapshot.ok !== true) {
-    console.log(`   ${scopeLine}（无 execute 时点快照可对比——完整表跑 sillyspec scope-audit --change ${changeName}）`)
-    return
-  }
-  const current = scopeAuditPathSet(result)
-  const baseline = scopeAuditPathSet(snapshot)
-  const drift = [...new Set([...current, ...baseline])].filter(p => current.has(p) !== baseline.has(p)).sort()
-  if (drift.length === 0) {
-    console.log(`   ${scopeLine}（vs execute 时点：一致）`)
-  } else {
-    const shown = drift.slice(0, 5).join(', ')
-    const tail = drift.length > 5 ? ` 等 ${drift.length} 个` : ''
-    console.log(`   ${scopeLine}（vs execute 时点：漂移 ${drift.length} 文件：${shown}${tail}——advisory 不阻断，请确认 verify 期改动并按需补 design.md 声明）`)
-  }
-}
-
 /** 两完成路径公共入口（stage 派发 + 动态 import + fail-soft 兜底，D-006） */
 async function printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts }) {
   try {
-    if (!changeName || (stageName !== 'execute' && stageName !== 'verify')) return
+    if (!changeName || stageName !== 'execute') return
     const { computeChangeScopeAudit, renderScopeAuditTable } = await import('../scope-audit.js')
-    if (stageName === 'execute') {
-      await printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable })
-    } else {
-      await printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit })
-    }
+    await printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable })
   } catch (e) {
     console.warn(`⚠️ 变更范围对账输出异常（advisory，不阻断 ${stageName} 阶段完成）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
   }
@@ -1733,6 +1642,15 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
         const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
         const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
         const r = readReview(reviewPath)
+        // 变更归属校验（坑 execute-runs-orphan-review-false-check 建议②）：review 带 change
+        // 戳且与当前变更不符 → 拒用（跨变更遗物/复用 runId 混入在字段面不可认领）；存量件无
+        // 字段 → 放行（向后兼容）。主防线仍是上方 runId 锚定（marker 缺失 fail-closed +
+        // reviewPath 恒含 runId 段，顶层遗物结构性不可达），此为纵深防御。
+        if (r?.ok && typeof r.review?.change === 'string' && r.review.change !== changeName) {
+          console.warn(`⚠️ review 归属校验拒用：task-${taskNum} 的 review.json change=${r.review.change} ≠ 当前变更 ${changeName}——不自动勾选`)
+          skippedCount++
+          return match
+        }
         // 卡片读取延后到 verdict 可用之后（2026-09-11 审查性能包③）：review 缺失或 spec/quality
         // 已 fail 时 endToEnd 取值不影响 shouldAutoCheckTask 结果（恒 false），先读卡片是纯浪费
         // ——持 tasks 锁期间每 task 省一次 readFileSync。
@@ -1773,80 +1691,6 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
  * 安全门：注册表零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任声明但用代码核验兜底。
  * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
  */
-/**
- * verify 批量完成检测（P0-1，2026-09-20）：镜像 execute 的 detectExecuteBatchFinish。
- * 条件（全部满足才批量）：verify-result.md 结论枚举已填（三态任一，非待填占位）+
- * verify-facts.json 在场（探针跑过）+ 锚定步（step 1-2）已完成。批量只标剩余 step
- * completed，收尾门禁由阶段完成分支照常执行（批量不绕门）。
- */
-/**
- * 批量对齐面是否含未完成的 verify 亲测步（cli-protocol-trust，评审 P1 修复的判定半边）：
- * DB 步骤行只有 {name,status}——_cliAction 在 stageRegistry 的步骤定义上，按索引对齐判定
- * （进度库步骤按定义种子，同序同名）；步对象自带 _cliAction 时兜底直读。导出供 test 直测。
- */
-export function hasPendingVerifyScanStep(stageName, steps) {
-  try {
-    const defSteps = stageRegistry[stageName]?.steps || []
-    return (steps || []).some((s, i) =>
-      (s.status === 'pending' || s.status === 'in-progress') &&
-      (s._cliAction === 'verifyRunQualityScan' || defSteps[i]?._cliAction === 'verifyRunQualityScan'))
-  } catch {
-    return false // fail-open：判定异常不阻断批量（亲测门兜底由收尾对账承担）
-  }
-}
-
-/**
- * 批量资格纯判定（2026-10-21-verify-reuse-large-repo FR-02，从 detectVerifyBatchFinish 抽出）：
- * 只查不改（不 mutating 步骤状态）——verify --done 批量对齐块用它做「预跑亲测」的前置闸：
- * 资格不成立时中间步 --done 不预跑 executeVerifyQualityScan（实测归亲测步自身与收口门；
- * dsh 0ff6f1c8 取证：报告未就绪的每个中间步 --done 都整轮实测 10~13.5 分钟纯浪费）。
- * 判据与 detectVerifyBatchFinish 逐字同源（那边消费本函数，理由串不变）。
- */
-export function isVerifyBatchEligible({ changeName, specBase, steps }) {
-  if (!changeName) return { eligible: false, reason: '无 changeName' }
-  try {
-    const changeDir = join(specBase, 'changes', changeName)
-    const reportPath = join(changeDir, 'verify-result.md')
-    if (!existsSync(reportPath)) return { eligible: false, reason: 'verify-result.md 缺席（报告未写不批量）' }
-    const report = readFileSync(reportPath, 'utf8')
-    if (!/结论枚举[：:]\s*`?\s*(PASS WITH NOTES|PASS|FAIL)/.test(report)) {
-      return { eligible: false, reason: '结论枚举未填（待填占位不批量）' }
-    }
-    if (!existsSync(join(changeDir, 'verify-facts.json'))) {
-      return { eligible: false, reason: 'verify-facts.json 缺席（探针未跑不批量）' }
-    }
-    const firstPendingIdx = (steps || []).findIndex(s => s.status === 'pending' || s.status === 'in-progress')
-    if (firstPendingIdx === -1) return { eligible: false, reason: '无剩余 step' }
-    if (firstPendingIdx < 2) {
-      return { eligible: false, reason: '锚定步未过（step 1-2 须逐步完成，语义锚定不批量）' }
-    }
-    return { eligible: true }
-  } catch (e) {
-    return { eligible: false, reason: `批量资格判定异常（fail-open 不批量）：${e && e.message ? e.message : e}` }
-  }
-}
-
-export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
-  if (!changeName) return { batched: false, aligned: 0 }
-  const pre = isVerifyBatchEligible({ changeName, specBase, steps })
-  if (!pre.eligible) return { batched: false, aligned: 0, reason: pre.reason }
-  try {
-    const now = new Date().toLocaleString('zh-CN', { hour12: false })
-    let aligned = 0
-    for (const step of steps) {
-      if (step.status === 'pending' || step.status === 'in-progress') {
-        step.status = 'completed'
-        step.completedAt = now
-        step._batchAligned = true // 乐观预标戳：gate 失败 rollback 一并回滚（execute 同款）
-        aligned++
-      }
-    }
-    return { batched: true, aligned }
-  } catch (e) {
-    return { batched: false, aligned: 0, reason: `批量完成检测异常（fail-open 单步推进）：${e && e.message ? e.message : e}` }
-  }
-}
-
 export async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
   try {
     const changeDir = join(specBase, 'changes', changeName)
@@ -2427,7 +2271,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
     // 摩擦信号消费（friction-signal-hint task-03）：与 completeStep 完成分支同款（Grill CC-03：
     // 漏此则 --continue 收尾丢提示丢清零）。全零/读失败零输出，摩擦提示失败不影响收尾。
-    if (stageName === 'verify') {
+    if (stageName === 'archive') {
       try {
         const { consumeFrictionHint } = await import('../friction-tally.js')
         const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
@@ -2444,7 +2288,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
       } catch { /* 摩擦提示/台账失败不影响收尾 */ }
     }
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
-    const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
+    const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'archive' }[stageName]
     if (nextStageHint) {
       // brainstorm 按 design.md frontmatter 的 scale 分叉（2026-09-29-brainstorm-exit-thin-default
       // 与 completeStep 主路径同口径）：large → run plan（完整五阶段）；small/未标 → flow start

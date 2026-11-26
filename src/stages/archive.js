@@ -4,6 +4,19 @@ export const definition = {
   description: '规范沉淀，可追溯',
   steps: [
     {
+      name: '收口实测门',
+      // 2026-11-26-verify-stage-retire task-02（D-005 方案A / D-008）：verify 阶段退役后，
+      // 「CLI 亲跑 commands.test」这一机器门前移到归档首步——runner/动态子集三源推断/指纹
+      // 缓存沿用原 verify-quality-scan（更名 archive-quality-scan）。失败 throw 不盖
+      // completed = 归档被阻断（fail-closed），可重入断点续。
+      // 本仓落点：local.yaml 将 commands.test 标 unavailable（D-008 关闭亲跑，留痕归 CI）。
+      noAI: true,
+      _cliAction: 'archiveCloseGate',
+      prompt: '',
+      outputHint: '收口实测结果（CLI 实测输出 + 指纹复用记录）',
+      optional: false
+    },
+    {
       name: 'decision-distill 决策提炼',
       // noAI 化（P0-4 安全变体，noai-ir-roadmap §3）：旧 prompt 本身就是「调用 CLI 纯函数
       // distillIntoKnowledge 并转述返回」——全流程最纯的中继步，LLM 零判断增量。提炼本体
@@ -40,7 +53,7 @@ export const definition = {
 {TASK_COMPLETION_REPORT}
 - tasks.md 的 - [x] checkbox 仅作显示态参考（自动回填可能停在未勾态，与客观 verdict 不一致时以报告为准）。
 - 报告「未通过 / 缺失」= 0 且 source 为 review.json → 完成度合格，继续 ②。
-- 「cannot_verify 草稿（未真正复核）」计数 > 0 → 先确认 verify 阶段已兑现其 requiredEvidence；缺证据的派独立子代理对照 task brief + git diff 补真实复核（升级 pass/fail），勿静默放行。
+- 「cannot_verify 草稿（未真正复核）」计数 > 0 → 派独立子代理对照 task brief + git diff 补真实复核（升级 pass/fail），勿静默放行（verify 阶段已退役，归档是最后一道完成度注视）。
 - source 为 plan-checkbox-fallback（客观源不可用）或存在未完成任务 → --wait 请用户裁决，勿自行放行。
 
 ### ② module-impact 终审（机械核对已由 CLI 代算——不要重跑 git diff 手工比对，直接消费报告）
@@ -53,7 +66,7 @@ export const definition = {
 - 人工备注（MANUAL_NOTES 标记区间）永远保护回填；标记缺失/重复 → needs_review: true。
 - 新建卡片用骨架模板（frontmatter \`author: <git-user>\` / \`created_at: <now-datetime>\` 占位符由 CLI 每步替换真值，照抄即过元数据校验）；一级标题 \`# <中文名>（<module-id>）\`。
 - 常规（无 needs_review 影响/无 unmapped/人工备注标记齐全）→ 直接写入 + --done；异常（needs_review/unmapped/备注标记缺失/覆盖丢手动字段）→ --wait 请用户裁决。
-- 回填 module-impact.md「更新结果」表（目标列 \`_module-map.yaml: <module-id>\` 或 \`modules/<module-id>.md\`，区分 done/skipped）——verify 已硬校验无 pending 死信，此处保持清零。
+- 回填 module-impact.md「更新结果」表（目标列 \`_module-map.yaml: <module-id>\` 或 \`modules/<module-id>.md\`，区分 done/skipped）——归档前保持清零（verify 阶段已退役，死信校验归 archive 前置）。
 - 如需 rebuild 索引：\`sillyspec modules rebuild --force\` 会清空手动维护字段，仅当可接受时用（优先手动更新）。
 
 ### ④ 路线图更新
@@ -75,19 +88,15 @@ export const definition = {
 
 {SCOPE_AUDIT_TABLE}
 
-3. 展示移交项清单（verify 阶段 facts.handover——CLI 机械注入如下，勿手改勿手算；blocking 置顶 + severity 标注，超封顶截断；确认前逐项核对 blocking 移交项已有处置安排（db-script 类须先在 verify-result.md 补执行声明——归档门会拦未声明/互斥态，env-blocked 确认复跑条件已登记，manual-acceptance 确认验收安排），advisory 项记录备查；无移交项时本区为空，注入异常时置换单行降级指引，全量见 changes/<变更名>/verify-facts.json）：
-
-{HANDOVER_SUMMARY}
-
-4. 确保任务清单（tasks.md）所有 task checkbox 都已勾选；对照下方完成度快照做归档前最后注视（未完成/存疑 → 停下勿确认）：
+3. 确保任务清单（tasks.md）所有 task checkbox 都已勾选；对照下方完成度快照做归档前最后注视（未完成/存疑 → 停下勿确认）：
 {TASK_COMPLETION_REPORT}
-5. 若上一步机械决策提炼输出「⚠️ rejected 决策缺否决理由/复潮条件（needsWait）」：先按其指引处理——补录 decisions.md 缺失字段后重跑提炼命令（幂等），或经用户裁决跳过该条；处理结果写进本步 --output
-6. **git 暂存已由 CLI 自动完成**（归档完成时自动 add：\`.sillyspec/changes/archive/\`、本次同步的模块文档、\`.sillyspec/knowledge/decisions/\`——未提交，由用户通过统一提交工具处理）——你不需要也不应该手动 git add
-7. 让用户确认后，用 \`--confirm\` 完成本步骤：
+4. 若上一步机械决策提炼输出「⚠️ rejected 决策缺否决理由/复潮条件（needsWait）」：先按其指引处理——补录 decisions.md 缺失字段后重跑提炼命令（幂等），或经用户裁决跳过该条；处理结果写进本步 --output
+5. **git 暂存已由 CLI 自动完成**（归档完成时自动 add：\`.sillyspec/changes/archive/\`、本次同步的模块文档、\`.sillyspec/knowledge/decisions/\`——未提交，由用户通过统一提交工具处理）——你不需要也不应该手动 git add
+6. 让用户确认后，用 \`--confirm\` 完成本步骤：
    \`sillyspec run archive --done --confirm --output "确认归档"\`
-8. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
+7. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
 
-9. **收口输出转达义务**（知识可见性契约，2026-09-23）：--confirm 收口输出里若出现「📚/⚠️ 知识收件箱」横幅（uncategorized 待审知识标题清单），必须在最终回复中**原文转达用户**——CLI 输出用户不可见，你的转述是用户看到它的唯一通道；未出现则不提及（不得编造）。
+8. **收口输出转达义务**（知识可见性契约，2026-09-23）：--confirm 收口输出里若出现「📚/⚠️ 知识收件箱」横幅（uncategorized 待审知识标题清单），必须在最终回复中**原文转达用户**——CLI 输出用户不可见，你的转述是用户看到它的唯一通道；未出现则不提及（不得编造）。
 
 ### 输出
 归档完成 + archive 目录路径`,

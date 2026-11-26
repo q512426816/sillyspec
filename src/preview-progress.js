@@ -22,7 +22,6 @@ export const PREVIEW_STAGE_SOURCES = {
   brainstorm: ['proposal.md', 'requirements.md', 'decisions.md', 'design.md'],
   plan: ['plan.md'],
   execute: ['tasks.md'],
-  verify: ['verify-result.md', 'verify-facts.json'],
 }
 
 /**
@@ -98,8 +97,6 @@ export const PREVIEW_STEP_SOURCES = {
   'design.md': { stage: 'brainstorm', step: '写设计文档并自审' },
   'decisions.md': { stage: 'brainstorm', step: '写设计文档并自审' },
   'plan.md': { stage: 'plan', step: '生成分级计划' },
-  'verify-result.md': { stage: 'verify', step: '输出验证报告' },
-  'verify-facts.json': { stage: 'verify', step: '输出验证报告' },
   'module-impact.md': { stage: 'archive', step: 'extract-module-impact 与归档语义收尾' },
 }
 

@@ -705,85 +705,14 @@ function writeApplyManifest({ projectRoot, specBase, changeName, baseHash, files
   return { written: true, file: manifestPath, files: entries };
 }
 
-// ── db/*.sql 声明门（2026-09-17-pass-cap-semantics task-04 / FR-05 / FR-06 / D-007 / D-012）──
-// 文法实现单点：verify-probes 的 parseDbScriptDeclarations（X-03 双形态：声明行 + 回执
-// command）/ parseHandoverRows（task-01 导出），禁二份副本。顶层 await 动态绑定
-// （verify-probes :1630 stage-contract 同款先例；已核 verify-probes 静态闭包与其顶层
-// await 链均不回指本文件，任一加载序无环）。绑定失败降级 null → 门 fail-open（warn
-// 放行）——门自身异常不锁死 apply/归档主流程。
-let dbScriptDeclareParser = null
-let handoverRowsParser = null
-try {
-  ;({ parseDbScriptDeclarations: dbScriptDeclareParser, parseHandoverRows: handoverRowsParser } = await import('./verify-probes.js'))
-} catch { /* fail-open：绑定失败时下方门函数降级 warn 放行 */ }
-
-/**
- * db/*.sql 执行声明对账门（task-04 兜底侧，apply 尾声与 archive --confirm 前置共用同一函数）。
- * 纯「文件集 × 文本声明」对账，零连库（design 非目标——不做 information_schema 对账）。
- *
- * 口径：
- *   - 入参文件集 posix 化后取 ^db/ 开头且 .sql 结尾者（与声明文法产出 db/<file>.sql 同形，
- *     对账零变换；深路径 src/.../db/x.sql 不进门——声明文法同样不认该形态，两侧一致无死锁）；
- *   - 声明集 = parseDbScriptDeclarations(verifyMd)，verifyMd 自 <changeDir>/verify-result.md
- *     读取（changeDir 经 resolveActiveOrArchiveChangeDir 归档感知，specBase 缺省时与
- *     writeApplyManifest 同链兜底：透传 specBase > 平台指针 > 本地 .sillyspec）；
- *   - verify-result.md 缺失（ENOENT）= 空声明集 → 有 db 交付即拦（fail-closed 正常判定路径）；
- *   - 互斥分支（D-005@v2：db-script 恒 blocking）：声明集全命中 × handover 存在 db-script
- *     类型行 → 两面矛盾 error。数据源 facts.handover（verify-facts.json，{ count, items[] }
- *     形态）优先，缺 facts 时 parseHandoverRows(verifyMd) 兜底，两源任一命中即拦。
- *
- * fail 分布：正常判定路径 fail-closed（缺声明/互斥 → ok:false + 修复指引）；门自身异常
- * （绑定失败 / verifyMd 读取抛非 ENOENT 异常 / facts 解析异常走 md 兜底）fail-open
- * （ok:true + warning）。
- *
- * @param {{ projectRoot: string, specBase?: string, changeName: string, files: string[] }} p
- * @returns {{ ok: true, warning?: string } | { ok: false, error: string }}
- */
+// ── db/*.sql 声明门：随 verify 阶段退役（2026-11-26-verify-stage-retire / D-001 C3——
+//    db 声明与 handover 门属 verify 收尾语义面，数据源 verify-result.md/verify-facts.json
+//    已停写）。本函数保留为退役空实现：调用点（apply 尾声 / archive 前置）零改动，恒放行。
+//    历史实现见 git 历史（2026-09-17-pass-cap-semantics task-04）。
 export function checkDbScriptDeclarationGate({ projectRoot, specBase, changeName, files }) {
-  const dbFiles = [...new Set((Array.isArray(files) ? files : [])
-    .map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean))]
-    .filter((f) => /^db\/[\w./-]+\.sql$/.test(f)).sort()
-  if (dbFiles.length === 0) return { ok: true } // 无 db/*.sql 交集 → 零行为变化（存量兼容）
-  if (!dbScriptDeclareParser) {
-    return { ok: true, warning: `db 声明门降级放行（fail-open）：verify-probes 文法绑定不可用——本次未对账以下 db 脚本执行声明，请人工确认已对目标库执行：${dbFiles.join(', ')}` }
-  }
-  const base = specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec')
-  const changeDir = resolveActiveOrArchiveChangeDir(base, changeName)
-  let verifyMd = ''
-  try {
-    verifyMd = readFileSync(join(changeDir, 'verify-result.md'), 'utf8')
-  } catch (e) {
-    if (e && e.code === 'ENOENT') verifyMd = '' // verify-result.md 缺失 = 空声明集（走下方缺声明拦截）
-    else return { ok: true, warning: `db 声明门降级放行（fail-open）：verify-result.md 读取异常（${(e && e.message) || e}）——本次未对账以下 db 脚本执行声明，请人工确认：${dbFiles.join(', ')}` }
-  }
-  const declared = new Set(dbScriptDeclareParser(verifyMd))
-  const missing = dbFiles.filter((f) => !declared.has(f))
-  if (missing.length > 0) {
-    return { ok: false, error: [
-      `db 脚本执行声明缺失：以下 ${missing.length} 个 db/*.sql 交付文件未在 verify-result.md 声明已对目标库执行（fix.sql 双门兜底，D-007/D-012——覆盖 verify 后新增 sql 的时序窗口）：`,
-      ...missing.map((f) => `  - ${f}`),
-      `修复：先在 ${join(changeDir, 'verify-result.md').replace(/\\/g, '/')} 声明已执行——补「已对目标库执行：db/<file>.sql」声明行，或「## 集成验证回执」条目 command 含 db/<file>.sql（X-03 双形态，含 log 路径可选），补后重跑本命令。`,
-    ].join('\n') }
-  }
-  // 互斥分支：声明全在场 × handover db-script 行在场 = 「已执行」vs「移交待执行」两面矛盾
-  let handoverItems = null
-  try {
-    const facts = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
-    if (facts && facts.handover && Array.isArray(facts.handover.items)) handoverItems = facts.handover.items
-  } catch { /* facts 缺失/损坏 → parseHandoverRows(verifyMd) 兜底 */ }
-  if (!handoverItems) {
-    try { handoverItems = handoverRowsParser ? handoverRowsParser(verifyMd) : [] } catch { handoverItems = [] }
-  }
-  if (handoverItems.some((h) => h && String(h.type || '').toLowerCase().replace(/[\s_]+/g, '-') === 'db-script')) {
-    return { ok: false, error: [
-      `db-script 移交项与执行声明互斥（D-005@v2）：verify-result.md 已声明以下 db 脚本对目标库执行，但「移交项（结构化）」存在 type=db-script 行（承认该脚本待执行）——两面矛盾，二选一以真实状态为准：`,
-      ...dbFiles.map((f) => `  - ${f}`),
-      `修复：确已执行 → 从 verify-result.md「## 移交项（结构化）」删除该 db-script 行后重跑；确未执行 → 删除对应「已对目标库执行」声明行/回执条目后重跑（届时按缺声明门指引处理）。`,
-    ].join('\n') }
-  }
+  // 退役空实现（随 verify 阶段删除，D-001 C3）：不再读 verify-result.md/verify-facts.json，恒放行。
   return { ok: true }
 }
-
 /**
  * 坑 mixed-baseline-drift-hint（ql-20260915-004）：apply 尾声混合基线 advisory。
  *
@@ -2126,11 +2055,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         return result;
       }
 
-      // --- 7.1 db/*.sql 声明门·出口②（task-04 / FR-05 / D-007 / D-012 兜底第一门）---
-      // patch 主路径 apply 文件集（patch 实际落盘集 ∪ 4.5 三方合并写回集，与 7.2 manifestFace
-      // 同口径）∩ db/*.sql 逐文件对账 verify-result.md 执行声明（X-03 双形态文法，verify-probes
-      // 单点实现）——缺失/与 db-script handover 互斥 → result.errors 阻断（result.ok 不置 true，
-      // 走既有 apply error 通道，不抛异常）；无 db/*.sql 交集零行为变化；门异常 fail-open。
+      // --- 7.1 db/*.sql 声明门·出口②（已随 verify 阶段退役——2026-11-26-verify-stage-retire
+      // D-001 C3：db 声明/handover 门属 verify 收尾语义面，数据源 verify-result.md/
+      // verify-facts.json 已停写；checkDbScriptDeclarationGate 现为退役空实现恒放行）。
+      // 调用点保留以维持 apply 流程结构，行为恒 ok。
       const dbGateMain = checkDbScriptDeclarationGate({
         projectRoot, specBase: allowSpecBase, changeName,
         files: [...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])],
@@ -3081,7 +3009,7 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
   // --- Next ---
   lines.push(``);
   lines.push(`Next`);
-  lines.push(`  → sillyspec run verify`);
+  lines.push(`  → sillyspec run archive`);
 
   return lines.join('\n');
 }

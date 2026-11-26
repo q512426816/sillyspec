@@ -24,8 +24,18 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 import { splitFrontmatter, parseTaskFrontmatter } from '../src/taskcard-frontmatter.js'
-import { parseTaskContracts, validateCrossTaskContracts, validatePlanFeasibility } from '../src/stages/plan-postcheck.js'
-import { parseTaskAcceptance, runVerifyProbes, generateVerifyResultSkeleton } from '../src/verify-probes.js'
+import { parseTaskContracts, validateCrossTaskContracts, validatePlanFeasibility, validateTaskcardsCli } from '../src/stages/plan-postcheck.js'
+// parseTaskAcceptance 原在 verify-probes.js（随 verify 阶段退役，2026-11-26-verify-stage-retire）；
+// 它只是保留面 parseTaskFrontmatter 的薄包装——测试内等价组装锁三态契约。
+function parseTaskAcceptance(content) {
+  const parsed = parseTaskFrontmatter(content)
+  if (!parsed.hasFrontmatter) return { status: 'no-frontmatter', acceptance: [], error: null }
+  if (!parsed.ok) return { status: 'invalid-yaml', acceptance: [], error: parsed.error }
+  const fmObj = parsed.fm || {}
+  if (typeof fmObj.acceptance === 'string') { const s = fmObj.acceptance.trim(); return { status: 'ok', acceptance: s ? [s] : [], error: null } }
+  if (Array.isArray(fmObj.acceptance)) return { status: 'ok', acceptance: fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim()), error: null }
+  return { status: 'ok', acceptance: [], error: null }
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_DIR = join(__dirname, 'fixtures', 'taskcard-bad-yaml')
@@ -264,50 +274,79 @@ describe('verify 探针面（AC-05/AC-06）', () => {
     assert.equal(okNone.status, 'ok')
     assert.deepEqual(okNone.acceptance, [])
   })
+})
 
-  it('AC-06：坏卡渲染「frontmatter 非法 YAML」行，不渲染假防御行；真无 acceptance 保留防御行', () => {
-    const proj = join(tmpdir(), `sillyspec-hardgate-p7-${Math.random().toString(36).slice(2)}`)
-    const changeDir = join(proj, '.sillyspec', 'changes', 'c9')
-    mkdirSync(join(changeDir, 'tasks'), { recursive: true })
-    try {
-      // 坏卡（真实夹具）+ 真无 acceptance 的合法卡并列
-      writeFileSync(join(changeDir, 'tasks', 'task-01.md'), fixture('01'))
-      writeFileSync(join(changeDir, 'tasks', 'task-02.md'), [
-        '---',
-        'id: task-02',
-        "title: 'no-acc'",
-        "title_zh: '无验收卡'",
-        'depends_on: []',
-        'allowed_paths:',
-        '  - src/foo.js',
-        'goal: >',
-        '  g',
-        'implementation:',
-        '  - i',
-        'acceptance: []',
-        'verify:',
-        '  - node --check src/foo.js',
-        'constraints:',
-        '  - c',
-        '---',
-        'body',
-      ].join('\n'))
-      const r = runVerifyProbes({ cwd: proj, changeName: 'c9' })
-      const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
-      const t2 = r.probe7.tasks.find(t => t.task === 'task-02')
-      assert.ok(t1, '坏卡不因解析失败被跳过')
-      assert.ok(t1.fmError, '坏卡条目挂 fmError')
-      assert.equal(t1.fmError.line, BAD_POS['01'].line)
-      assert.ok(!t2.fmError, '合法无验收卡不挂 fmError')
+// ─── 坑 2026-11-20-taskcard-provides-map-form-silent-then-misleading ─────────
+// provides 按最自然的契约名→细节映射写：taskcard 校验静默过（Array.isArray=false 跳过整段），
+// plan --done 才报「未声明此契约」与真因脱节。修复=映射形态显性拦（指引改数组）。
+describe('provides 映射形态拦截（2026-11-20 坑）', () => {
+  let changeDir
+  const tasksDir = () => join(changeDir, 'tasks')
+  beforeEach(() => {
+    changeDir = join(tmpdir(), `sillyspec-hardgate-mp-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(tasksDir(), { recursive: true })
+  })
+  afterEach(() => {
+    try { rmSync(changeDir, { recursive: true, force: true }) } catch {}
+  })
 
-      const skeleton = generateVerifyResultSkeleton(r)
-      assert.ok(skeleton.includes('frontmatter 非法 YAML（task-01.md:20:35'), `骨架渲染坏 YAML 行带行:列（实际片段：${skeleton.split('\n').find(l => l.includes('frontmatter 非法 YAML')) || '(未找到)'}）`)
-      const t1Section = skeleton.slice(skeleton.indexOf('**task-01**'), skeleton.indexOf('**task-02**'))
-      assert.ok(!t1Section.includes('卡无 acceptance'), '坏卡不渲染假防御行')
-      const t2Section = skeleton.slice(skeleton.indexOf('**task-02**'))
-      assert.ok(t2Section.includes('卡无 acceptance——防御'), '真无 acceptance 合法卡保留防御行')
-    } finally {
-      rmSync(proj, { recursive: true, force: true })
-    }
+  it('映射形态 provides → 校验报错点名映射 + 数组形态指引（不再静默过）', () => {
+    writeFileSync(join(tasksDir(), 'task-01.md'), [
+      '---',
+      'id: task-01',
+      'title: t',
+      "title_zh: '卡'",
+      'depends_on: []',
+      'allowed_paths:',
+      '  - src/x.js',
+      'provides:',
+      '  git_submodule_list_rpc:',
+      '    method: git_submodule_list',
+      '    request: {root: string}',
+      'goal: g',
+      'implementation:',
+      '  - i',
+      'acceptance:',
+      '  - a1',
+      'verify:',
+      '  - node --check x.js',
+      'constraints:',
+      '  - c',
+      '---',
+      'body',
+    ].join('\n'))
+    const r = validateTaskcardsCli({ changeDir })
+    const hitErr = r.errors.find((e) => e.includes('映射形态'))
+    assert.ok(hitErr, `应报映射形态错（实际 ${JSON.stringify(r.errors)}）`)
+    assert.ok(hitErr.includes('git_submodule_list_rpc'), '报错携带契约键名')
+    assert.ok(hitErr.includes('- contract: <名>'), '给数组形态模板')
+  })
+
+  it('数组形态好卡零回归（同字段合法 provides 不受影响）', () => {
+    writeFileSync(join(tasksDir(), 'task-01.md'), [
+      '---',
+      'id: task-01',
+      'title: t',
+      "title_zh: '卡'",
+      'depends_on: []',
+      'allowed_paths:',
+      '  - src/x.js',
+      'provides:',
+      '  - contract: Demo',
+      '    fields: [a, b]',
+      'goal: g',
+      'implementation:',
+      '  - i',
+      'acceptance:',
+      '  - a1',
+      'verify:',
+      '  - node --check x.js',
+      'constraints:',
+      '  - c',
+      '---',
+      'body',
+    ].join('\n'))
+    const r = validateTaskcardsCli({ changeDir })
+    assert.ok(!r.errors.some((e) => e.includes('映射形态')), `数组形态不误报（实际 ${JSON.stringify(r.errors)}）`)
   })
 })

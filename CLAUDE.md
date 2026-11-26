@@ -10,7 +10,7 @@
 ## 核心规则
 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
-3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → archive`（verify 已退役）。
 4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 补 spec 面（FR 绑定+design 四节）→ 批准（`flow approve` / `--autopilot`）→ 干活 → `sillyspec flow done --change <名>`。`--input` 引号内换行合法，下例可照抄：
 
    ```bash
@@ -47,7 +47,7 @@
 
 ### 触发更新的典型改动
 - 新增 / 删除 / 重命名阶段步骤
-- 修改步骤 prompt 中的输出文件名（如 verify-result.md）
+- 修改步骤 prompt 中的输出文件名（如 plan.md / close-receipt.md）
 - 修改阶段间的流转逻辑（如 archive 归档方式）
 - 新增 / 删除运行时文件类型（如 manifest.json、sync-conflict-*.json 等平台运行时产物）
 - 修改 ProgressManager 的数据存储方式（如 SQLite 表结构变更）

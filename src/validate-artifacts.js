@@ -39,15 +39,7 @@ export async function validateChangeArtifacts({ cwd, specBase, changeName, runti
   const changeDir = join(specBase, 'changes', changeName)
   const rt = runtimeRoot || join(specBase, '.runtime')
 
-  // ① verify-facts.json（既有真 validator）
-  {
-    const { validateFactsV2 } = await import('./verify-facts-schema.js')
-    const r = checkJson(join(changeDir, 'verify-facts.json'), (d) => {
-      const v = validateFactsV2(d)
-      return v && !v.ok ? (v.errors || ['validateFactsV2 不通过']) : []
-    })
-    checks.push({ artifact: 'verify-facts.json', ...r })
-  }
+  // ① verify-facts.json：随 verify 阶段退役（2026-11-26-verify-stage-retire）——facts 校验面下线
 
   // ② verify-required-evidence.json（轻形状：execute Task Review Gate 的 cannot_verify 账）
   {

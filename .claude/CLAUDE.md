@@ -12,7 +12,7 @@
 0. **禁止跑全量测试，仅跑自己修改相关的测试，全量测试留给CI。
 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
-3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → archive`（verify 已退役）。
 4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start --change <名>` → 直接干活 → `sillyspec flow done`。
 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
 6. **判规模选档**：≤3 文件、范围明确走 `flow`；多阶段 / 架构级走完整流程。
@@ -41,7 +41,7 @@
 
 ### 触发更新的典型改动
 - 新增 / 删除 / 重命名阶段步骤
-- 修改步骤 prompt 中的输出文件名（如 verify-result.md）
+- 修改步骤 prompt 中的输出文件名（如 plan.md / close-receipt.md）
 - 修改阶段间的流转逻辑（如 archive 归档方式）
 - 新增 / 删除运行时文件类型（如 gate-status.json）
 - 修改 ProgressManager 的数据存储方式（如 SQLite 表结构变更）

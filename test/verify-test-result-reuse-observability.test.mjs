@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, readFileSync, readdirSync, writeFileSync, mkdirSyn
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
-import { executeVerifyQualityScan, loadLastQualityScanRecord } from '../src/run/verify-quality-scan.js'
+import { runArchiveCloseGate, loadLastQualityScanRecord } from '../src/run/archive-quality-scan.js'
 import { appendReuseDecision } from '../src/verify-postcheck.js'
 
 function makeFixtureRepo() {
@@ -32,7 +32,7 @@ function makeFixtureRepo() {
   mkdirSync(join(dir, '.sillyspec', 'changes', 'c1'), { recursive: true })
   mkdirSync(join(dir, '.sillyspec', '.runtime', 'verify-runs'), { recursive: true })
   writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node exit0.js\n  lint: node exit0.js\n')
-  // 快照慢性失败拦截器（同 verify-quality-scan-reuse-actual-scope fixture）
+  // 快照慢性失败拦截器（同 archive-quality-scan-reuse-actual-scope fixture）
   writeFileSync(join(dir, '.git', 'worktrees'), 'blocked-by-test')
   return dir
 }
@@ -53,7 +53,7 @@ test('真跑轮：test-result.json 携 fingerprint 与 reuse_decision（layer=re
   try {
     const specBase = join(dir, '.sillyspec')
     writeFileSync(join(dir, 'flip.test.mjs'), readFileSync(join(dir, 'flip.test.mjs'), 'utf8') + '// touched\n')
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     const j = latestTestResult(specBase)
     assert.ok(j, '真跑轮 test-result.json 在场')
     assert.ok(j.fingerprint && typeof j.fingerprint === 'string' && j.fingerprint.length === 64, 'fingerprint 落盘（质量扫描口径 sha256）')
@@ -75,9 +75,9 @@ test('复用命中轮：reuse-decisions jsonl 落判定行；记录 missReason �
   try {
     const specBase = join(dir, '.sillyspec')
     writeFileSync(join(dir, 'flip.test.mjs'), readFileSync(join(dir, 'flip.test.mjs'), 'utf8') + '// touched\n')
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     // 第二轮：慢性失败口径一致 → passed 幂等闸命中 → journal 落 noai-passed-gate 行
-    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     const jl = join(specBase, '.runtime', 'verify-runs', 'reuse-decisions-c1.jsonl')
     assert.ok(existsSync(jl), 'jsonl journal 在场')
     const lines = readFileSync(jl, 'utf8').trim().split('\n').map((l) => JSON.parse(l))

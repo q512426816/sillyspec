@@ -1126,15 +1126,10 @@ export class ProgressManager {
   // 单变更阶段查询（quick 轻量归档阶段闸）：无行 null，读失败抛（调用方 fail-closed）
   getChangeStage(cwd, changeName) { return this._changeRegistry.getChangeStage(cwd, changeName); }
 
-  // verifyStartAt 基准只读（2026-09-08-ir-verify-facts）：execute 行 completed_at；无行 null 走 R-05 fallback
-  getStageCompletedAt(cwd, changeName, stage) { return this._changeRegistry.getStageCompletedAt(cwd, changeName, stage); }
 
   // 最近进度活动时刻只读（D-002@v1 复潮）：quick --done 自动归档闸的时近性信号
   getLatestActivityAt(cwd, changeName) { return this._changeRegistry.getLatestActivityAt(cwd, changeName); }
 
-  // evidence mtime 窗口锚点（2026-09-10 用户反馈②）：execute 行 started_at——证据合法产自 execute
-  // 或 verify 两窗口，锚「完成时刻」会把 execute 期间产的证据判旧（时序两难）；无行 null 走 completed_at → R-05
-  getStageStartedAt(cwd, changeName, stage) { return this._changeRegistry.getStageStartedAt(cwd, changeName, stage); }
 
   registerChange(cwd, changeName, opts) { return this._changeRegistry.registerChange(cwd, changeName, opts); }
 
@@ -1367,6 +1362,8 @@ export class ProgressManager {
   _validateStageArtifacts(cwd, stage, changeName) { return this._stageMachine._validateStageArtifacts(cwd, stage, changeName); }
 
   completeStage(cwd, stage, changeName = null, opts = {}) { return this._stageMachine.completeStage(cwd, stage, changeName, opts); }
+  /** 退役阶段 legacy 盖戳（2026-11-26-verify-stage-retire task-09）：绕过 VALID_STAGES，一次写两态 verify completed + current_stage→archive */
+  legacyCompleteRetiredStage(cwd, changeName = null) { return this._stageMachine.legacyCompleteRetiredStage(cwd, changeName); }
 
   show(cwd, changeName = null, opts = {}) { return this._stageMachine.show(cwd, changeName, opts); }
 

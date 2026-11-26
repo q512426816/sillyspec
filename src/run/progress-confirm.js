@@ -1,5 +1,5 @@
 /**
- * progressConfirm — 主流程 Step1「进度确认」的 noAI 动作（brainstorm / execute / verify）
+ * progressConfirm — 主流程 Step1「进度确认」的 noAI 动作（brainstorm / execute；verify 已退役）
  * （2026-09-07 noAI 主流程首批；机制先例：scan 系 noAI 步 + planPostcheck，见 run/stage.js noAI 分支）
  *
  * noAI 化依据（step1 职责在历次加固后已全部机械化）：
@@ -27,7 +27,7 @@ const AUTO_CHANGE_NAME_RE = /^\d{4}-\d{2}-\d{2}-new-change-[a-f0-9]+$/
  * 执行「进度确认」noAI 动作：打印进度快照 + 阶段专属机械提示。
  *
  * @param {object} opts
- * @param {string} opts.stageName - brainstorm / execute / verify
+ * @param {string} opts.stageName - brainstorm / execute（verify 已退役）
  * @param {string} opts.cwd
  * @param {object} opts.stageData - progress.stages[stageName]（steps 数组）
  * @param {string|null} opts.changeName
@@ -57,10 +57,4 @@ export function executeProgressConfirm({ stageName, cwd, stageData, changeName, 
     } catch { /* 勾选计数 fail-soft：plan.md 缺失/解析失败不阻塞确认步 */ }
   }
 
-  if (stageName === 'verify') {
-    console.log('')
-    console.log('💡 `run verify` 只下发指令不跑测试——全量测试由 CLI 在最后 --done 统一执行')
-    console.log('   （local.yaml 的 commands.test，同步对账可能耗时较长）；后续「运行测试和质量扫描」')
-    console.log('   步骤无需手动跑全量，只做 lint/静态检查 + 可选快速冒烟。')
-  }
 }

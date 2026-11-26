@@ -32,7 +32,7 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec run <stage> [options]     执行阶段步骤（核心命令）
   sillyspec <stage> [options]         顶层别名，等同 run <stage>
-    stage: scan | brainstorm | plan | execute | verify | archive |
+    stage: scan | brainstorm | plan | execute | archive |
            quick | explore | status | doctor | auto
 
   run 通用参数（所有 stage 适用）:
@@ -88,6 +88,7 @@ SillySpec CLI — 规范驱动开发工具包
     cleanup <change> [--force]          清理 worktree
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
         --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
+        --legacy-complete-verify [--change <名>] [--confirm]  verify 阶段已退役（四阶段流转）——为停在 verify 的存量变更一次性盖完成戳（dry-run 默认）
         --prune-cross-worktrees [--confirm]  清跨仓仓幽灵 worktree 注册（目录已删注册残留——dry-run 预览，--confirm 执行 prune；locked 条目只提示）
 
   sillyspec patch-reanchor --change <名>   归档收口留痕锚点回写主仓（worktree 收口后 apply 重放致 baseline/head 悬空的修复；幂等，doctor 检出时指路至此）
@@ -122,7 +123,6 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）；sillyspec push [--dry-run] [--mode by-change|one|none] [--change <名>] [--no-push] [--undo] [--json]  推送前压扁本地未推送提交并快进推送（默认按变更分段；不改写已推送历史、不 force）
-  sillyspec verify-probes --change <name> [--init [--force]]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架（--force 覆盖重生成，手填内容会重置）
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
@@ -182,7 +182,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec init
   sillyspec run brainstorm --change 2026-07-03-add-login
   sillyspec flow start --change 2026-07-03-my-fix --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
-  sillyspec run verify --done --output "验证通过，测试全绿"
+  sillyspec run archive --done --confirm --output "归档完成"（verify 阶段已退役——execute 完成后直接归档）
   sillyspec run archive --done --confirm --output "归档完成"
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
   sillyspec progress show
@@ -728,7 +728,7 @@ async function main() {
       const gateChangeIdx = args.indexOf('--change');
       const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
-        console.error('用法: sillyspec gate <stage|last> --change <name> [--json] [--full|--docs-only]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  --full 覆盖 --done 独有贵检查（reconcile/stage review 预检）；--docs-only 轻量档（verify）跳过 test/lint 执行只核文档契约面；两者互斥\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
+        console.error('用法: sillyspec gate <stage|last> --change <name> [--json] [--full|--docs-only]\n  stage: brainstorm | plan | execute | archive | ...\n  --full 覆盖 --done 独有贵检查（reconcile/stage review 预检）；--docs-only 轻量档（verify）跳过 test/lint 执行只核文档契约面；两者互斥\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
@@ -1477,301 +1477,10 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       break;
     }
     case 'verify-probes': {
-      // verify 机械探针命令化（2026-08-21 审计第三批 H1/H3/H5/H7/F9）：verify-probes.md 模板
-      // 六探针中的纯机械四个（未实现标记 grep / 测试文件递归查找 / API 契约对账 / 删除对账）
-      // 一条命令跑完并渲染成可直接粘贴的 markdown；半语义探针（2/4 + 3.4/3.5）显式留 TODO。
-      // --init 顺带生成 verify-result.md 七章节骨架（探针结果预填；结论留「待填」——gate 找
-      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖；--force 覆盖重生成全骨架
-      // （quick-B，2026-09-20 报告问题 B：骨架 :2571 指引曾承诺「重跑 --init 刷新本段」但已存在
-      // 场景实为 no-op——刷新通道缺失；design-init --force 同款先例）。
-      const vpChangeIdx = args.indexOf('--change');
-      const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
-      const vpInit = args.includes('--init');
-      const vpForce = args.includes('--force');
-      const vpDraft = args.includes('--draft');
-      const vpAmendDraft = args.includes('--amend-draft');
-      // --refresh-probes（2026-10-06-verify-friction-fix task-01）：定向刷新通道——只刷新仍含
-      // 待填占位的探针机械段（表格已填行按行携载），已手填段保留；与 --force 互斥（force 是
-      // 显式全量重置通道，refresh 是保手填通道，并存语义矛盾拒跑）。
-      const vpRefresh = args.includes('--refresh-probes');
-      if (vpDraft && !vpInit) {
-        console.error('❌ --draft 需与 --init 同用（draft 是骨架生成的机器起草模式）——sillyspec verify-probes --change <名> --init --draft');
-        process.exit(2);
-      }
-      if (vpRefresh && vpForce) {
-        console.error('❌ --refresh-probes 与 --force 互斥——refresh 只刷新未手填的探针段（保手填），force 是全量重置（自动备份后覆盖）；两者并存语义矛盾。');
-        process.exit(2);
-      }
-      if (!vpChange) {
-        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--refresh-probes] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）；--force 覆盖重生成全骨架（覆盖前自动备份到 .runtime/verify-runs/ 并打印路径）；\n  --refresh-probes 定向刷新：只替换仍含待填占位的探针预填段（表格已填行携载保留），已手填段不动——预填段过期但手填内容舍不得时的安全刷新通道（同样先自动备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
-        process.exit(2);
-      }
-      assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections, applySkeletonPreservingHuman } = await import('./verify-probes.js');
-      // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
-      // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
-      // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
-      // 才把它的返回值当平台根——无 pointer 时它回退 resolveSpecDir(cwd)，会返回 worktree 副本
-      // 根，当作 platformBase 传入会让锚定被跳过（骨架落回副本）。
-      const vpResolved = resolvePlatformSpecDir(dir, specDir);
-      const vpPlatformBase = existsSync(join(dir, '.sillyspec-platform.json')) ? vpResolved : null;
-      const vpSpecBase = resolveVerifyProbesSpecBase(dir, specDir, vpPlatformBase);
-      // 平台模式回显注记（2026-09-10 驾驭小结②）：物理路径在 hub 镜像根，产物经 daemon
-      // spec-sync 落主仓——回显补主仓同步位置，消「回显镜像路径 / 核对主仓路径」的显示混乱
-      const vpPlatformNote = formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-result.md');
-      // 平台模式双写镜像（坑 platform-init-artifact-daemon-dir-only，2026-09-10 驾驭小结第三批②）：
-      // agent 本地（pointer 态、非显式 --spec-dir）--init 产物同时镜像主仓 changeDir，不再单点
-      // 依赖 spec-sync 回程（用户两次实锤产物落 daemon specs 同步目录）。
-      const mirrorInitArtifact = async (platformPath, file, content) => {
-        if (!vpPlatformBase || specDir) return null
-        try {
-          const { mirrorPlatformArtifactToMainRepo } = await import('./run/shared.js')
-          return mirrorPlatformArtifactToMainRepo({ cwd: dir, changeName: vpChange, file, content, platformBase: vpPlatformBase })
-        } catch { return null }
-      }
-      const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
-      // ── --amend-draft（r5l 方案3/护栏#2：机器段修改的唯一留痕通道）── 对 md 中现存
-      // MACHINE-DRAFT 标记段按当前内容重锚哈希 + sidecar amendment 审计，不跑探针不写骨架。
-      if (vpAmendDraft) {
-        const { resolveRuntimeRoot } = await import('./run/shared.js');
-        const { amendDraftMarkers } = await import('./verify-draft.js');
-        const vpAmRoot = resolveRuntimeRoot({}, vpSpecBase);
-        const vpAmKeys = amendDraftMarkers({
-          mdPath: join(vpSpecBase, 'changes', vpChange, 'verify-result.md'),
-          changeName: vpChange, runtimeRoot: vpAmRoot,
-        });
-        if (vpAmKeys.length > 0) {
-          try { await mirrorInitArtifact(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'verify-result.md', readFileSync(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'utf8')) } catch { /* 镜像失败不阻断 */ }
-          console.log(`✏️  amend-draft 已重锚 ${vpAmKeys.length} 个机器段：${vpAmKeys.join('、')}（sidecar 记 amendment 审计——verify --done 篡改门禁按新指纹放行）`);
-        } else {
-          console.log('ℹ️  无 MACHINE-DRAFT 标记段可重锚（报告未用 --draft 生成，或标记已全部删除——后者会被 --done 拒收，先恢复标记或重跑 --init --force --draft）');
-        }
-        break;
-      }
-      if (json) {
-        console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
-        break;
-      }
-      console.log(renderVerifyProbesReport(vpResult));
-      // ── --refresh-probes 定向刷新（2026-10-06-verify-friction-fix task-01）── 独立于 --init：
-      // 预填段过期但手填内容舍不得时的安全刷新通道。先自动备份，再只替换仍含待填占位的探针
-      // 机械段（表格已填行按行携载），已手填段原样保留并逐段报告。刷新后 enricher 不在此跑
-      // （那些是 --init 的幂等补段面，与探针段刷新正交；需要时再跑 --init，已存在 no-op 安全）。
-      if (vpRefresh) {
-        const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
-        if (!existsSync(vpReportPath)) {
-          console.error(`❌ 无 verify-result.md 可刷新: ${vpReportPath}——先 sillyspec verify-probes --change ${vpChange} --init 生成骨架`);
-          process.exit(2);
-        }
-        const { resolveRuntimeRoot: vpRefreshRTR } = await import('./run/shared.js');
-        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase), changeName: vpChange });
-        const vpOld = readFileSync(vpReportPath, 'utf8');
-        const vpRef = refreshProbeSections(vpOld, renderVerifyProbesReport(vpResult));
-        if (vpRef.text !== vpOld) {
-          writeFileSync(vpReportPath, vpRef.text);
-          await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpRef.text);
-        }
-        console.log(`\n🔄 --refresh-probes 定向刷新完成: ${vpReportPath}${vpPlatformNote}`);
-        if (vpBackupPath) console.log(`🗄️  刷新前已自动备份: ${vpBackupPath}`);
-        const fmt = (arr) => arr.length > 0 ? arr.map(n => `探针${n}`).join('、') : '无';
-        console.log(`   替换（仍含待填占位的机械段）: ${fmt(vpRef.replaced)}；保留（已手填/无占位，原样不动）: ${fmt(vpRef.kept)}；新注入: ${fmt(vpRef.appended)}；表格已填行携载 ${vpRef.carriedRows} 行`);
-        if (vpRef.kept.length > 0) {
-          console.log(`   保留段如确需强刷（预填过期且确认无手填内容），用 --init --force（自动备份后全量重生成）。`);
-        }
-        try {
-          const { triggerSync } = await import('./run/shared.js');
-          triggerSync(dir, vpChange, { specRoot: vpSpecBase });
-        } catch { /* 同步触发失败不阻断探针命令 */ }
-        break;
-      }
-      if (vpInit) {
-        const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
-        if (existsSync(vpReportPath)) {
-          const vpExisting = readFileSync(vpReportPath, 'utf8');
-          // 检测正则与提取侧（parseProbePrefillAnchors 的 /^#### 探针 (\d+)[：:]/）对齐要求冒号——
-          // 对抗复审 BUG-1（2026-09-07）：agent 手写无冒号走样标题 `#### 探针 1` 会被宽松检测误判
-          // 「已有子节」跳过注入，而提取侧不认 → 死路复活（--init no-op + gate error 无解）。
-          if (!/^#### 探针 \d+[：:]/m.test(vpExisting)) {
-            // P1 修复（2026-09-07）：存量旧格式（九章节）报告 + --init 曾是死路——facts 无条件刷新
-            // 而正文不补，checkProbeConsistency 判别子判「疑似 agent 删除预填段」error 阻断，而修复
-            // 指引「重跑 --init」对已存在报告是 no-op。修法：探针段是 CLI 拥有的机械段，检测缺失时
-            // 尾部补注入（正文其余不动），判别子自此有子节可对账。
-            const vpSection = `\n## 探针结果（CLI 机械预填，--init 补注入） [层：可复跑探针——gate 抽查防篡改]\n${renderVerifyProbesReport(vpResult)}\n`;
-            const vpInjected = vpExisting.replace(/\s*$/, '\n') + vpSection;
-            writeFileSync(vpReportPath, vpInjected);
-            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
-            console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
-          } else if (vpForce) {
-            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）。
-            // 2026-10-06-verify-friction-fix：覆盖前自动备份（postmortem 实证 38 格手填复核成果
-            // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
-            // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
-            // 2026-10-09-verify-papercuts ②：语义升级——机器段全量重刷 + 人工面按段携载
-            // （applySkeletonPreservingHuman：结论槽/移交项表/矩阵已填行不再被 wipe），备份
-            // 保留为兜底通道。
-            const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
-            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase), changeName: vpChange });
-            const vpSkeleton = generateVerifyResultSkeleton(vpResult);
-            const vpOldText = readFileSync(vpReportPath, 'utf8');
-            const vpApplied = applySkeletonPreservingHuman(vpOldText, vpSkeleton);
-            writeFileSync(vpReportPath, vpApplied.text);
-            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpApplied.text);
-            if (vpBackupPath) {
-              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（携载语义之外的极端形态从这里找回）`);
-            } else {
-              console.error(`\n⚠️ 自动备份失败——若 verify-result.md 含手填内容，请立即手动复制保存后重跑本命令。`);
-            }
-            const vpCarriedNote = vpApplied.carriedSections.length > 0
-              ? `已填人工面按段携载保留：${vpApplied.carriedSections.join('、')}（携载表格行 ${vpApplied.carriedRows}）——与机器段新渲染不符的携载内容由 gate 一致性抽查把关`
-              : `未发现已填人工面（全文占位形态——行为与旧版全量重置一致）`;
-            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；${vpCarriedNote}）${vpPlatformNote}`);
-          } else {
-            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
-          }
-        } else {
-          const vpSkeleton = generateVerifyResultSkeleton(vpResult);
-          writeFileSync(vpReportPath, vpSkeleton);
-          await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
-          console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）${vpPlatformNote}`);
-        }
-        // ── --draft 填槽模式（r5l 方案3/护栏#2，v2 件二）── 四节机器预填完整句子 + 指纹防篡改。
-        // 位置刻意在 backfill/ensure/inject 三 enricher 之前：决策追踪矩阵由本段先落（含标记），
-        // injectDecisionChainDraft 随后见表格自然 no-op（幂等两不误）。材料与 verify 门对账同源：
-        // 测试结果优先级 P2 账本 > 质量扫描记录（gates.js 同序）；风险判级 evaluateConclusionDraft
-        // 同款口径（detectChangeRisk 词表已退役 D-008）。幂等：段内非 TODO 占位（已手写/已
-        // draft 化）零改动；平台模式 sidecar 随 vpSpecBase 锚定（门禁侧 not-applicable 即降级放行，
-        // 不产生假红）。
-        if (vpDraft && existsSync(vpReportPath)) {
-          try {
-            const { resolveRuntimeRoot } = await import('./run/shared.js');
-            const { summarizeTaskCompletion } = await import('./task-review.js');
-            const { buildDecisionChainMatrix } = await import('./verify-probes.js');
-            const { parseFileChangeListDetailed } = await import('./change-list.js');
-            const { loadBlastDeclarationsAllProjects } = await import('./blast-surface.js');
-            const { resolveChangeRisk, extractExplicitRiskLevel } = await import('./change-risk-profile.js');
-            const { consultTestLedger } = await import('./run/test-ledger.js');
-            const { loadReusableQualityScan } = await import('./run/verify-quality-scan.js');
-            const { buildDraftSections, applyDraftMode } = await import('./verify-draft.js');
-            const vpChangeDir = join(vpSpecBase, 'changes', vpChange);
-            const vpRuntimeRoot = resolveRuntimeRoot({}, vpSpecBase);
-            // ① 任务完成度（summarizeTaskCompletion 同源：review verdict 真源 + 降级说明句）
-            const vpSummarize = summarizeTaskCompletion({ changeDir: vpChangeDir, runtimeRoot: vpRuntimeRoot, changeName: vpChange });
-            // ② 风险等级（evaluateConclusionDraft 同款输入面；无清单 → null 走降级句）
-            let vpRisk = null;
-            try {
-              const vpDesignPath = join(vpChangeDir, 'design.md');
-              const vpDesignContent = existsSync(vpDesignPath) ? readFileSync(vpDesignPath, 'utf8') : '';
-              const vpDeclared = parseFileChangeListDetailed(vpDesignPath, { keepSillyspecDocs: true }).map((e) => e.path);
-              if (vpDeclared.length > 0) {
-                vpRisk = resolveChangeRisk({
-                  files: vpDeclared,
-                  blastDeclarations: loadBlastDeclarationsAllProjects({ specBase: vpSpecBase }),
-                  explicitRiskLevel: vpDesignContent ? extractExplicitRiskLevel(vpDesignContent) : null,
-                });
-              }
-            } catch { /* 风险材料不可得 → 降级句（完整句子，不空段） */ }
-            // ③ 测试结果（与 verify 门对账同源优先级：P2 账本 > 扫描记录 > 无记录提示句）
-            let vpTest = null;
-            try {
-              const vpConsult = consultTestLedger({ runtimeRoot: vpRuntimeRoot, changeName: vpChange, projectRoot: dir, testRoot: join(dir, 'test'), specBase: vpSpecBase, cwd: dir });
-              if (vpConsult.reuse) vpTest = { source: 'ledger', command: vpConsult.runPlan?.[0]?.runner || 'npm test', status: 'passed', ranAt: vpConsult.result.ranAt, durationMs: vpConsult.result.durationMs, total: vpConsult.result.total ?? null };
-            } catch { /* 账本咨询异常 → 下一源 */ }
-            if (!vpTest) {
-              try {
-                const vpScan = loadReusableQualityScan({ specBase: vpSpecBase, cwd: dir, changeName: vpChange });
-                if (vpScan && vpScan.testResult) vpTest = { source: 'scan', command: vpScan.testResult.command, status: vpScan.testResult.status, ranAt: vpScan.ranAt, durationMs: vpScan.testResult.durationMs, total: vpScan.testResult.total ?? null };
-              } catch { /* 扫描记录不可得 → 提示句 */ }
-            }
-            // ④ 决策追踪（buildDecisionChainMatrix 机械半边——Evidence/状态两列留人工）
-            const vpChain = buildDecisionChainMatrix(vpChangeDir);
-            const vpDraftRes = applyDraftMode({
-              mdPath: vpReportPath, changeName: vpChange, runtimeRoot: vpRuntimeRoot,
-              sections: buildDraftSections({ summarize: vpSummarize, risk: vpRisk, testResult: vpTest, decisionChain: vpChain }),
-            });
-            if (vpDraftRes) {
-              try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
-              console.log(`\n📝 填槽模式已应用：${vpDraftRes.applied.length} 节机器预填（${vpDraftRes.applied.join('、')}，MACHINE-DRAFT 指纹防篡改——整段改写会被 verify --done 拒收）；你只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）${vpPlatformNote}`);
-            }
-          } catch (e) {
-            console.warn(`⚠️ --draft 机器起草降级（fail-soft，骨架保持原态）: ${e && e.message ? e.message : e}`);
-          }
-        }
-        const vpFacts = writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
-          platformNote: formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-facts.json'),
-        }); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
-        if (vpFacts && vpFacts.path) {
-          try { await mirrorInitArtifact(vpFacts.path, 'verify-facts.json', readFileSync(vpFacts.path, 'utf8')) } catch { /* 读回失败跳过镜像 */ }
-        }
-        // 2026-09-08-ir-verify-facts R-02：已存在 md 缺证据账/回执槽段时仅追加骨架（幂等二跑
-        // 零改动）；task 行按 verify-required-evidence.json 预填（存在时）。
-        if (existsSync(vpReportPath)) {
-          let vpReqItems = []
-          try {
-            const vpReqPath = join(vpSpecBase, 'changes', vpChange, 'verify-required-evidence.json')
-            if (existsSync(vpReqPath)) {
-              const vpReq = JSON.parse(readFileSync(vpReqPath, 'utf8'))
-              vpReqItems = Array.isArray(vpReq.items) ? vpReq.items.map(it => ({ task: it.task, evidence: it.evidence || [] })) : []
-            }
-          } catch { /* 读取失败 → 空预填，不阻断 */ }
-          const { backfillMissingEvidenceSlots } = await import('./verify-probes.js')
-          const vpAdded = backfillMissingEvidenceSlots(vpReportPath, vpReqItems)
-          if (vpAdded.added.length > 0) {
-            console.log(`📄 已补齐缺失槽段（不触碰既有正文）: ${vpAdded.added.join('、')}`)
-          }
-        }
-        // 2026-09-14-acceptance-test-matrix：探针 7 验收×测试覆盖矩阵骨架幂等补段——
-        // verify-result.md 已存在但缺「#### 探针 7」段且 applicable（有 TaskCard）时补矩阵
-        // 骨架（学 backfillMissingEvidenceSlots 形态，不触既有正文；判定/证据槽 fail-closed
-        // 由 verify 门禁负责）。本变更自举：verify-result.md 先于特性存在的存量走此补段。
-        try {
-          const { ensureAcceptanceMatrixSection } = await import('./verify-probes.js')
-          const vpMatrix = ensureAcceptanceMatrixSection(vpReportPath, vpResult.probe7)
-          if (vpMatrix.added) {
-            try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
-            console.log(`🧩 探针 7 验收×测试覆盖矩阵骨架段已补齐（判定=五选一/证据两槽待填，命中≠判定；不触碰既有正文）: ${vpReportPath}${vpPlatformNote}`)
-          }
-        } catch { /* 矩阵补段失败不阻断 --init */ }
-        // P0-1（noai-ir-roadmap §3）两件机械预填，均幂等 fail-soft：
-        //   ①决策追踪矩阵机械半边——D→FR→task 链自 decisions.md × tasks/*.md frontmatter
-        //     结构化字段构建，Evidence/状态两列留 agent 逐格复核；
-        //   ②结论草稿——机械事实全绿（noAI 实测 + 探针 1/3/5/6 + 风险门）才预填 PASS，
-        //     「草稿待确认」形态，gate 判定链不动（前置三）。
-        try {
-          const { injectDecisionChainDraft } = await import('./verify-probes.js')
-          const vpChain = injectDecisionChainDraft(vpReportPath, join(vpSpecBase, 'changes', vpChange))
-          if (vpChain) {
-            try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
-            console.log(`🔗 决策追踪矩阵机械半边已预填：${vpChain.decisions} 条决策 × ${vpChain.tasks} 张 task 卡（Evidence/状态两列待逐格复核；未闭环行须在报告标注风险）`)
-          }
-        } catch { /* 链路预填失败不阻断 --init */ }
-        try {
-          const { extractVerifyConclusionSlot } = await import('./stage-contract.js')
-          const { evaluateConclusionDraft } = await import('./run/verify-quality-scan.js')
-          const { applyConclusionDraftToText } = await import('./verify-probes.js')
-          const vpMd = readFileSync(vpReportPath, 'utf8')
-          if (extractVerifyConclusionSlot(vpMd) === '') {
-            const vpDraftEval = evaluateConclusionDraft({ cwd: dir, specBase: vpSpecBase, changeName: vpChange, changeDir: join(vpSpecBase, 'changes', vpChange), probesResult: vpResult })
-            if (vpDraftEval.draft) {
-              const vpNext = applyConclusionDraftToText(vpMd, vpDraftEval.draft)
-              writeFileSync(vpReportPath, vpNext)
-              try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpNext) } catch { /* 镜像失败不阻断 */ }
-              console.log(`🤖 结论草稿已预填 ${vpDraftEval.draft}（机械事实全绿：noAI 实测通过 + 探针 1/3/5/6 干净 + 风险门非 integration/deployment）——草稿待确认，复核后不同意即改写槽行；gate 独立复核不受预填影响。`)
-            } else {
-              console.log(`ℹ️  结论草稿未预填（${vpDraftEval.reasons.join('；')}）——槽行由你填写。`)
-            }
-          }
-        } catch { /* 草稿预填失败不阻断 --init */ }
-      }
-      // ── 产物落盘即推平台（2026-09-24 fr-test-readside 断流实证修复④）：--init/--force
-      //    写探针报告/骨架/facts 后不触发同步，verify 期步骤与文件迟到平台直到 --done——
-      //    补 triggerSync 与 stage 渲染同拍（bg 异步，不阻塞命令返回）。──
-      if (vpChange && (vpInit || vpForce)) {
-        try {
-          const { triggerSync } = await import('./run/shared.js')
-          triggerSync(dir, vpChange, { specRoot: vpSpecBase })
-        } catch { /* 同步触发失败不阻断探针命令 */ }
-      }
-      break;
+      // verify-probes 命令族随 verify 阶段退役（2026-11-26-verify-stage-retire）
+      console.error('❌ verify-probes 已退役：verify 阶段删除，探针/骨架/draft 机制一并下线。')
+      console.error('   完整流程现为 brainstorm → plan → execute → archive；收口实测门随 run archive 执行。')
+      process.exit(2)
     }
     case 'review-dispatch': {
       // tier=independent 独立审查的平台派发命令（2026-09-10-review-dispatch FR-01~04 / D-001~003@1）：
@@ -3092,6 +2801,61 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
 
       // --align-execute-progress：基于 plan.md 声明对齐 execute 派生戳（仿 --cleanup-remnant 范式）
       // 默认 dry-run（只报告将补哪些 step），加 --confirm 才写。命中即 break，绝不 fall-through。
+      // --legacy-complete-verify（2026-11-26-verify-stage-retire task-09 / D-004）：verify 阶段
+      // 已从阶段机注销，存量在途变更（stages.verify 未 completed）按新四阶段流转无法继续。
+      // 默认 dry-run 只报状态，--confirm 走 ProgressManager.legacyCompleteRetiredStage 一次写两态
+      // （verify completed + current_stage→archive，绕 VALID_STAGES 拦截，不加 TRANSITION 幽灵边）。
+      if (filteredArgs.includes('--legacy-complete-verify')) {
+        const chIdx = filteredArgs.indexOf('--change');
+        let legacyChange = chIdx >= 0 && filteredArgs[chIdx + 1] && !String(filteredArgs[chIdx + 1]).startsWith('--') ? filteredArgs[chIdx + 1] : null;
+        const legacySpecBase = resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec');
+        if (!legacyChange) {
+          const changesDir = join(legacySpecBase, 'changes');
+          if (existsSync(changesDir)) {
+            const active = readdirSync(changesDir, { withFileTypes: true })
+              .filter(e => e.isDirectory() && e.name !== 'archive').map(e => e.name);
+            if (active.length === 1) legacyChange = active[0];
+          }
+        }
+        if (!legacyChange) {
+          console.error('❌ 无法确定变更名：请用 --change <name>，或确保仅有一个活跃变更');
+          process.exitCode = 2;
+          break;
+        }
+        const legacyPm = new ProgressManager({ specDir: resolvePlatformSpecDir(doctorEffectiveDir, specDir) });
+        if (!doctorConfirm) {
+          let prog = null;
+          try { prog = legacyPm.read(doctorEffectiveDir, legacyChange); } catch { /* 读失败按未知 */ }
+          const vStage = prog && prog.stages ? prog.stages.verify : null;
+          if (!vStage) {
+            console.log(`ℹ️  ${legacyChange} 无 verify 阶段行——无需 legacy 盖戳（新变更按四阶段流转）`);
+            process.exitCode = 0;
+            break;
+          }
+          if (vStage.status === 'completed') {
+            console.log(`ℹ️  ${legacyChange} 的 verify 阶段已 completed——无需重复盖戳`);
+            process.exitCode = 0;
+            break;
+          }
+          console.log(`🔎 ${legacyChange}：verify 阶段 status=${vStage.status}（${(vStage.steps || []).length} 步）——dry-run，未写盘。`);
+          console.log(`   加 --confirm 执行 legacy 盖戳（verify completed + current_stage → archive），随后 run archive。`);
+          process.exitCode = 0;
+          break;
+        }
+        let r;
+        try {
+          r = legacyPm.legacyCompleteRetiredStage(doctorEffectiveDir, legacyChange);
+        } catch (e) {
+          console.error(`❌ legacy 盖戳失败：${e.message}`);
+          process.exitCode = 1;
+          break;
+        }
+        if (json) console.log(JSON.stringify(r, null, 2));
+        else if (!r.applied) console.error(`❌ 未盖戳：${r.reason}`);
+        process.exitCode = r.applied ? 0 : 1;
+        break;
+      }
+
       const alignFlag = filteredArgs.includes('--align-execute-progress');
       if (alignFlag) {
         // --change 解析：显式优先，缺省用单活跃变更自动兜底（与 run.js resolveChangeNameAuto 同逻辑）
@@ -3362,7 +3126,6 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     case 'brainstorm':
     case 'plan':
     case 'execute':
-    case 'verify':
     case 'auto':
     case 'archive': {
       const stageArgs = [command, ...filteredArgs.slice(1)]
@@ -5912,7 +5675,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'overlap', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'overlap', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

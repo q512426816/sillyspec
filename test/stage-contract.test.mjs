@@ -13,8 +13,7 @@ const transitionTests = [
   ['', 'brainstorm', true],
   ['brainstorm', 'plan', true],
   ['plan', 'execute', true],
-  ['execute', 'verify', true],
-  ['verify', 'archive', true],
+  ['execute', 'archive', true],
 
   // 跳步应被拦截
   ['', 'plan', false],
@@ -23,8 +22,8 @@ const transitionTests = [
   ['brainstorm', 'execute', false, { fromStageData: { status: 'in-progress' } }],
   // 出生未入门（brainstorm 仍 pending/无 stages 行）等价旧 scan 出生态：主流程直入放行
   ['brainstorm', 'execute', true],
-  ['plan', 'verify', false],
-  ['execute', 'archive', false],
+  ['plan', 'archive', false],
+  ['verify', 'archive', false],
 
   // 回退应被拦截
   ['plan', 'brainstorm', false],
@@ -47,9 +46,9 @@ const transitionTests = [
   ['quick', 'plan', true],
   ['doctor', 'brainstorm', true],
 
-  // archive 特殊：verify 后允许，其他主流程不允许直接跳
-  ['verify', 'archive', true],
-  ['execute', 'archive', false],
+  // archive 特殊：execute 后允许（verify 已退役，2026-11-26-verify-stage-retire），其他主流程不允许直接跳
+  ['execute', 'archive', true],
+  ['verify', 'archive', false],
   ['plan', 'archive', false],
 ]
 
@@ -73,12 +72,12 @@ if (planResult.ok === false && planResult.errors.length > 0) {
   failed++
 }
 
-// verify validator：变更目录不存在应报错
-const verifyResult = runValidators('verify', '.', 'nonexistent-change')
-if (verifyResult.ok === false && verifyResult.errors.length > 0) {
-  console.log('✅ verify validator 检测到缺失变更目录')
+// verify 阶段已退役（2026-11-26-verify-stage-retire）：无 verify validator，runValidators 零门
+const verifyRetired = runValidators('verify', '.', 'nonexistent-change')
+if (verifyRetired.errors.length === 0) {
+  console.log('✅ verify 阶段退役：runValidators(verify) 零 validator 门')
 } else {
-  console.log('❌ verify validator 未检测到缺失变更目录')
+  console.log('❌ verify 退役后仍有 validator 报错', verifyRetired.errors)
   failed++
 }
 
@@ -198,24 +197,7 @@ if (planTrace.ok === true
 }
 
 writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\n- [ ] task-01: implement naming（覆盖：FR-01, D-001@v1）\n')
-writeFileSync(join(traceDir, 'verify-result.md'), '# Verify\n\nPASS\n')
-
-const verifyTrace = runValidators('verify', traceRoot, 'trace')
-if (verifyTrace.ok === true && verifyTrace.warnings.some(w => w.includes('verify-result.md 未引用') && w.includes('D-001@V1'))) {
-  console.log('✅ verify validator 检测到 verify-result.md 缺少 D-001@v1 引用')
-} else {
-  console.log('❌ verify validator 未检测到 verify-result.md 缺少 D-001@v1 引用', verifyTrace)
-  failed++
-}
-
-writeFileSync(join(traceDir, 'verify-result.md'), '# Verify\n\n## 决策追踪矩阵\n| D-001@v1 | FR-01 | task-01 | evidence | PASS |\n')
-const verifyTraceOk = runValidators('verify', traceRoot, 'trace')
-if (verifyTraceOk.ok === true && !verifyTraceOk.warnings.some(w => w.includes('D-001@V1'))) {
-  console.log('✅ verify validator 在 D-001@v1 已覆盖时不再报警')
-} else {
-  console.log('❌ verify validator 覆盖后仍报警', verifyTraceOk)
-  failed++
-}
+// verify-result.md 决策追踪 validator 随 verify 阶段退役（2026-11-26-verify-stage-retire）
 
 writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n## D-002@v1: Unresolved schema conflict\n- priority: P0\n- status: unresolved\n')
 const blockerTrace = runValidators('plan', traceRoot, 'trace')
@@ -357,54 +339,6 @@ function writeBlastMap(root, project = 'demo') {
   ].join('\n'), 'utf8')
 }
 
-const gateRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
-const gateDir = join(gateRoot, '.sillyspec', 'changes', 'gate')
-mkdirSync(gateDir, { recursive: true })
-writeBlastMap(gateRoot)
-// design 文件清单命中 evidence:true 声明路径（旧版靠 daemon/server.js 措辞——已退役）
-writeFileSync(join(gateDir, 'design.md'), [
-  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-  'D-001@v1', ''
-].join('\n'))
-writeFileSync(join(gateDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 实现下发\n')
-writeFileSync(join(gateDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— gate\n\n测试占位\n')
-// verify 只有单测、无集成证据字面（「端到端/Runtime Evidence」等字面会喂饱 legacy literals——故意不含）
-writeFileSync(join(gateDir, 'verify-result.md'), [
-  '# 验证报告', '', '## 结论', '', 'PASS', '',
-  '单测全过。spike-02 手测：真跑 claude --debug。', ''
-].join('\n'))
-
-const gateTrace = runValidators('verify', gateRoot, 'gate')
-const gateErr = gateTrace.errors.find(e => e.includes('缺少真实集成证据'))
-if (gateTrace.ok === false
-  && gateErr
-  && gateErr.includes('real_daemon_backend_integration')
-  && gateErr.includes('字面命中其一')
-  && gateErr.includes('风险判级原因')
-  && gateErr.includes('变更文件面命中项目声明危险面')) {
-  console.log('✅ evidence:true 命中门控报错可执行：列出缺失项 + 字面期望 + 判级原因（声明面口径）')
-} else {
-  console.log('❌ evidence:true 门控报错不可执行', gateTrace.errors)
-  failed++
-}
-
-// 补齐真实启动 daemon 证据后应放行
-writeFileSync(join(gateDir, 'verify-result.md'), [
-  '# 验证报告', '', '## 结论', '', 'PASS', '',
-  '真实集成：端到端跑通 daemon↔backend。', '',
-  '## Runtime Evidence', '实际启动 daemon/backend 一次（node server.js 起 backend），docker up 全栈，日志片段见附。', ''
-].join('\n'))
-const gateOk = runValidators('verify', gateRoot, 'gate')
-if (!gateOk.errors.some(e => e.includes('缺少真实集成证据'))) {
-  console.log('✅ 补齐真实启动 daemon/backend 证据后，门控放行')
-} else {
-  console.log('❌ 补齐证据后门控仍阻断', gateOk.errors)
-  failed++
-}
-
-rmSync(gateRoot, { recursive: true })
-
 // === risk_level 显式豁免（2026-07-28，反馈②）===
 // detectChangeRisk 是机械字面匹配，不认否定语境——design 写「不改动 daemon/session」仍误判高危级。
 // design.md frontmatter 加 risk_level 显式声明 → 以声明为准覆盖关键词判级；显式等级下 PASS WITH NOTES
@@ -492,93 +426,6 @@ console.log('\n=== risk_level 显式豁免 ===')
   }
 }
 
-// 集成 3：门控端到端 —— evidence:true 命中 + explicit unit-sufficient + PASS + 仅单测 → 仍拦
-// 【语义翻转，D-009 / 2026-09-19-ceremony-pricing-five-cuts】旧断言期望「显式声明放行免证据」
-// ——懒 agent 洞（声明 doc-only 连证据门全免）已收口：explicit 只压仪式档、不豁免证据要求。
-{
-  const exRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risktag-'))
-  const exDir = join(exRoot, '.sillyspec', 'changes', 'risktag')
-  mkdirSync(exDir, { recursive: true })
-  writeBlastMap(exRoot)
-  writeFileSync(join(exDir, 'design.md'), [
-    '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
-    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-    'D-001@v1', ''
-  ].join('\n'))
-  writeFileSync(join(exDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改下发\n')
-  writeFileSync(join(exDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ex\n\n测试占位\n')
-  writeFileSync(join(exDir, 'verify-result.md'), [
-    '# 验证报告', '', '## 结论', '', 'PASS', '',
-    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = unit-sufficient。', '',
-    '单测全过。', ''
-  ].join('\n'))
-  const exPass = runValidators('verify', exRoot, 'risktag')
-  if (exPass.errors.some(e => e.includes('缺少真实集成证据'))) {
-    console.log('✅ 门控（D-009 端到端钉）：evidence 命中 + explicit unit-sufficient + PASS + 仅单测 → 仍拦（explicit 不豁免证据）')
-  } else {
-    console.log('❌ explicit 豁免了证据门（懒 agent 洞回归）', exPass.errors)
-    failed++
-  }
-  // 3b：无声明面命中的纯文案变更（explicit unit-sufficient + 文件不命中 blast）→ 放行
-  writeFileSync(join(exDir, 'design.md'), [
-    '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
-    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-    '| 修改 | `docs/readme.md` | 文案 |', '', '## 风险登记', '## 自审', '',
-    'D-001@v1', ''
-  ].join('\n'))
-  const exClean = runValidators('verify', exRoot, 'risktag')
-  if (!exClean.errors.some(e => e.includes('缺少真实集成证据'))) {
-    console.log('✅ 门控：文件面零声明命中 + PASS + 仅单测 → 放行（未配置路径 S1 起步，无误伤）')
-  } else {
-    console.log('❌ 零命中面仍被强制集成证据', exClean.errors)
-    failed++
-  }
-
-  // 集成 4：evidence 命中 + 显式 integration-critical + PASS WITH NOTES（无 handover 无集成证据）→ 拦截
-  // 【D-002@v1 / 2026-09-17-pass-cap-semantics task-02 契约延续】显式 critical + NOTES 必须携带
-  // 结构化 handover 或齐全集成证据二选一；两者皆缺 → error。
-  writeFileSync(join(exDir, 'design.md'), [
-    '---', 'author: qinyi', 'risk_level: integration-critical', '---',
-    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-    'D-001@v1', ''
-  ].join('\n'))
-  writeFileSync(join(exDir, 'verify-result.md'), [
-    '# 验证报告', '', '## 结论', '', 'PASS WITH NOTES', '',
-    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = integration-critical。残留：端到端集成证据留待部署后补。', '',
-    '单测全过。', ''
-  ].join('\n'))
-  const exPwn = runValidators('verify', exRoot, 'risktag')
-  if (exPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
-    console.log('✅ 门控：显式 integration-critical + PASS WITH NOTES 无 handover 无证据 → 拦截（D-002 二选一缺位）')
-  } else {
-    console.log('❌ 显式 critical + NOTES 豁免洞未封死（应要求 handover 或证据二选一）', exPwn.errors)
-    failed++
-  }
-  if (exPwn.warnings.some(w => w.includes('零有效行') && w.includes('二选一'))) {
-    console.log('✅ 门控：二选一出路 warning 在场（补结构化移交项 或 提供齐全集成证据）')
-  } else {
-    console.log('❌ 二选一出路 warning 缺失', exPwn.warnings)
-    failed++
-  }
-
-  // 集成 5：对照 —— 无显式声明、evidence 命中 + PASS WITH NOTES（无证据）→ 仍拦
-  writeFileSync(join(exDir, 'design.md'), [
-    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-    'D-001@v1', ''
-  ].join('\n'))
-  const exAutoPwn = runValidators('verify', exRoot, 'risktag')
-  if (exAutoPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
-    console.log('✅ 对照：无显式声明 + evidence 命中 + PASS WITH NOTES → 仍强制集成证据（严格模式不变）')
-  } else {
-    console.log('❌ 无声明时 PASS WITH NOTES 竟被放行', exAutoPwn.errors)
-    failed++
-  }
-  rmSync(exRoot, { recursive: true })
-}
-
 // === StageContract 结构测试 ===
 console.log('\n=== Contract 结构测试 ===')
 
@@ -590,11 +437,10 @@ if (plan.allowedFrom.includes('brainstorm') && plan.allowedTo.includes('execute'
   failed++
 }
 
-const verify = getContract('verify')
-if (verify.allowedFrom.includes('execute') && verify.allowedTo.includes('archive')) {
-  console.log('✅ verify contract 结构正确')
+if (getContract('verify') === null) {
+  console.log('✅ verify contract 已注销（getContract 返回 null——阶段退役）')
 } else {
-  console.log('❌ verify contract 结构异常')
+  console.log('❌ verify contract 仍在注册表')
   failed++
 }
 
@@ -659,99 +505,6 @@ if (epExempt.ok && !epExempt.errors.some(e => e.includes('生产接线路径矛�
 
 rmSync(epRoot, { recursive: true })
 
-// === Change Risk Gate 早期引导（坑2 FR-02；2026-09-19-ceremony-pricing-five-cuts task-03 声明面口径）===
-// evidence 命中且无 explicit → verify 门早期透出命中披露 + 出路（不依赖 conclusion / evidence）；
-// 加 explicit 后不再发「无声明」引导（但 evidence 要求仍在——D-009 口径由集成 3 钉）。
-console.log('\n=== Change Risk Gate 早期声明面披露 ===')
-
-const warnRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskwarn-'))
-const warnDir = join(warnRoot, '.sillyspec', 'changes', 'riskwarn')
-mkdirSync(warnDir, { recursive: true })
-writeBlastMap(warnRoot)
-// design 文件清单命中 evidence:true（无 frontmatter risk_level）
-writeFileSync(join(warnDir, 'design.md'), [
-  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-  'D-001@v1', ''
-].join('\n'))
-writeFileSync(join(warnDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改下发\n')
-writeFileSync(join(warnDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
-const warnAuto = runValidators('verify', warnRoot, 'riskwarn')
-const warnHit = warnAuto.warnings.find(w =>
-  w.includes('integration-critical') && w.includes('声明文件面命中项目声明危险面') && w.includes('src/daemon')
-  && w.includes('_module-map.yaml'))
-if (warnHit) {
-  console.log('✅ evidence 命中无 frontmatter → 早期 warning 透出命中面 + 改 map 出路')
-} else {
-  console.log('❌ evidence 命中未透出早期披露 warning', warnAuto.warnings)
-  failed++
-}
-
-// 加 frontmatter risk_level（explicit）后 → 不再发「无声明」引导（证据要求不豁免——由集成 3 钉）
-writeFileSync(join(warnDir, 'design.md'), [
-  '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
-  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
-  'D-001@v1', ''
-].join('\n'))
-const warnExplicit = runValidators('verify', warnRoot, 'riskwarn')
-if (!warnExplicit.warnings.some(w => w.includes('若认为不该要求集成证据：改 _module-map.yaml'))) {
-  console.log('✅ 加 frontmatter risk_level（explicit）后不再发无声明引导')
-} else {
-  console.log('❌ explicit 后仍发无声明引导', warnExplicit.warnings)
-  failed++
-}
-rmSync(warnRoot, { recursive: true })
-
-// === 零命中面放行对照（2026-09-19-ceremony-pricing-five-cuts task-03：否定抑制机制随词表退役，
-// 本段改为声明面正交对照——文件面零声明命中 → 无证据要求、PASS 放行）===
-console.log('\n=== 零命中面放行对照（声明面） ===')
-
-const supRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risksup-'))
-const supDir = join(supRoot, '.sillyspec', 'changes', 'risksup')
-mkdirSync(supDir, { recursive: true })
-writeBlastMap(supRoot)
-// 文件清单写满旧词表时代的词（daemon/session 表述在正文与路径不命中声明面）→ 零命中放行
-writeFileSync(join(supDir, 'design.md'), [
-  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
-  '| 修改 | `docs/glossary.md` | daemon/session 术语文案 |', '', '## 风险登记', '## 自审', '',
-  'D-001@v1', ''
-].join('\n'))
-writeFileSync(join(supDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 调整文案\n')
-writeFileSync(join(supDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
-const supAuto = runValidators('verify', supRoot, 'risksup')
-if (supAuto.ok === true && !supAuto.errors.some(e => e.includes('缺少真实集成证据'))) {
-  console.log('✅ 正文含旧词表词但文件面零声明命中 → doc 面 S1 放行（撞词时代结束，D-008）')
-} else {
-  console.log('❌ 零命中面被误拦', { ok: supAuto.ok, errors: supAuto.errors, warnings: supAuto.warnings })
-  failed++
-}
-rmSync(supRoot, { recursive: true })
-
-// === FAIL 门控重验成本预告（坑 fail-gate-reattest-cost-hint，2026-08-24 用户反馈三期②）===
-// FAIL 快速阻断是对的，但旧文案不提示「修复后 verify --done 仍会全量对账 commands.test」——
-// 长套件耗时段 agent 心里没数。failMessage 须带成本预告 + test_strategy 收窄指引。
-console.log('\n=== FAIL 门控重验成本预告 ===')
-
-const fgRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskfail-'))
-const fgDir = join(fgRoot, '.sillyspec', 'changes', 'riskfail')
-mkdirSync(fgDir, { recursive: true })
-writeFileSync(join(fgDir, 'design.md'), [
-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
-  '仅文案调整。', '',
-].join('\n'))
-writeFileSync(join(fgDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 调整文案\n')
-writeFileSync(join(fgDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nFAIL\n\n实测不过。\n')
-const fgAuto = runValidators('verify', fgRoot, 'riskfail')
-const fgHit = (fgAuto.errors || []).find(e => e.includes('结论为 FAIL') && e.includes('commands.test') && e.includes('test_strategy'))
-if (fgHit && fgAuto.ok === false) {
-  console.log('✅ FAIL 门控文案含重验成本预告（commands.test 全量对账 + test_strategy 收窄指引）')
-} else {
-  console.log('❌ FAIL 门控缺成本预告或未阻断', { ok: fgAuto.ok, errors: fgAuto.errors })
-  failed++
-}
-rmSync(fgRoot, { recursive: true })
-
 // === design gate 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24；task-03 声明面口径）===
 // 首次使用者在 design --done 就应看到声明面命中 + 出路，不必等 verify 撞墙；explicit 在场 →
 // 透出「压档不豁免证据」（D-009）。
@@ -784,8 +537,8 @@ writeFileSync(join(ehDir, 'design.md'), [
   'D-001@v1', ''
 ].join('\n'))
 const ehSup = runValidators('brainstorm', ehRoot, 'riskhint')
-if (ehSup.warnings.some(w => w.includes('[risk]') && w.includes('不被豁免') && w.includes('D-009'))) {
-  console.log('✅ evidence 命中 + explicit → design gate 透出「压档不豁免证据」提示')
+if (ehSup.warnings.some(w => w.includes('[risk]') && w.includes('压仪式档'))) {
+  console.log('✅ evidence 命中 + explicit → design gate 透出「显式声明压仪式档」提示（证据门已随 verify 退役）')
 } else {
   console.log('❌ design gate 未透出 explicit 不豁免提示', ehSup.warnings)
   failed++

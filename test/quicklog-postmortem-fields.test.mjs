@@ -28,7 +28,6 @@ import {
   setQuickFileNotes,
 } from '../src/quicklog.js'
 import { definition as quickDef } from '../src/stages/quick.js'
-import { definition as verifyDef } from '../src/stages/verify.js'
 import { definition as doctorDef } from '../src/stages/doctor.js'
 
 let root
@@ -276,22 +275,7 @@ describe('文案一致性（stage prompt）', () => {
     assert.ok(p.includes('postmortem'), '含 postmortem 用法指引')
   })
 
-  it('verify「对照设计检查」：实现偏差 postmortem 提示含四子字段 + 三类证据路径 + known-issues.md 指引', () => {
-    const step = verifyDef.steps.find((s) => s.name === '对照设计检查')
-    assert.ok(step, '「对照设计检查」步骤存在')
-    const p = step.prompt
-    assert.ok(p.includes('实现偏差 postmortem 提示'), '实现偏差 postmortem 提示段存在')
-    for (const sub of ['- 现象：', '- 根因：', '- 护栏：', '- 证据：']) {
-      assert.ok(p.includes(sub), `四子字段字样 ${sub} 应出现在提示段`)
-    }
-    // 三类证据路径指引：会话日志 jsonl / review.json / verify-result.md
-    assert.ok(p.includes('agent-log --json'), '证据指引：agent-log --json 会话日志路径')
-    assert.ok(p.includes('review.json'), '证据指引：review.json')
-    assert.ok(p.includes('verify-result.md'), '证据指引：verify-result.md')
-    // 护栏归档指引：known-issues.md 走既有 knowledge 链路（不新建链路不新建命令）
-    assert.ok(p.includes('known-issues.md'), '护栏结论归入 known-issues.md 指引')
-    assert.ok(p.includes('knowledge/uncategorized.md'), '走既有 knowledge/uncategorized.md 追加链路')
-  })
+  // verify「对照设计检查」用例随 verify 阶段退役（2026-11-26-verify-stage-retire）
 
   it('doctor「汇总报告」：状态错乱 postmortem 提示含四子字段 + 三类证据路径 + known-issues.md 指引', () => {
     const step = doctorDef.steps.find((s) => s.name === '汇总报告')

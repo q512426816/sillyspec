@@ -643,20 +643,20 @@ Action: auto-applied | blocked
 6. **BLOCKED** → 不 apply，输出原因，提示用户检查：
    - \`sillyspec worktree diff <change-name>\` 查看具体变更
    - \`sillyspec worktree cleanup <change-name>\` 丢弃
-7. 建议下一步：\`sillyspec run verify\`
+7. 建议下一步：\`sillyspec run archive\`
 
 ### 操作（mode = native-worktree，用户已有的 linked worktree）
 1. 同上自动审计流程
 2. SAFE/WARNING → \`sillyspec worktree apply <change-name>\`
 3. **不要运行 cleanup**
 4. 输出 Worktree: kept
-5. 建议下一步：\`sillyspec run verify\`
+5. 建议下一步：\`sillyspec run archive\`
 
 ### 操作（mode = in-place-fallback，降级模式无隔离目录）
 1. 展示本次执行摘要（\`git diff\` 查看变更）
 2. 跳过 apply 和 cleanup
 3. 输出 Worktree: none
-4. 建议下一步：\`sillyspec run verify\`
+4. 建议下一步：\`sillyspec run archive\`
 
 ### 输出
 Apply Decision + 下一步建议

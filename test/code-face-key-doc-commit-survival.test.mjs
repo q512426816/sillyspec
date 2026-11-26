@@ -14,7 +14,7 @@ import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
 import { computeCodeTreeKey, filterCodePorcelain, isNonCodePath } from '../src/run/code-face-key.js'
 import { computeGateFingerprint } from '../src/run/green-cache.js'
-import { computeQualityScanFingerprint } from '../src/run/verify-quality-scan.js'
+import { computeQualityScanFingerprint } from '../src/run/archive-quality-scan.js'
 
 function makeFixtureRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'cfk-'))

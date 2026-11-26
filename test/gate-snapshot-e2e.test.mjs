@@ -2,7 +2,7 @@
  * gate-snapshot-e2e.test.mjs — 快照门禁 E2E 测试基建（ql-20260921-008）
  *
  * 缺口实证（2026-09-21 batch2 verify）：单元钉（createGateSnapshot 直调）只覆盖组装函数，
- * 真链路（executeVerifyQualityScan → 建快照 → 快照内跑 commands.test → 判定）无自动验证面
+ * 真链路（runArchiveCloseGate → 建快照 → 快照内跑 commands.test → 判定）无自动验证面
  * ——batch2 verify 为确认 M2 血统修复在真链路成立，手工搭副本目录+副本内烧 2-3 次全量套件
  * （146+136+106s）。本件用假项目夹具把该验证机制化：**夹具测试即血统探针**——probe.js 在快照
  * 内读 service.js 比对 LINEAGE_EXPECT 期望标记，门禁判定直接反映快照取材血统。
@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
-const { executeVerifyQualityScan } = await import('../src/run/verify-quality-scan.js')
+const { runArchiveCloseGate } = await import('../src/run/archive-quality-scan.js')
 const { WorktreeManager } = await import('../src/worktree.js')
 
 const CHANGE = '2026-09-21-e2e-demo'
@@ -76,7 +76,7 @@ async function runScan({ repo, specBase }, expectMarker) {
   console.log = (...a) => buf.push(a.map(String).join(' '))
   console.error = (...a) => buf.push(a.map(String).join(' '))
   try {
-    await executeVerifyQualityScan({ cwd: repo, specBase, changeName: CHANGE, platformOpts: {} })
+    await runArchiveCloseGate({ cwd: repo, specBase, changeName: CHANGE, platformOpts: {} })
     return { ok: true, logs: buf }
   } catch (e) {
     return { ok: false, msg: String(e && e.message || e), logs: buf }
@@ -158,7 +158,7 @@ test('E2E ④ 构建缓存：UV_CACHE_DIR 钉在仓内（gitignored）→ 快照
     console.log = (...a) => buf.push(a.map(String).join(' '))
     console.error = (...a) => buf.push(a.map(String).join(' '))
     try {
-      await executeVerifyQualityScan({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
+      await runArchiveCloseGate({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
     } finally {
       console.log = ol; console.error = oe
       if (prevUv === undefined) delete process.env.UV_CACHE_DIR; else process.env.UV_CACHE_DIR = prevUv
@@ -191,7 +191,7 @@ test('E2E ④ 钉在仓外（家目录形态）→ 不链接零行为（继承 e
     console.log = (...a) => buf.push(a.map(String).join(' '))
     console.error = (...a) => buf.push(a.map(String).join(' '))
     try {
-      await executeVerifyQualityScan({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
+      await runArchiveCloseGate({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
     } finally {
       console.log = ol; console.error = oe
       if (prevUv === undefined) delete process.env.UV_CACHE_DIR; else process.env.UV_CACHE_DIR = prevUv

@@ -33,6 +33,7 @@ function initGitRepo(dir) {
 }
 
 const ARCHIVE_STEPS = (lastStatus) => [
+  { name: '收口实测门', status: 'completed' },
   { name: 'decision-distill 决策提炼', status: 'completed' },
   { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
   { name: '确认归档', status: lastStatus },

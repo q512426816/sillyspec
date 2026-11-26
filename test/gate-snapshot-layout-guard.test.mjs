@@ -9,7 +9,6 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { spawnSync } from 'node:child_process'
 import { detectSymlinkStoreLayout, createGateSnapshot } from '../src/run/gate-snapshot.js'
-import { runVerifyProbes } from '../src/verify-probes.js'
 import { writeTaskReview } from '../src/task-review.js'
 
 const tmpRoots = []
@@ -67,28 +66,6 @@ test('createGateSnapshot：pnpm 布局 → null 回退主仓（不再沙箱假�
   mkdirSync(join(proj, 'node_modules'), { recursive: true })
   assert.equal(createGateSnapshot({ cwd: proj, files: ['src/a.js'] }), null,
     'pnpm 布局快照作废（回退主仓——第三次踩的假败根治）')
-})
-
-test('probe1：design 清单 NEW: 前缀文件（已合入主仓无前缀实体）命中扫描不落 skipped', () => {
-  const proj = mk('np-')
-  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
-  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
-  mkdirSync(join(proj, 'src'), { recursive: true })
-  writeFileSync(join(proj, 'src', 'new-mod.js'), 'export const x = 1 // TODO: 修这个\n')
-  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
-  const specBase = join(proj, '.sillyspec')
-  const changeDir = join(specBase, 'changes', 'c1')
-  mkdirSync(changeDir, { recursive: true })
-  writeFileSync(join(changeDir, 'design.md'), [
-    '## 文件变更清单', '',
-    '| 操作 | 文件路径 | 说明 |',
-    '|---|---|---|',
-    '| 新增 | NEW: src/new-mod.js | 待建（已合入） |',
-    '',
-  ].join('\n'))
-  const r = runVerifyProbes({ cwd: proj, changeName: 'c1' })
-  assert.ok(r.probe1.matches.some(m => m.file === 'src/new-mod.js'), 'NEW: 前缀条目按目标文件命中（TODO 标记扫到）')
-  assert.ok(!r.probe1.skippedFiles.some(f => f.includes('new-mod')), '不再落 skippedFiles 留 ⚠️ 噪声')
 })
 
 test('writeTaskReview：落盘含 writtenBy/writtenAt 溯源戳（空壳覆写归因用）', async () => {

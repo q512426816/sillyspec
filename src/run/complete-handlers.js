@@ -314,7 +314,8 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
       // current-stage-review-run-id-<stage>-<change>，按 endsWith('-'+change) 后缀匹配会在归档
       // 手工短名变更（如 login）时误删自动日期前缀变更（2026-08-01-login 天然以 '-login' 结尾）
       // 的 marker。stage 集合与写入侧 stageReviewMarkerPath 的调用方一致。
-      const REVIEW_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
+      // verify 已退役（2026-11-26-verify-stage-retire）——marker 清理集合随四阶段收缩
+      const REVIEW_STAGES = ['brainstorm', 'plan', 'execute', 'archive']
       // 2026-10-18 布局分层后 marker 落 state/；根目录扫描保留为旧布局兜底（迁移幂等收敛）
       const markerDirs = [join(runtimeRoot, 'state'), runtimeRoot]
       let markerCleaned = 0

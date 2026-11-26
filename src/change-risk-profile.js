@@ -60,7 +60,7 @@ export function isEndToEndTaskText(text = '') {
 // 供 stage-contract 拼成可执行的报错信息。
 
 /** 每项 requiredVerification 的需求描述 + 字面期望 */
-export const VERIFICATION_NEEDS = {
+const VERIFICATION_NEEDS = {
   unit_tests: {
     desc: '单元测试（verify 必做；在 verify-result.md 写明测试套件与结果）',
     literals: [],
@@ -98,7 +98,7 @@ export const VERIFICATION_NEEDS = {
 }
 
 /** 风险分级的判定来源（2026-09-19-ceremony-pricing-five-cuts task-03 改声明面口径） */
-export const RISK_LEVEL_CAUSES = {
+const RISK_LEVEL_CAUSES = {
   'deployment-critical':
     '变更文件面命中项目声明危险面（_module-map.yaml 顶层 blast 段）且判级为顶档。' +
     '这是按「文件路径 × 项目声明」判定的——若认为该路径不该定此价：改 map 声明（git 可见）；危险链路该有真实启动证据。',
@@ -194,7 +194,7 @@ export function resolveChangeRisk({ files = [], blastDeclarations = [], explicit
 // 变动）。对齐目标：verify-probes.js classifyReceiptCommandSource（judgeIntegrationRan 消费）
 // 同款 sourceMark 参数与标记族——**任一侧增改标记族必须双侧同步**（G-3 先例：producer 侧
 // 曾漏 smoke 一词致口径分裂）。
-export const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
+const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
   '\\biwr\\b', '\\birm\\b', 'https?://',
   'spring-boot:run', '\\bjava\\b[^|\\n]*\\s-jar\\b',
@@ -202,9 +202,9 @@ export const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\bdotnet\\s+run\\b', '\\bflask\\s+run\\b', '\\buvicorn\\b', '\\bgunicorn\\b',
   '\\b(?:nc|netcat|telnet|socat)\\b',
 ].join('|'), 'i')
-export const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
 /** CLI 机器段来源标记（与 verify-probes.js SMOKE_RECEIPT_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
-export const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
+const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
 function classifyReceiptSourceTag(command, sourceMark) {
   if (sourceMark === CLI_SMOKE_SOURCE_MARK) return 'cross-layer'
   const cmd = String(command || '')

@@ -87,22 +87,6 @@ export class ChangeRegistry {
    * @returns {{ current_stage: string, status: string }|null} 无该行返回 null（未注册目录桩）
    */
   /**
-   * 读某变更某阶段的 completed_at（2026-09-08-ir-verify-facts FR-02：verifyStartAt 基准——
-   * evidence 分类核验的 mtime 窗口下界，取 execute 行 completed_at）。只读不抛：无行/读失败
-   * 返回 null（调用方走 R-05 fallback，与 getChangeCreatedAt 同容错风格）。
-   */
-  getStageCompletedAt(cwd, changeName, stage) {
-    try {
-      const db = this.pm._ensureDB(cwd);
-      const row = db.getDb().prepare(
-        `SELECT s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id
-         WHERE c.name = ? AND s.stage = ? ORDER BY s.completed_at DESC LIMIT 1`
-      ).get(changeName, stage);
-      return row && row.completed_at ? row.completed_at : null;
-    } catch { return null; }
-  }
-
-  /**
    * 读某变更最近一次进度活动时刻（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮
    * 2026-09-11 实证：stage 阶段态区分不了「活跃在途」与「启动后弃单」——brainstorm
    * in_progress + tasks.md 仅含他者 quick 行时「全勾」是空洞真值）。取该变更全部
@@ -131,24 +115,6 @@ export class ChangeRegistry {
         if (Number.isFinite(ms) && ms > latestMs) latestMs = ms;
       }
       return latestMs === -Infinity ? null : new Date(latestMs).toISOString();
-    } catch { return null; }
-  }
-
-  /**
-   * 读某变更某阶段的 started_at（2026-09-10 用户反馈②：evidence mtime 窗口锚点从
-   * execute completed_at 放宽到 started_at——证据合法产自 execute 或 verify 两窗口，
-   * 锚「完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则
-   * mtime 旧」的时序两难）。只读不抛：无行/列空/读失败返回 null（调用方退
-   * getStageCompletedAt → R-05 fallback，与 getStageCompletedAt 同族容错）。
-   */
-  getStageStartedAt(cwd, changeName, stage) {
-    try {
-      const db = this.pm._ensureDB(cwd);
-      const row = db.getDb().prepare(
-        `SELECT s.started_at FROM stages s JOIN changes c ON s.change_id = c.id
-         WHERE c.name = ? AND s.stage = ? ORDER BY s.started_at DESC LIMIT 1`
-      ).get(changeName, stage);
-      return row && row.started_at ? row.started_at : null;
     } catch { return null; }
   }
 

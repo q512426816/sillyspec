@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
-import { runCoverageExistenceCheck, renderCoverageExistenceReport, intersectCoverageExistence } from '../src/run/verify-quality-scan.js'
+import { runCoverageExistenceCheck, renderCoverageExistenceReport, intersectCoverageExistence } from '../src/run/archive-quality-scan.js'
 
 function makeFixture() {
   const cwd = mkdtempSync(join(tmpdir(), 'covex-'))

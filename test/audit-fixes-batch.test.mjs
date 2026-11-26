@@ -1,5 +1,5 @@
 /**
- * 外部审核修正批（ql-20260909-005）：lint 硬门决策 / 严格档结论槽必在 / 三重核对真接 map。
+ * 外部审核修正批（ql-20260909-005）：lint 硬门决策 / 三重核对真接 map。（严格档结论槽用例随 verify 阶段退役——2026-11-26-verify-stage-retire）
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +9,6 @@ import { tmpdir } from 'os'
 import { execSync } from 'child_process'
 import { shouldBlockVerifyLint } from '../src/verify-postcheck.js'
 import { auditModuleImpactAgainstDiff } from '../src/archive-delta.js'
-import { IR_STRICT_SINCE } from '../src/constants.js'
 
 test('shouldBlockVerifyLint：failed 默认阻断；advisory 逃生；passed/skipped 不拦', () => {
   assert.equal(shouldBlockVerifyLint({ status: 'failed' }), true, 'failed 默认硬门')
@@ -17,26 +16,6 @@ test('shouldBlockVerifyLint：failed 默认阻断；advisory 逃生；passed/ski
   assert.equal(shouldBlockVerifyLint({ status: 'passed' }), false)
   assert.equal(shouldBlockVerifyLint({ status: 'skipped' }), false)
   assert.equal(shouldBlockVerifyLint(null), false)
-})
-
-test('严格档（created_at ≥ ' + IR_STRICT_SINCE + '）删结论槽行 → validateVerifyOutputs ERROR', async () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'sillyspec-strict-'))
-  try {
-    const changeDir = join(cwd, '.sillyspec', 'changes', 'c1')
-    mkdirSync(changeDir, { recursive: true })
-    writeFileSync(join(changeDir, 'design.md'), `---\nauthor: t\ncreated_at: ${IR_STRICT_SINCE}\nrisk_level: unit-sufficient\n---\n\n# d\n`)
-    // 整行删除「结论枚举：」槽，正文留 PASS 关键词（旧逃逸路径：slot=null → 窗口正则蹭词）
-    writeFileSync(join(changeDir, 'verify-result.md'), [
-      '# 验证报告', '', '## 结论 [层：人工判断]', '', '结论：✅ PASS 全绿（无槽行变体）', '',
-    ].join('\n'))
-    const { runValidators } = await import('../src/stage-contract.js')
-    const r = runValidators('verify', cwd, 'c1', {})
-    assert.ok(r.errors.some(e => e.includes('缺「结论枚举：」槽行')), `严格档删槽被拦（errors 尾：${r.errors[r.errors.length - 1]?.slice(0, 80)}）`)
-    // 存量变更（created_at 早于闸门）删槽 → 不新增 error（legacy 回退保留）
-    writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-01-01\n---\n\n# d\n')
-    const r2 = runValidators('verify', cwd, 'c1', {})
-    assert.ok(!r2.errors.some(e => e.includes('缺「结论枚举：」槽行')), '存量变更删槽不拦（legacy 回退）')
-  } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 
 test('三重核对第三重：矩阵模块列误标 → map 归属不一致点名', () => {

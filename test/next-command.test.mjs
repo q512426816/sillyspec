@@ -75,7 +75,7 @@ console.log('--- 3. 活跃变更产物链推断 ---')
 
   writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 甲\n- [x] task-02: 乙\n')
   r = detectNextStep({ cwd: dir })
-  assert(r.state.includes('待验证') && r.next.includes('verify'), '全勾无 verify-result → verify')
+  assert(r.state.includes('待归档') && r.next.includes('archive'), '全勾 → archive（verify 阶段已退役，2026-11-26-verify-stage-retire）')
 
   writeFileSync(join(changeDir, 'verify-result.md'), '# v\n结论：PASS\n')
   r = detectNextStep({ cwd: dir })

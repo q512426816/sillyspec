@@ -20,7 +20,7 @@ $ARGUMENTS
 
 ## 执行流程
 
-按 brainstorm → plan → execute → verify 顺序自动推进；**编排由 CLI driver 承担，你只执行判断步**。
+按 brainstorm → plan → execute → archive 顺序自动推进（verify 已退役）；**编排由 CLI driver 承担，你只执行判断步**。
 
 ### 启动
 

@@ -306,7 +306,7 @@ console.log('\n=== 2. buildDeltaReport（Before/Delta/After 三段式，now 注�
   assert(!zeroMd.includes('### 端点基线提示'), 'backendEndpoints=0 → 无端点基线提示小节')
   const noFactsFx = buildFixture({ facts: null })
   const noFactsMd = buildDeltaReport({ changeDir: noFactsFx.changeDir, specRoot: noFactsFx.specRoot, project: noFactsFx.project, runtimeRoot: noFactsFx.runtimeRoot, now: NOW })
-  assert(!noFactsMd.includes('### 端点基线提示') && noFactsMd.includes(`（无 verify-facts.json：${join(noFactsFx.changeDir, 'verify-facts.json')} 不存在或不可解析——探针指标快照缺位，可跑 sillyspec verify-probes --change ${CN} --init 补）`),
+  assert(!noFactsMd.includes('### 端点基线提示') && noFactsMd.includes(`（无 verify-facts.json：${join(noFactsFx.changeDir, 'verify-facts.json')} 不存在或不可解析——探针指标快照缺位，verify 阶段已退役，探针快照不再产生（历史归档件只读））`),
     '无 verify-facts → 探针段降级注记（含补跑指引）+ 无端点提示')
 }
 
@@ -449,6 +449,7 @@ console.log('\n=== 4. delta CLI（bin/sillyspec.js 子进程）===\n')
 console.log('\n=== 5. 归档集成（run archive --done --confirm 子进程完整路径）===\n')
 
 const ARCHIVE_STEPS = [
+  { name: '收口实测门', status: 'completed' },
   { name: 'decision-distill 决策提炼', status: 'completed' },
   { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
   { name: '确认归档', status: 'pending' },

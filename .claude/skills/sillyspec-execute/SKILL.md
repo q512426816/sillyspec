@@ -66,7 +66,7 @@ execute 前缀步「加载上下文」的 `--done` 会硬校验符号影响面�
 
 ### Task Review Gate
 
-execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否则阻断完成。**例外**：task 在 `tasks/task-XX.md` frontmatter 声明 `low_risk: true`（type-only / 机械迁移等低逻辑风险）时，缺 review.json 只发 warning 不阻断。`cannot_verify` 的 task 会写入 `verify-required-evidence.json`，由 verify 阶段消费。
+execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否则阻断完成。**例外**：task 在 `tasks/task-XX.md` frontmatter 声明 `low_risk: true`（type-only / 机械迁移等低逻辑风险）时，缺 review.json 只发 warning 不阻断。`cannot_verify` 的 task 必须在归档前由独立复核升级（verify 阶段已退役，归档是最后一道完成度注视）。
 
 #### task 级 review.json 契约（CLI 硬校验）
 

@@ -73,7 +73,7 @@ const VOLATILE_PLACEHOLDER_RES = [
   /{REVIEW_TIER}/g, /{REVIEW_TIER_REASON}/g, /{REVIEW_JSON_CONTRACT}/g,
   /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
   /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
-  /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{HANDOVER_SUMMARY}/g, /{PREFLIGHT_FAILURES}/g,
+  /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{PREFLIGHT_FAILURES}/g,
   /{PRIOR_REVIEW_FACTS}/g, /{ARCHIVE_IMPACT_AUDIT}/g, /{EVIDENCE_AUTO_RECOMMENDATION}/g,
 ]
 const VOLATILE_MASK = '⟦dyn⟧'
@@ -645,67 +645,6 @@ function appendVocabBypassSection(base, injection, runtimeDir, change) {
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
 // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
-
-/**
- * 等效验证先例库（坑 verify-precedent-only-in-prose，2026-09-15 EHS 生产实证：mvn test 被
- * 公司框架 parent pom pluginManagement 硬编码 surefire skip=true、-D 覆盖无效——等效口径
- * dependency:build-classpath+javac+JUnitCore 第二次复用靠 agent 翻旧 verify-result.md 正文
- * 续命；先例只活在散文里 = 换个 agent/换个变更就断档）。结构化登记进 local.yaml
- * verify_precedents 段，verify prompt 时点注入提示（与 test_strategy 预检提示同挂点）。
- *
- * 对象数组形态（行扫描，同 extractKnownFailures 免 YAML 依赖口径——注释/空行/块界容错）：
- *   verify_precedents:
- *     - id: mvn-test-surefire-skip
- *       standard_command: mvn test
- *       reason: <标准命令为何不可用>
- *       equivalent: <已验证的等效口径>
- *       established_by: <确立该口径的变更名>
- *       notes: <可选补充>
- * 残项（standard_command 与 equivalent 双缺）过滤——登记不完整的先例没有可执行口径。
- * @param {string|null} yamlText local.yaml 全文
- * @returns {Array<object>} 先例对象数组
- */
-export function parseVerifyPrecedents(yamlText) {
-  const lines = String(yamlText || '').split(/\r?\n/)
-  const headIdx = lines.findIndex(l => /^verify_precedents:\s*(?:#.*)?$/.test(l))
-  if (headIdx < 0) return []
-  const items = []
-  let cur = null
-  const clean = (v) => String(v || '').replace(/\s+#.*$/, '').trim()
-  for (let i = headIdx + 1; i < lines.length; i++) {
-    const l = lines[i]
-    if (/^\S/.test(l)) break // 下一个顶层键 → 块结束
-    if (!l.trim() || /^\s*#/.test(l)) continue
-    const item = l.match(/^\s*-\s+([A-Za-z_][\w-]*):\s*(.*)$/)
-    if (item) {
-      cur = {}
-      items.push(cur)
-      cur[item[1]] = clean(item[2])
-      continue
-    }
-    const kv = l.match(/^\s*([A-Za-z_][\w-]*):\s*(.*)$/)
-    if (kv && cur) cur[kv[1]] = clean(kv[2])
-  }
-  return items.filter(x => x && (x.standard_command || x.equivalent))
-}
-
-/**
- * 先例提示渲染（verify prompt 注入用；空输入 → ''，调用方零输出）。
- * 行动指引刻意指向「把等效命令配进 commands.test 照常全量实测对账」而非 test_strategy: skip
- * 放行——EHS 实证里被环境阻断 deferred 的集成测试正是 P1 缺陷藏身处，能实测就实测。
- * @param {Array<object>|null} precedents
- * @returns {string}
- */
-export function renderVerifyPrecedentHint(precedents) {
-  if (!Array.isArray(precedents) || precedents.length === 0) return ''
-  const L = [`【验证先例提示】本仓已登记 ${precedents.length} 条等效验证先例（标准命令不可用时的既有替代口径）：`]
-  for (const p of precedents.slice(0, 5)) {
-    L.push(`- ${p.id || '（无 id）'}：\`${p.standard_command || '?'}\` 不可用（${p.reason || '原因未注'}）→ 等效口径 \`${p.equivalent || '?'}\`（确立于 ${p.established_by || '?'}${p.notes ? `；${p.notes}` : ''}）`)
-  }
-  if (precedents.length > 5) L.push(`- …另有 ${precedents.length - 5} 条未展开（读 local.yaml verify_precedents 段看全量）`)
-  L.push('适用时把等效命令配进 local.yaml commands.test（或 modules.<m>.test）后照常全量实测对账，而不是只靠 test_strategy: skip 放行；先例不适用（环境已变/口径失效）可忽略并在 verify-result 注记。')
-  return L.join('\n')
-}
 
 /**
  * 提示词路径根的单一解析：specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)。
@@ -1838,87 +1777,6 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
     }
   }
 
-  // verify Step2「加载规范并锚定」worktree 基线锚点注入：execute 在 worktree 分支上 commit，
-  // verify 的 diff 对账基点 = worktree 分支的真实基点（git merge-base），不是主仓当前 HEAD。
-  // agent 拿不到基点时会拿主仓 HEAD / 旧 release commit 兜底——主仓在 execute 期间推进时
-  // （并行 session commit）会把别人的演进误判为本变更越权新增（2026-08-17 实录：误用 d192f89
-  // 而实际 merge-base 49ade71，第 6/7 条铁律被误判新增）。注入 fail-soft：worktree/分支/meta
-  // 读不到时降级为自查指引，绝不阻断 verify。
-  if (stageName === 'verify' && promptText.includes('{WORKTREE_BASELINE_INFO}')) {
-    let baselineInfo
-    try {
-      const { WorktreeManager } = await import('../worktree.js')
-      const wm = new WorktreeManager({ cwd })
-      const meta = changeName ? wm.getMeta(changeName) : null
-      const branch = meta?.branch || (changeName ? 'sillyspec/' + changeName : null)
-      const branchExists = branch
-        ? safeGit(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}']).error === null
-        : false
-      if (branchExists) {
-        const baseBranch = meta?.baseBranch || 'main'
-        const mergeBase = safeGit(cwd, ['merge-base', baseBranch, branch]).value
-        baselineInfo =
-          `- 本变更 worktree 分支：${branch}（存在）\n` +
-          (meta
-            ? `- worktree 基点（创建时锚定）：baseHash=${meta.baseHash || '未知'}，actualBaseHash=${meta.actualBaseHash || '未知'}（含 dirty overlay 后的 worktree 起点）\n`
-            : '- worktree meta 已不可读（可能已被 cleanup），用下方 merge-base 即可\n') +
-          `- ⚠️ diff 对账基点：\`git merge-base ${baseBranch} ${branch}\` = ${mergeBase || '（计算失败，手动跑上面命令）'}\n` +
-          `  不要用主仓当前 HEAD / 最近 release commit 当基点——主仓在 execute 期间可能已被并行 session 推进，用错基点会把别人的演进误判为本变更越权改动。\n` +
-          `- task review 的 base/head 引用分支上的 commit，逐 task 核验 diff 用 \`git diff <base>..<head>\`（分支 ref 若已被 cleanup 删除，hash 仍可直达，但不要主动删分支）。`
-      } else if (meta) {
-        baselineInfo =
-          '- 本变更 worktree meta 存在但分支不可达（可能已被 cleanup）：按主仓 git log 对照本变更各 commit 核验；task review 的 base/head 若悬空，在 verify-result.md 标注审计链风险。'
-      } else {
-        baselineInfo =
-          '- 本变更无 worktree（in-place / 纯文档变更 / worktree 已清理且 meta 不可读）：按主仓 git log 最近提交对照核验。'
-      }
-    } catch (e) {
-      baselineInfo = '（worktree 基线注入失败：' + e.message + '——diff 对账前先 git branch -a 查 sillyspec/<change> 分支并用 git merge-base <main> <branch> 自查基点，勿用主仓 HEAD 当基点）'
-    }
-    substituteRaw('{WORKTREE_BASELINE_INFO}', baselineInfo)
-  }
-
-  // verify「运行测试和质量扫描」evidence-auto 推荐注入（task-12，FR-11 / D-005@v2）：
-  // verify-postcheck 在 --done 事后解析 evidence-auto，agent 写 verify-result.md 时看不到
-  // 推荐组合、无从否决——故在 prompt 时点经 {EVIDENCE_AUTO_RECOMMENDATION} 把 task-11
-  // resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt（含推荐
-  // 理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径），供用户否决（FR-11）。
-  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染推荐；full/module/skip/已配置
-  // 替换为空串零输出；**未配置**且 commands.test 已配时渲染 test_strategy 预检提示（2026-09-15
-  // 复盘：环境硬伤的全量实测打回返工，提前在 prompt 时点给配置指引）。fail-soft：读取/解析异常降级单行说明不抛，
-  // 绝不阻断 verify prompt 输出（对齐上方 {WORKTREE_BASELINE_INFO} 注入先例）。
-  if (stageName === 'verify' && promptText.includes('{EVIDENCE_AUTO_RECOMMENDATION}')) {
-    let eaInjected = ''
-    try {
-      const { resolveTestStrategy, extractTestCommand, extractTestStrategy } = await import('../verify-postcheck.js')
-      const eaSpecBase = resolvePromptSpecBase(platformOpts, cwd)
-      // 信任边界：local.yaml 只读 specBase（平台 specRoot / 漂移锚定主仓 / cwd 本地），与
-      // runVerifyTestCheck 的 specBase 来源同口径，不读 agent 可写的 worktree 副本。
-      const eaYamlPath = join(eaSpecBase, 'local.yaml')
-      const eaYamlText = existsSync(eaYamlPath) ? readFileSync(eaYamlPath, 'utf8') : null
-      const eaChangeDir = changeName ? join(eaSpecBase, 'changes', changeName) : null
-      const resolution = resolveTestStrategy({ yamlText: eaYamlText, changeDir: eaChangeDir })
-      const rec = resolution.evidence_auto_recommendation
-      if (rec && rec.summary) {
-        eaInjected = rec.summary
-      } else if (eaYamlText && extractTestCommand(eaYamlText) && !extractTestStrategy(eaYamlText)) {
-        // test_strategy 预检提示（2026-09-15 复盘教训「test_strategy 该在进 verify 前配好，
-        // 而不是被 verify-test gate 打回后才补」）：已配 commands.test 但顶层 test_strategy
-        // 未设（缺省=全量实测对账），prompt 时点先给配置指引——环境注定跑不了全量时省一轮
-        // 「--done 实测打回 → 补配置 → 重跑」返工
-        eaInjected = '【test_strategy 预检提示】local.yaml 已配置 commands.test 但未设顶层 test_strategy（缺省=全量实测对账）。若该命令在当前环境无法真实执行（框架/环境硬伤，如测试框架硬编码 skip、依赖外部服务），先在 local.yaml 显式配 `test_strategy: skip`（或 `module` + modules 映射收窄）并注释理由再继续——避免 verify --done 实测对账打回后返工。'
-      }
-      // 等效验证先例注入（verify-precedent-only-in-prose，2026-09-15 EHS 实证）：先例与
-      // 预检提示同挂点追加——标准命令不可用但已有验证过的等效口径时，指引优先配进
-      // commands.test 实测对账而非 skip 放行。
-      const _precHint = renderVerifyPrecedentHint(parseVerifyPrecedents(eaYamlText))
-      if (_precHint) eaInjected = eaInjected ? `${eaInjected}\n\n${_precHint}` : _precHint
-    } catch (e) {
-      eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
-    }
-    substituteRaw('{EVIDENCE_AUTO_RECOMMENDATION}', eaInjected)
-  }
-
   // {ARCHIVE_IMPACT_AUDIT}（2026-09-09 ql-20260909-004）：archive extract-module-impact 步的
   // 三重核对机械预填——auditModuleImpactAgainstDiff 代算（module-impact × diff × map 归属），
   // agent 只裁决不一致项。fail-soft：审计异常降级单行指引（回退手跑 git diff）。
@@ -1960,42 +1818,6 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
       scopeTable = '（变更范围对账表注入失败：' + (e && e.message ? e.message : e) + '——回退手跑 sillyspec scope-audit --change <name> 查看后再确认归档，注入失败不阻断归档）'
     }
     substituteRaw('{SCOPE_AUDIT_TABLE}', scopeTable)
-  }
-
-  // {HANDOVER_SUMMARY}（2026-09-17-pass-cap-semantics task-04，FR-06 注入态）：archive「确认
-  // 归档」步的移交项清单注入——读 changes/<name>/verify-facts.json 的 facts.handover（task-01
-  // 产出 { count, items[] }，items 行含 type/item/condition/severity），blocking 置顶 + severity
-  // 标注 + 封顶渲染（maxRows 8，对齐 {SCOPE_AUDIT_TABLE} 60/量级收窄——移交项是裁决面不是
-  // 对账面），表尾指路 verify-facts.json 看全量。fail-soft：handover 段缺失/零条目/facts.json
-  // 缺失 → 空串（正常态零输出）；读取异常降级单行指引——注入永不阻断归档 prompt 输出
-  //（与门阻断语义分离，对齐 {SCOPE_AUDIT_TABLE} 注入先例）。
-  if (stageName === 'archive' && promptText.includes('{HANDOVER_SUMMARY}')) {
-    let handoverBlock = ''
-    try {
-      const hsSpecBase = resolvePromptSpecBase(platformOpts, cwd)
-      const hsFactsPath = changeName ? join(hsSpecBase, 'changes', changeName, 'verify-facts.json') : null
-      if (hsFactsPath && existsSync(hsFactsPath)) {
-        const hsFacts = JSON.parse(readFileSync(hsFactsPath, 'utf8'))
-        const hsItems = (hsFacts && hsFacts.handover && Array.isArray(hsFacts.handover.items)) ? hsFacts.handover.items : []
-        if (hsItems.length > 0) {
-          const HS_MAX_ROWS = 8
-          const sevOf = (it) => (it && it.severity === 'blocking') ? 'blocking' : 'advisory'
-          const sorted = [...hsItems].sort((a, b) => (sevOf(a) === 'blocking' ? 0 : 1) - (sevOf(b) === 'blocking' ? 0 : 1))
-          const rows = sorted.slice(0, HS_MAX_ROWS).map((it) => {
-            const cond = it && it.condition ? ` | 条件: ${it.condition}` : ''
-            return `- [${sevOf(it)}] ${(it && it.type) || 'unknown'} | ${(it && it.item) || ''}${cond}`
-          })
-          handoverBlock = [
-            `【移交项清单（CLI 机械注入，共 ${hsItems.length} 条，blocking 置顶）】`,
-            ...rows,
-            ...(sorted.length > HS_MAX_ROWS ? [`……（其余 ${sorted.length - HS_MAX_ROWS} 条略——全量见 verify-facts.json）`] : []),
-          ].join(String.fromCharCode(10))
-        }
-      }
-    } catch (e) {
-      handoverBlock = '（移交项清单注入失败：' + (e && e.message ? e.message : e) + '——回退读 changes/<变更名>/verify-facts.json 的 handover 段核对后再确认归档，注入失败不阻断归档）'
-    }
-    substituteRaw('{HANDOVER_SUMMARY}', handoverBlock)
   }
 
   // 注入模块上下文（brainstorm/plan/execute 阶段 + quick 首步「理解任务」——刀①：quick
@@ -2248,7 +2070,7 @@ ${maskVolatileForGuide(guideTemplate)}
     console.log('- CLI 子命令以本 prompt 或上一条 --done 输出的字面为准；不确定时停下问用户，猜测命令会让状态机推进到错误位置。')
     console.log('- 本步骤产物落盘后立即执行 prompt 末尾的 --done：CLI 据此校验产出并推进状态机；不跑则进度永远停在本步。')
     console.log('- 变更目录改名用 `sillyspec change-rename <旧名> <新名>`：mv/rename 会漏改进度库引用，导致变更失联。')
-    console.log('- 变更产物文档一律用 CLI 骨架命令生成（fourpiece-init / design-init / taskcard / module-impact / verify-probes --init）——骨架已预填 author/created_at/generated_by 元数据，勿删勿手拼 frontmatter；仅从零手写的补充文档才需手填 author（git 用户名）与 created_at（精确到秒）')
+    console.log('- 变更产物文档一律用 CLI 骨架命令生成（fourpiece-init / design-init / taskcard / module-impact）——骨架已预填 author/created_at/generated_by 元数据，勿删勿手拼 frontmatter；仅从零手写的补充文档才需手填 author（git 用户名）与 created_at（精确到秒）')
     console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
     console.log('- **输出纪律（上下文卫生；R12 对撞实测均轮 134K vs 其他轮 181-234K）**：预计输出超过 ~50 行的命令（pytest / vitest / npm test / uv sync / 全量 JSON 等）一律重定向落盘 `.sillyspec/.runtime/logs/<名>.log 2>&1`，只回看 `tail -n 50` 判断结果；需要细节时 grep 该日志。禁止把命令全量输出读进上下文——长输出逐轮回放是 token 膨胀主源（CLI noAI 步的输出截断同理，勿整段复述）。')
   }
@@ -2289,7 +2111,7 @@ ${maskVolatileForGuide(guideTemplate)}
   // 多数失败是机械的（占位符未替换/文件未建/行号失效）。gate 是只读聚合预检，--done 前跑一次
   // 把「重做一轮」变「本地预检」。主阶段且有 change 才提示（quick 边界审计在 --done 内联、
   // 辅助阶段无 gate 语义）。
-  if (['brainstorm', 'plan', 'execute', 'verify', 'archive'].includes(stageName) && changeName) {
+  if (['brainstorm', 'plan', 'execute', 'archive'].includes(stageName) && changeName) {
     console.log(`💡 预检（只读，省一轮 gate 失败重跑）：sillyspec gate ${stageName} --change ${changeName} [--json]`)
   }
   // requiresConfirm 步骤（如 archive「确认归档」）的完成命令必须带 --confirm——坑

@@ -1307,7 +1307,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     ? (gitQuiet(cwd, ['rev-list', '--count', `${st.baseline_commit}..HEAD`]) || '0').toString().trim()
     : '?'
   const dirty = changedFilesSinceBaseline(cwd, st.baseline_commit).length
-  const hasLedger = existsSync(runtimeStatePath(runtimeRoot, `verify-quality-scan-${change}.json`))
+  const hasLedger = existsSync(runtimeStatePath(runtimeRoot, `archive-quality-scan-${change}.json`))
   console.log([
     `🔁 flow start 恢复简报（重入）: ${change}（tier=${st.tier}${st.legacy_fallback ? '，legacy_fallback=true 混跑回退中' : ''}）`,
     `══════════════════════════════════════════════════════`,
@@ -2824,7 +2824,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
   if (st.substeps?.probes === 'done') { skip('probes') } else {
-    if (st.tier === 'thick') console.log('ℹ️ 厚档探针链：run verify --done 时经 verify-probes --init --draft 承接（第 3 批既有面）')
+    if (st.tier === 'thick') console.log('ℹ️ 厚档探针链已随 verify 阶段退役（2026-11-26-verify-stage-retire）：收口实测门随 run archive 首步执行')
     // 探针 12 error 档收口拦截（2026-09-27-ui-visual-guidance：UI 视觉证据分级门——
     // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦；
     // 默认 warn 档只警告不拦。与 run/gates.js verify 收尾同一检测单点，不二算）。
@@ -2985,12 +2985,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         } catch { /* 回读失败留 — */ }
       }
       const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])
-      writeFileSync(join(changeDir, 'verify-result.md'), renderVerifyReceipt({
+      writeFileSync(join(changeDir, 'close-receipt.md'), renderVerifyReceipt({
         change, baseline: st.baseline_commit, head: typeof headNow === 'string' ? headNow.trim() : null,
         gateSummary: gateSummaryText, review: reviewOutcome, traceCount, patchMeta,
         generatedAt: new Date().toISOString(),
       }))
-      console.log('🧾 验证回执已合成：verify-result.md（随归档留档）')
+      console.log('🧾 收口回执已合成：close-receipt.md（随归档留档）')
     } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
     const { ProgressManager } = await import('./progress.js')
     const { runArchiveChain } = await import('./run/complete-handlers.js')

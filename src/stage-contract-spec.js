@@ -54,9 +54,6 @@ const CUSTOM_KINDS = new Set([
   'task-plan-reconciliation', // plan.md 声明任务 ↔ tasks/ 卡片双向对账(plan-postcheck)
   'design-readiness',        // design.md 进入 plan 前的章节就绪检查(validateDesignForPlan)
   'task-card-fields',        // task-NN.md 卡片字段存在性(validateBlueprintConsistency + validatePlanFeasibility)
-  'verify-conclusion-gate',  // verify-result.md 结论 PASS/FAIL 门控
-  'integration-evidence',    // verify-result.md 集成证据(change-risk-profile.checkIntegrationEvidence)
-  'change-risk-gate',        // 变更风险分级门控(resolveChangeRisk)
 ])
 
 export function isCustomKind(kind) {
@@ -286,71 +283,6 @@ const SCAN_RULES = SCAN_REQUIRED_DOCS.map(doc => ({
   failMessage: 'scan 文档缺失: ${path}',
 }))
 // 注:modules 目录非空检查保留在 validateScanOutputs 内联(两种文案"不存在/为空",单 failMessage 表达不了)
-
-// ── verify ──
-// 核心文档存在性(error)。decisions 阻塞 / FAIL 门控 / Change Risk Gate 为 custom kind(Batch 3 迁入)
-const VERIFY_RULES = [
-  {
-    id: 'verify.verify-result.exists',
-    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'file-exists',
-    target: { root: 'change', path: 'verify-result.md' },
-    data: {},
-    spec: '产出 `verify-result.md`(verify 阶段必须产出验证报告才能完成——不存在则不能完成,防"假完成")',
-    failMessage: 'verify-result.md 不存在 — verify 阶段必须产出验证报告才能完成（${path}）',
-  },
-  {
-    id: 'verify.design.exists',
-    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'file-exists',
-    target: { root: 'change', path: 'design.md' },
-    data: {},
-    spec: '`design.md` 仍存在(核心文档,verify 时确认未丢失)',
-    failMessage: '核心文档缺失: ${path}',
-  },
-  {
-    id: 'verify.plan.exists',
-    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'file-exists',
-    target: { root: 'change', path: 'plan.md' },
-    data: {},
-    spec: '`plan.md` 仍存在(核心文档,verify 时确认未丢失)',
-    failMessage: '核心文档缺失: ${path}',
-  },
-  // verify-conclusion-gate(custom):结论 FAIL 门控。算法 extractVerifyConclusion 留 validator,
-  // failMessage / noConclusionWarning 从 manifest 同源。
-  {
-    id: 'verify.conclusion.fail-gate',
-    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'verify-conclusion-gate',
-    target: { root: 'change', path: 'verify-result.md', scope: 'full' },
-    data: {},
-    spec: 'verify-result.md 结论不得为 FAIL(FAIL 阻断 verify 完成)。结论在含「结论/Conclusion/Result/结果」的二级标题后,值为 PASS / PASS WITH NOTES / FAIL。',
-    failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证。⚠️ 重验成本预告：修复后 verify --done 时 CLI 会重新执行 local.yaml 的 commands.test 全量对账（同步执行，长套件可达数分钟、中途无输出属正常；可按 local.yaml test_strategy: module + modules 收窄命中模块），请在修复时一并评估测试范围',
-    noConclusionWarning: 'verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）',
-  },
-  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 resolveChangeRisk +
-  // checkIntegrationEvidence 留 change-risk-profile.js(需运行时读 design/plan 内容,引擎无法纯判定);
-  // 此处只作事前提示——renderStageContract 把 spec/hint 注入 verify step0,让 agent 写 verify-result.md
-  // 前就知道:若 design/plan 命中部署/启动或跨进程关键词,必须提供对应字面证据,否则完成时被门控阻断。
-  // (历史教训:agent 闷头写完 verify-result.md 才发现缺「真实启动」证据,撞墙不知缺哪一项。)
-  {
-    id: 'verify.integration-evidence',
-    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'integration-evidence',
-    target: { root: 'change', path: 'verify-result.md', scope: 'full' },
-    data: {},
-    spec: [
-      '集成/部署证据门控(仅当 design.md / plan.md 命中以下关键词时触发;命中即阻断完成,直到 verify-result.md 含对应字面证据):',
-      '- 命中启动入口(cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint)→ 部署级:须「真实启动一次本变更触及的入口」,字面命中其一:启动…一次 / 实际…启动 / real startup / docker up / npm start / node server。',
-      '- 命中跨进程/状态机(daemon / backend / session / lease / lifecycle / heartbeat)→ 集成级:须「真实 daemon↔backend 集成(非 mock 单测)」,字面命中其一:端到端 / integration test / e2e test / 真实集成 / runtime evidence;并补 Runtime Evidence 章节 + 日志片段。',
-      '- 单元测试结论(verify 必做,无论风险级):写明测试套件与结果。',
-    ].join('\n'),
-    // 运行时门控按 changeRiskProfile 动态拼详细报错(见 stage-contract.js validateVerifyOutputs);
-    // 此 failMessage 为单行摘要,满足「每规则声明 failMessage」契约 + 概括阻断原因。
-    failMessage: '[integration/deployment-critical] 验证结论为 PASS 但缺少真实集成证据(真实启动本变更触及的入口 / 真实 daemon↔backend 集成 / Runtime Evidence)。需在 verify-result.md 如实补全对应字面证据,或如实改结论 FAIL。',
-    hint: [
-      '① 先看你的 design.md / plan.md 是否提到上述关键词——是就按对应级别补证据。',
-      '② 「真实启动」必须是本变更实际改动的那一类入口(服务入口/CLI 主入口/守护进程),不能拿无关进程的启动凑数。',
-      '③ 风险判级按 design/plan 措辞,若属误判可在 design 中如实缩小范围;但危险链路该有真实启动证据,不建议为绕门控而规避。',
-    ].join(' '),
-  },
-]
 
 // ── plan ──
 // plan.md 存在性(error)。entryPoint 接线 / FR-D id-trace / decisions 阻塞为 custom kind(Batch 3 迁入)
@@ -597,7 +529,6 @@ const SHARED_RULES = [
 const RULES = [
   ...BRAINSTORM_RULES,
   ...SCAN_RULES,
-  ...VERIFY_RULES,
   ...PLAN_RULES,
   ...ARCHIVE_RULES,
   ...CHANGE_CLOSED_RULES,

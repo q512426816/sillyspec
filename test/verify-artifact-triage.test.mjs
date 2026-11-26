@@ -5,7 +5,7 @@
  *      applyArtifactTriageRerun 编排四态（命中+主树复跑过=放行有据 / 复跑仍挂=真失败 /
  *      不命中=原样且不触发复跑 / 主树口径失败命中=只注记不复跑）；
  *   d. shouldReuseLastFailedScan 判定矩阵 + computeQualityScanDedupKey 豁免面敏感性 +
- *      executeVerifyQualityScan E2E（签名未变不重跑；逃生阀/代码面/豁免面三路解封）；
+ *      runArchiveCloseGate E2E（签名未变不重跑；逃生阀/代码面/豁免面三路解封）；
  *   c. runVerifyTestCheck 缺省收窄 E2E（modules 已配未显式 test_strategy → module 子集；
  *      显式 full 与未配 modules 两对照保持全量）。
  * 修复一 b（venv junction 回归钉）在 gate-snapshot-monorepo.test.mjs。
@@ -22,8 +22,8 @@ import {
   loadLastQualityScanRecord,
   shouldReuseLastFailedScan,
   applyArtifactTriageRerun,
-  executeVerifyQualityScan,
-} from '../src/run/verify-quality-scan.js'
+  runArchiveCloseGate,
+} from '../src/run/archive-quality-scan.js'
 
 const tmpRoots = []
 function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
@@ -166,7 +166,7 @@ test('去重键：known_failures 豁免面 / 代码面变化即失配；文档�
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-// ── 修复一 d：executeVerifyQualityScan E2E ──────────────────────────
+// ── 修复一 d：runArchiveCloseGate E2E ──────────────────────────
 
 test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁免面三路解封', async () => {
   const dir = makeRepo()
@@ -183,32 +183,32 @@ test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁�
     delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
     try {
       // 第一次：真跑失败，台账落盘（dedupKey + usedSnapshot 随行）
-      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
+      await assert.rejects(runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
       assert.equal(runCount(), 1, '第一次真跑')
       const rec = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
       assert.equal(rec.testResult.status, 'failed')
       assert.ok(rec.dedupKey, '新记录携带去重键')
       assert.equal(rec.usedSnapshot, false, '主树口径如实记录')
       // 第二次：什么都没变 → 去重（不重跑），报「失败签名未变」
-      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /失败签名未变/)
+      await assert.rejects(runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' }), /失败签名未变/)
       assert.equal(runCount(), 1, '签名未变跳过重跑（三连假红重试根治点）')
       // 第三次：RERUN=1 同签名 → RERUN 签名闸拒绝（r5l 方案 4 新契约：RERUN=1 不再无条件
       // 解封——签名含环境探针，环境真变自动放行；不变则重跑注定同果）
       process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = '1'
-      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /RERUN 签名闸拒绝重跑/)
+      await assert.rejects(runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' }), /RERUN 签名闸拒绝重跑/)
       assert.equal(runCount(), 1, '同签名 RERUN=1 被签名闸拒绝（不真跑）')
       // 第三次b：force 逃生阀 → 无条件真跑（旧 RERUN=1 的裸语义移到 force 档）
       process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = 'force'
-      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
+      await assert.rejects(runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
       assert.equal(runCount(), 2, 'force 逃生阀解封真跑')
       delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
       // 第四次：代码面变化 → 指纹失配 → 真跑
       writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')
-      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
+      await assert.rejects(runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
       assert.equal(runCount(), 3, '代码变化解封真跑')
       // 第五次：豁免面补救 → 键失配 → 重跑且豁免命中通过（假红补救全流程闭环）
       writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'test_strategy: full\ncommands:\n  test: node count-fail.js\n  lint: node exit0.js\nknown_failures:\n  - Boom-counter\n')
-      await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' })
+      await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1' })
       assert.equal(runCount(), 4, '豁免面变化解封重跑且判 passed（不再 throw）')
       assert.equal(loadLastQualityScanRecord({ specBase, changeName: 'c1' }).testResult.status, 'passed')
     } finally {

@@ -12,7 +12,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
 import { reportGateSnapshotFallback } from '../src/run/gate-snapshot.js'
-import { executeVerifyQualityScan, storeQualityScan } from '../src/run/verify-quality-scan.js'
+import { runArchiveCloseGate, storeQualityScan } from '../src/run/archive-quality-scan.js'
 
 function makeFixtureRepo(tag) {
   const dir = mkdtempSync(join(tmpdir(), `snapvis-${tag}-`))
@@ -65,7 +65,7 @@ test('noAI 质量扫描步：快照慢性失败经真实调用点产出 ⚠️ �
     const orig = console.warn
     console.warn = (...a) => { warns.push(a.join(' ')) }
     try {
-      await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+      await runArchiveCloseGate({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     } finally { console.warn = orig }
     assert.ok(warns.some((w) => w.includes('noAI 质量扫描步') && w.includes('gate-snapshot-fallback')), `真实调用点告警可见（实得：${warns.join(' || ').slice(0, 200)}）`)
     const tally = JSON.parse(readFileSync(join(dir, '.sillyspec', '.runtime', 'state', 'friction-tally-c1.json'), 'utf-8'))

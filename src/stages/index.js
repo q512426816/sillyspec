@@ -1,7 +1,6 @@
 import { definition as brainstorm } from './brainstorm.js'
 import { definition as plan } from './plan.js'
 import { definition as execute } from './execute.js'
-import { definition as verify } from './verify.js'
 import { definition as scan } from './scan.js'
 import { definition as quick } from './quick.js'
 import { definition as explore } from './explore.js'
@@ -16,7 +15,6 @@ export const stageRegistry = {
   brainstorm,
   plan,
   execute,
-  verify,
   scan: { ...scan, ...auxiliaryFlag },
   quick: { ...quick, ...auxiliaryFlag },
   explore: { ...explore, ...auxiliaryFlag },

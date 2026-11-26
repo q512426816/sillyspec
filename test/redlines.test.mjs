@@ -9,12 +9,22 @@
  *
  * 风格：自研 assert + tmp fixture（同 quick-test-gate.test.mjs）。
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
 import { parseRedlines, resolveScopeFiles, evaluateRedlines } from '../src/redlines.js'
-import { runRedlineConsistencyProbe } from '../src/verify-probes.js'
+// 探针包装随 verify-probes 退役（2026-11-26-verify-stage-retire）：测试内以保留面等价组装
+function runRedlineConsistencyProbe({ specBase, cwd }) {
+  const yamlPath = join(specBase, 'redlines.yaml')
+  if (!existsSync(yamlPath)) return { applicable: false, entryCount: 0, findings: [], warnings: [] }
+  let parsed
+  try { parsed = parseRedlines(readFileSync(yamlPath, 'utf8')) } catch (e) {
+    return { applicable: false, entryCount: 0, findings: [], warnings: [`redlines.yaml 解析失败（不适用）：${e && e.message ? e.message : e}`] }
+  }
+  const r = evaluateRedlines({ entries: parsed.entries, root: cwd })
+  return { applicable: true, entryCount: r.entryCount, findings: r.findings, warnings: [...(parsed.warnings || []), ...(r.warnings || [])] }
+}
 
 let failed = 0
 let total = 0

@@ -12,7 +12,6 @@ import os from 'os'
 import { execSync, spawn } from 'child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { WorktreeManager } from '../src/worktree.js'
-import { definition as verifyDef } from '../src/stages/verify.js'
 
 const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
 const root = join(__dirname, '..')
@@ -106,63 +105,8 @@ console.log('\n=== ② 归档变更 worktree 不供给改清理（坑 doctor-rep
   execSync(`git worktree remove --force "${wt2}"`, { cwd: d, stdio: 'ignore' })
 }
 
-console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verify-service-process-leak）===\n')
-{
-  // prompt 契约：登记指引 + 硬要求措辞
-  const prompt = verifyDef.steps.map(s => s.prompt || '').join('\n')
-  assertTrue(prompt.includes('verify-services-<change-name>.pids'), 'verify prompt 含 PID 分片登记文件指引（按变更分片，跨会话不误杀）')
-  assertTrue(prompt.includes('自动回收'), 'prompt 明示 CLI 收尾自动回收')
-  // 回收器 e2e：真实起一个长驻子进程，写 PID 文件，走 verify gate 收尾（直接调 gates 逻辑较重——
-  // 用 node 起一个 sleep 进程 + 手动触发 gates.js 的回收段不可单独导出，改为 e2e：完整 verify --done）
-  const d = mkRepo('svc')
-  run(`node "${binCLI}" --dir "${d}" init`)
-  const cn = '2026-08-22-svc-verify'
-  const changeDir = join(d, '.sillyspec', 'changes', cn)
-  fs.mkdirSync(changeDir, { recursive: true })
-  fs.writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: none\n---\n# Plan\n')
-  fs.writeFileSync(join(changeDir, 'design.md'),
-    '# Design\n\n## 背景\nx\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/x.js | 改 |\n')
-  // 起真实子进程（node 长驻）+ 登记 PID
-  const child = spawn(process.execPath, ['-e', 'setInterval(()=>{},60000)'], { detached: false, stdio: 'ignore' })
-  child.unref()
-  const runtimeRoot = join(d, '.sillyspec', '.runtime')
-  fs.mkdirSync(runtimeRoot, { recursive: true })
-  fs.writeFileSync(join(runtimeRoot, `verify-services-${cn}.pids`), `${child.pid}\n`)
-  // 直接调回收逻辑：gates.js 的回收段在 runStageCompletionGates 内联——用最小驱动：种 verify 阶段并 --done
-  const { ProgressManager } = await import(pathToFileURL(join(root, 'src', 'progress.js')).href)
-  const pm = new ProgressManager({ specDir: join(d, '.sillyspec') })
-  pm.init(d)
-  pm.initChange(d, cn)
-  // 2026-09-07-ir-hardening D-001：回填存量 created_at（存量豁免是用例隐含前提；严格档专测于 ir-strict-mode）
-  try { pm._ensureDB(d).getDb().prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?").run(cn) } catch {}
-  const progress = pm.read(d, cn)
-  progress.currentChange = cn
-  progress.currentStage = 'verify'
-  progress.stages.verify = { status: 'in-progress', steps: verifyDef.steps.map((s, i) => ({
-    name: s.name, status: i < verifyDef.steps.length - 1 ? 'completed' : 'pending',
-  })) }
-  pm._write(d, progress, cn)
-  // verify-result.md（完成校验需要：结论须为「## 结论」二级标题 + PASS 字样）
-  fs.writeFileSync(join(changeDir, 'verify-result.md'),
-    '---\nauthor: t\ncreated_at: 2026-08-22 00:00:00\n---\n# 验证结果\n\n## 结论\n\nPASS\n\n## 任务完成度\n\nall\n')
-  // 本地无 commands.test → verify 实测 skip 不阻断
-  const r = run(`node "${binCLI}" --dir "${d}" run verify --done --change ${cn} --output "验证完成"`)
-  assertTrue(r.out.includes('服务进程已回收'), `verify 收尾回收登记进程（输出含回收行，尾：${r.out.slice(-120)}）`)
-  // POSIX 坑：子进程被外部 SIGTERM 后成 zombie，父进程（本测试）在 execSync 阻塞期间没有
-  // 迭代事件循环就不会 reap，kill(pid,0) 对 zombie 也"成功"——假"泄漏"误报。轮询 ≤2s：
-  // 每轮先让事件循环迭代（setTimeout tick 触发 SIGCHLD 处理完成 reap），reap 判据 =
-  // exitCode/signalCode 已置（kill 信号退出时 exitCode=null/signalCode='SIGTERM'）或 kill 0 失败。
-  // Windows 无 zombie 概念，kill 0 立即失败，首轮即过。
-  let alive = true
-  const deadline = Date.now() + 2000
-  while (Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, 25))
-    if (child.exitCode !== null || child.signalCode !== null) { alive = false; break }
-    try { process.kill(child.pid, 0) } catch { alive = false; break }
-  }
-  assertTrue(!alive, '子进程已被 kill（不再泄漏；zombie 需事件循环迭代后 reap）')
-  assertTrue(!fs.existsSync(join(runtimeRoot, `verify-services-${cn}.pids`)), 'PID 分片文件已清（不重复回收）')
-}
+// ③ verify 服务 PID 登记 + 收尾回收：随 verify 阶段退役（2026-11-26-verify-stage-retire / D-008——
+//   登记源头 verify prompt 已删、reapVerifyServices 已删，机制不存在则无从回收，本段退役）。
 
 cleanupAll()
 console.log(`\n${'='.repeat(50)}`)
