@@ -5825,3 +5825,60 @@
   confirmed_at: null
   source_change: 2026-11-25-freeze-face-body-attribution-and-review-base-fallback
   status: active
+
+## FR-core-engine-308 FR-<含下划线域>-NNN 绑定行归档提升不再被拒：FR-tool_gateway-001 形态过 ANCHOR_RE 校验并成功 upsert 进 knowledge/fr/ 机器子块（测试先行红转绿）
+变更：2026-11-26-fr-anchor-underscore-domain-align
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-26-fr-anchor-underscore-domain-align/requirements.md#FR-01
+最近确认：7cf8089430dc3b19b71d32b80561ba51db7f9445
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-01
+  tests: test/fr-anchor-underscore.test.mjs「ANCHOR_RE 与 normalizeRow 接受含下划线域锚，upsertFrBindings 成功写入机器子块」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-fr-anchor-underscore-domain-align
+  status: active
+
+## FR-core-engine-309 对齐后词表两侧同源：FR_SECTION_RE / FR_GLOBAL_ID_RE / frEntryExists 标题扫描 / knowledge-graph FR 节解析均接受含下划线域，知识文件重读不丢带下划线的 FR 节
+变更：2026-11-26-fr-anchor-underscore-domain-align
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-26-fr-anchor-underscore-domain-align/requirements.md#FR-02
+最近确认：7cf8089430dc3b19b71d32b80561ba51db7f9445
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-02
+  tests: test/fr-anchor-underscore.test.mjs「FR_SECTION_RE/FR_GLOBAL_ID_RE/标题扫描/knowledge-graph 解析含下划线域节头，重读不丢节」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-fr-anchor-underscore-domain-align
+  status: active
+
+## FR-core-engine-310 既有不带下划线域与 ql- 形态零回归（既有相关测试全绿）
+变更：2026-11-26-fr-anchor-underscore-domain-align
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-11-26-fr-anchor-underscore-domain-align/requirements.md#FR-03
+最近确认：7cf8089430dc3b19b71d32b80561ba51db7f9445
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-03
+  tests: test/fr-anchor-underscore.test.mjs「既有形态零回归：连字符域/FR-NN/ql/null 照常，既有非法形态仍拒」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-26-fr-anchor-underscore-domain-align
+  status: active

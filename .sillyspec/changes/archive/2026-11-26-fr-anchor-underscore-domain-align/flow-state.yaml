@@ -1,0 +1,57 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  FR 锚与提炼域词表对齐支持下划线域名
+
+
+  测试绑定归档提升的锚校验（test-bindings ANCHOR_RE，字符类 A-Za-z0-9- 不含下划线）拒收 FR-tool_gateway-001 形态，而同轮 FR
+  索引提炼对同编号放行且知识文件已写入带下划线域的节头——两处域名词表不同源（2026-11-25 实证、活跃坑
+  docs/sillyspec/2026-11-25-flow-done-test-binding-underscore-domain-rejected.md）。发号侧域取自模块
+  id（tool_gateway、frontend_components 等目录名形态）原样进编号，含下划线属正常形态非脏数据；连带发现 fr-index FR_SECTION_RE/FR_GLOBAL_ID_RE
+  同样不含下划线，知识文件重读时带下划线节会被静默跳过（幂等/重读面潜在丢节）。修复=提炼与消费两侧域字符类统一补下划线。
+
+
+  成功标准：
+
+  - FR-<含下划线域>-NNN 绑定行归档提升不再被拒：FR-tool_gateway-001 形态过 ANCHOR_RE 校验并成功 upsert 进 knowledge/fr/ 机器子块（测试先行红转绿）
+
+  - 对齐后词表两侧同源：FR_SECTION_RE / FR_GLOBAL_ID_RE / frEntryExists 标题扫描 / knowledge-graph FR 节解析均接受含下划线域，知识文件重读不丢带下划线的 FR 节
+
+  - 既有不带下划线域与 ql- 形态零回归（既有相关测试全绿）
+autopilot: false
+prestage_ack: false
+baseline_commit: 0b2ccda8dfb44d98731667fae01976119b871b07
+updatedAt: '2026-11-26T01:46:52.812Z'
+baseline_sha256: d29699f8f34e4a2da3300811fca3149624539d3248dfff7f8b4e9368154ce473
+spec_approved: true
+spec_approved_at: '2026-11-26T01:30:38.998Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js6)（15.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261126013754\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+accept_dirty_gap:
+  at: '2026-11-26T01:38:07.423Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/run/complete.js
+    - src/stages/plan-postcheck.js
+    - test/taskcard-frontmatter-hardgate.test.mjs
+    - test/autocheck-review-change-stamp.test.mjs
+  by: null
+

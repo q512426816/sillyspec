@@ -133,3 +133,4 @@
 | 2026-11-24 | 2026-11-24-token-commit-change-dir-attribution | 提交归属单一判定（目录规则层 + 作者身份补判）与含作者的日志解析；task tick 提交命令模板带变更名 |
 | 2026-11-25 | 2026-11-25-freeze-face-body-attribution-and-review-base-fallback | 冻结面读提交正文并补 review 基线回退 |
 | 2026-11-26 | 2026-11-26-verify-skip-switch | 验证阶段加跳过开关先止血 |
+| 2026-11-26 | 2026-11-26-fr-anchor-underscore-domain-align | FR 锚与提炼域词表对齐支持下划线域名 |

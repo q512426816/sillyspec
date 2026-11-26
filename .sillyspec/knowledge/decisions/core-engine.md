@@ -866,3 +866,12 @@ supersedes：无（L3 从未落地，无可取代物）
 文件：docs/sillyspec/file-lifecycle.md, src/config-schema.js, src/run/next.js, src/run/stage.js, src/stage-contract.js, src/verify-mode.js, test/verify-skip-mode.test.mjs
 最近确认：9401af1412ef9864ca05e6ddcd87792b98015b84
 理由：只加一个仓级开关，不改阶段壳、不删 26 个消费面。开关键 `verify.mode`（枚举 `full` | `skip`，缺省 `full`），落在 local.yaml 既有 `verify.*` 配置区。 - 读取：新增叶子模块 `src/verify-mode.js`，导出 `readVerifyMode(specBase)` 与纯判定 `shouldSkipVerify({ specBase, stageName })`，复用仓内既有 local.yaml 解析工具，fail-soft：读不到/值非法一律按 `full`。 - 跳过：`src/run/stage.js` 的 `runStage` 在阶段转换校验通过后、渲染步骤前判断——`verify` 阶段且开关为 `skip` 时，打印一行留痕（跳过原因 + 如何恢复），把 verify 全部步骤与阶段标记 completed 后返回，不渲染任何 prompt，不写任何产物。 - 放行：`src/stage-contract.js` 的 `resolveFactsExpected(changeDir)` 在 skip 档直接返回 `false`（由 changeDir 推导 specBase），使 verify/archive 完成门的 factsExpected fail-closed 按存量兼容口径跳过。 - 路由：`src/run/next.js` 的 `inferChange` 在 skip 档且无 `verify-result.md` 时直接提示 `run archive`，避免状态机一直停在「待验证」。
+
+## D-core-engine-068@v1 2026-11-26-fr-anchor-underscore-domain-align——词表对齐（charset 补下划线），不改任何流程结构：FR 全局 id 的域段取自模块 id（`resolveTouchedDomains` 命中的模块目录名
+状态：implemented
+变更：2026-11-26-fr-anchor-underscore-domain-align
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-26-fr-anchor-underscore-domain-align/design.md
+文件：src/fr-index.js, src/knowledge-graph.js, src/test-bindings.js, test/fr-anchor-underscore.test.mjs
+最近确认：7cf8089430dc3b19b71d32b80561ba51db7f9445
+理由：词表对齐（charset 补下划线），不改任何流程结构：FR 全局 id 的域段取自模块 id（`resolveTouchedDomains` 命中的模块目录名，`tool_gateway`/`frontend_components` 等下划线形态属正常产出），发号侧字符串拼接不设字符集，而九处解析/校验正则的域字符类均不含 `_`——补齐即可，单调放宽（任何此前通过的锚仍然通过，仅新增合法形态）。改四处： 1. `src/test-bindings.js`：ANCHOR_RE（FR 分支 `[A-Za-z0-9-]+` → `[A-Za-z0-9_-]+`）、frEntryExists 两处标题扫描（523/550 同步）。 2. `src/fr-index.js`：FR_SECTION_RE（`[a-z0-9-]` → `[a-z0-9_-]`，注释同步「含连字符」→「含连字符/下划线」）、FR_GLOBAL_ID_RE 同步、退役理由令牌扫描（:199）、索引节头扫描（:777）。 3. `src/knowledge-graph.js`：FR 节头解析（:233）与承接引用 supersede 扫描（:241）。 4. 新增 `test/fr-anchor-underscore.test.mjs`：FR-01/02/03 三组先红后绿用例（ANCHOR_RE/normalizeRow/upsertFrBindings、四侧词表解析与重读不丢节、既有形态零回归）。 测试先行：新增用例先实证红（现状 ANCHOR_RE 拒 FR-tool_gateway-001、FR_SECTION_RE 不识别带下划线节头），实现后转绿。

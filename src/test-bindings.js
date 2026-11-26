@@ -24,7 +24,7 @@ import { gitQuiet } from './git-helper.js'
 import { quicklogSidecarPath } from './quicklog.js'
 
 const sha256 = (s) => createHash('sha256').update(String(s || '')).digest('hex')
-export const ANCHOR_RE = /^(FR-[A-Za-z0-9-]+-\d+|FR-\d+|ql-[0-9]{8}-\d{3}-[0-9a-f]{4}|null)$/
+export const ANCHOR_RE = /^(FR-[A-Za-z0-9_-]+-\d+|FR-\d+|ql-[0-9]{8}-\d{3}-[0-9a-f]{4}|null)$/
 const REASONS = ['spec', 'capability', 'regression']
 const STATES = ['candidate', 'active']
 const BINDING_BLOCK_HEAD = '测试绑定：'
@@ -520,7 +520,7 @@ export function resolveTestFileOwners({ specBase, files }) {
     if (existsSync(dir)) {
       for (const f of readdirSync(dir).filter((x) => x.endsWith('.md')).sort()) {
         const text = readFileSync(join(dir, f), 'utf8')
-        for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
+        for (const m of text.matchAll(/^## (FR-[A-Za-z0-9_-]+-\d+) /gm)) {
           for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
             if (r.state !== 'active' || r.status === 'superseded') continue
             // 剥锚后按文件面匹配（tests 条目可携带用例锚——2026-09-26-binding-anchor-fidelity）
@@ -547,7 +547,7 @@ export function queryByChange({ specBase, knowledgeRoot, sourceChange }) {
     const dir = join(knowledgeRoot, 'fr')
     for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
       const text = readFileSync(join(dir, f), 'utf8')
-      for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
+      for (const m of text.matchAll(/^## (FR-[A-Za-z0-9_-]+-\d+) /gm)) {
         for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
           if (r.source_change === sourceChange) out.push(r)
         }

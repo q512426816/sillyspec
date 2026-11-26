@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-fr-anchor-underscore-domain-align",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7cf8089430dc3b19b71d32b80561ba51db7f9445",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "并行变更撞车：2026-11-26-cli-help-flag-fr-domain-charset 声明同三文件相同放宽（spec-only 未落码）",
+      "evidence": "对撞 change 目录只含 design/tasks 等 spec 文件、无代码；本变更实现已在 HEAD 提交（d1c43567）。属流程协调非代码缺陷，需 flow 层裁决对撞变更改道/收编，避免重复实施或相互覆盖。",
+      "location": ".sillyspec/changes/2026-11-26-cli-help-flag-fr-domain-charset/"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "测试头注引用的病根文档路径在本仓不存在（跨仓引用未限定仓名）",
+      "evidence": "test/fr-anchor-underscore.test.mjs:4 引 docs/sillyspec/2026-11-25-flow-done-test-binding-underscore-domain-rejected.md；该文档在本仓工作树与全历史均无（git log --all 空），实存于 multi-agent-platform 仓（已提交 de04b7a72）。纯注释溯源引用悬空，无功能影响。",
+      "location": "test/fr-anchor-underscore.test.mjs:4"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "requirements/design 把 523/550 两处标题扫描误记为「frEntryExists 两处」",
+      "evidence": "test-bindings.js:523/550 实际位于 resolveTestFileOwners 与 queryByChange；frEntryExists(:572) 用字面前缀匹配（l.startsWith(`## ${frId} `)）无字符类、本就不需改。行号正确、函数名错记；代码落点无误。",
+      "location": "src/test-bindings.js:523"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "design「放行面与发号产出面一一对应，无误放空间」轻微夸大",
+      "evidence": "补 _ 后 ANCHOR_RE 亦接受纯下划线域（如 FR-_001、FR-___-001），发号侧（模块目录名拼接）不产出该形态。实际无害：id 为字符串精确比较、无等价折叠、不串台；单调放宽性质不受影响。",
+      "location": "src/test-bindings.js:27"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR_SECTION_RE（[a-z0-9_-]）与 ANCHOR_RE（[A-Za-z0-9_-]）大小写不对称属既有差异，本次未对齐",
+      "evidence": "基线即小写域 vs 大小写域（git diff 0b2ccda8df 前后两侧各自保持原样）；非本变更引入、不在冻结面内。若未来出现大写模块目录名，绑定写入可过而重读解析会丢节——留作后续对齐候选，不阻断。",
+      "location": "src/fr-index.js:148"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——纯词表放宽，解析/校验均为单次输入上的纯函数，无状态与时序面（design 断言与代码一致）",
+    "并发": "ok——写路径未动：upsertFrBindings 仍走 writeAtomicSync（test-bindings.js:364），原子性约定保持；正则放宽不新增并发面",
+    "切换": "ok——幂等面真实受益：基线 FR_SECTION_RE 静默跳过带下划线节、重读丢节，修复后解析完整（base 对照实证 6 红中含重读丢节用例）",
+    "作用域": "ok——`_` 与 `-` 不等价：ANCHOR_RE/字面前缀/合并键均为精确字符串比较，FR-tool_gateway-001 与 FR-tool-gateway-001 互不串写；决策域正则（redomain/knowledge-digest/index.js）本就用 \\w 含 _，无漏改点"
+  },
+  "reviewedAt": "2026-11-26T09:45:55+08:00"
+}

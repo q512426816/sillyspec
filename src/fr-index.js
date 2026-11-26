@@ -142,9 +142,11 @@ export const FR_TITLE_OVERLAP_THRESHOLD = 0.6;
 const FR_DIR = 'fr';
 /** FR 节头：## FR-<域>-NNN 标题（域=[a-z0-9-] **含连字符**——真实模块 id 多为 cli-entry/core-engine 等连字符形态，
  *  R1 审查阻断①实证：漏 - 会让连字符域的发号/幂等/解析/承接全断。第二组为非捕获可选占位，
- *  三组结构与底座 splitKnowledgeSections 的 decisions 正则对齐（m[3]=标题，勿改组序）。 */
-export const FR_SECTION_RE = /^## (FR-[a-z0-9-]+-\d+)(?:@v(\d+))?\s*(.*)$/;
-const FR_GLOBAL_ID_RE = /^FR-[a-z0-9-]+-\d+$/;
+ *  三组结构与底座 splitKnowledgeSections 的 decisions 正则对齐（m[3]=标题，勿改组序）。
+ *  2026-11-26-fr-anchor-underscore-domain-align：域字符类补下划线——发号域取自模块 id
+ *  （tool_gateway 等目录名形态），此前绑定校验/重读解析拒收同编号（两处词表不同源）。 */
+export const FR_SECTION_RE = /^## (FR-[a-z0-9_-]+-\d+)(?:@v(\d+))?\s*(.*)$/;
+export const FR_GLOBAL_ID_RE = /^FR-[a-z0-9_-]+-\d+$/;
 
 /**
  * 解析变更 requirements.md 的 FR 块。
@@ -196,7 +198,7 @@ export function parseChangeRequirements(changeDir) {
         if (!t) continue;
         // 退役理由语法（追平刀②，对标 OpenSpec REMOVED 语义）：`FR-域-NNN（退役理由：一句话）`
         //——理由随承接令牌走，翻链时写进被取代条目。理由内禁逗号（token 切分边界）。
-        const rm = t.match(/^(FR-[A-Za-z0-9-]+)[（(]\s*退役理由[：:]\s*([^）)]+)[）)]$/);
+        const rm = t.match(/^(FR-[A-Za-z0-9_-]+)[（(]\s*退役理由[：:]\s*([^）)]+)[）)]$/);
         if (rm) {
           if (FR_GLOBAL_ID_RE.test(rm[1])) {
             cur.supersedes.push(rm[1]);
@@ -774,7 +776,7 @@ export function backfillScenarioBodies({ knowledgeRoot, archiveRoot }) {
     };
     let ordCounter = new Map(); // changeName → 该来源在当前文件已见条目数
     for (const line of lines) {
-      const hm = line.match(/^##\s+(FR-[A-Za-z0-9-]+)\s+(.*)$/);
+      const hm = line.match(/^##\s+(FR-[A-Za-z0-9_-]+)\s+(.*)$/);
       if (hm) {
         flushSection();
         sectionLines = [line];

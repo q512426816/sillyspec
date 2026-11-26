@@ -230,7 +230,7 @@ function buildKnowledgeGraphFresh(specRoot) {
       let cur = null
       const flush = () => { if (cur) frRows.push(cur); cur = null }
       for (const line of content.split('\n')) {
-        const h = line.match(/^##\s+(FR-[A-Za-z0-9-]+-\d+)\s*(.*)$/)
+        const h = line.match(/^##\s+(FR-[A-Za-z0-9_-]+-\d+)\s*(.*)$/)
         if (h) { flush(); cur = { domain, id: h[1], title: h[2].trim(), change: '', supersedes: [], supersededBy: '', tests: [] }; continue }
         if (!cur) continue
         let m
@@ -238,7 +238,7 @@ function buildKnowledgeGraphFresh(specRoot) {
         else if ((m = line.match(/^superseded_by\s*[：:]\s*(\S+)/))) cur.supersededBy = m[1]
         else if ((m = line.match(/^取代链\s*[：:]\s*(.*)$/))) {
           // 「FR-x-001, FR-x-002 ← 本条目（变更 承接）」——箭头左侧为被取代 id 列表
-          cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9-]+-\d+/g) || [])
+          cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9_-]+-\d+/g) || [])
         } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) {
           // 剥 #锚后缀（tests: test/x.test.mjs#① ——# 起是用例名注记非路径）
           cur.tests.push(posix(m[1].replace(/#.*$/, '')))

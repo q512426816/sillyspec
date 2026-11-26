@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-26-fr-anchor-underscore-domain-align",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-anchor-underscore.test.mjs「ANCHOR_RE 与 normalizeRow 接受含下划线域锚，upsertFrBindings 成功写入机器子块」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-fr-anchor-underscore-domain-align"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-02",
+      "tests": [
+        "test/fr-anchor-underscore.test.mjs「FR_SECTION_RE/FR_GLOBAL_ID_RE/标题扫描/knowledge-graph 解析含下划线域节头，重读不丢节」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-fr-anchor-underscore-domain-align"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-26-fr-anchor-underscore-domain-align:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-anchor-underscore.test.mjs「既有形态零回归：连字符域/FR-NN/ql/null 照常，既有非法形态仍拒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-26-fr-anchor-underscore-domain-align"
+    }
+  ]
+}

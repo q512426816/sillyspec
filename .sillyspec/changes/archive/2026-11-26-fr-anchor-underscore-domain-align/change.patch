@@ -1,0 +1,237 @@
+diff --git a/src/fr-index.js b/src/fr-index.js
+index e7ab0bf5..332cd1e7 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -142,9 +142,11 @@ export const FR_TITLE_OVERLAP_THRESHOLD = 0.6;
+ const FR_DIR = 'fr';
+ /** FR 节头：## FR-<域>-NNN 标题（域=[a-z0-9-] **含连字符**——真实模块 id 多为 cli-entry/core-engine 等连字符形态，
+  *  R1 审查阻断①实证：漏 - 会让连字符域的发号/幂等/解析/承接全断。第二组为非捕获可选占位，
+- *  三组结构与底座 splitKnowledgeSections 的 decisions 正则对齐（m[3]=标题，勿改组序）。 */
+-export const FR_SECTION_RE = /^## (FR-[a-z0-9-]+-\d+)(?:@v(\d+))?\s*(.*)$/;
+-const FR_GLOBAL_ID_RE = /^FR-[a-z0-9-]+-\d+$/;
++ *  三组结构与底座 splitKnowledgeSections 的 decisions 正则对齐（m[3]=标题，勿改组序）。
++ *  2026-11-26-fr-anchor-underscore-domain-align：域字符类补下划线——发号域取自模块 id
++ *  （tool_gateway 等目录名形态），此前绑定校验/重读解析拒收同编号（两处词表不同源）。 */
++export const FR_SECTION_RE = /^## (FR-[a-z0-9_-]+-\d+)(?:@v(\d+))?\s*(.*)$/;
++export const FR_GLOBAL_ID_RE = /^FR-[a-z0-9_-]+-\d+$/;
+ 
+ /**
+  * 解析变更 requirements.md 的 FR 块。
+@@ -196,7 +198,7 @@ export function parseChangeRequirements(changeDir) {
+         if (!t) continue;
+         // 退役理由语法（追平刀②，对标 OpenSpec REMOVED 语义）：`FR-域-NNN（退役理由：一句话）`
+         //——理由随承接令牌走，翻链时写进被取代条目。理由内禁逗号（token 切分边界）。
+-        const rm = t.match(/^(FR-[A-Za-z0-9-]+)[（(]\s*退役理由[：:]\s*([^）)]+)[）)]$/);
++        const rm = t.match(/^(FR-[A-Za-z0-9_-]+)[（(]\s*退役理由[：:]\s*([^）)]+)[）)]$/);
+         if (rm) {
+           if (FR_GLOBAL_ID_RE.test(rm[1])) {
+             cur.supersedes.push(rm[1]);
+@@ -774,7 +776,7 @@ export function backfillScenarioBodies({ knowledgeRoot, archiveRoot }) {
+     };
+     let ordCounter = new Map(); // changeName → 该来源在当前文件已见条目数
+     for (const line of lines) {
+-      const hm = line.match(/^##\s+(FR-[A-Za-z0-9-]+)\s+(.*)$/);
++      const hm = line.match(/^##\s+(FR-[A-Za-z0-9_-]+)\s+(.*)$/);
+       if (hm) {
+         flushSection();
+         sectionLines = [line];
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 4c673d08..33d1299c 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -230,7 +230,7 @@ function buildKnowledgeGraphFresh(specRoot) {
+       let cur = null
+       const flush = () => { if (cur) frRows.push(cur); cur = null }
+       for (const line of content.split('\n')) {
+-        const h = line.match(/^##\s+(FR-[A-Za-z0-9-]+-\d+)\s*(.*)$/)
++        const h = line.match(/^##\s+(FR-[A-Za-z0-9_-]+-\d+)\s*(.*)$/)
+         if (h) { flush(); cur = { domain, id: h[1], title: h[2].trim(), change: '', supersedes: [], supersededBy: '', tests: [] }; continue }
+         if (!cur) continue
+         let m
+@@ -238,7 +238,7 @@ function buildKnowledgeGraphFresh(specRoot) {
+         else if ((m = line.match(/^superseded_by\s*[：:]\s*(\S+)/))) cur.supersededBy = m[1]
+         else if ((m = line.match(/^取代链\s*[：:]\s*(.*)$/))) {
+           // 「FR-x-001, FR-x-002 ← 本条目（变更 承接）」——箭头左侧为被取代 id 列表
+-          cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9-]+-\d+/g) || [])
++          cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9_-]+-\d+/g) || [])
+         } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) {
+           // 剥 #锚后缀（tests: test/x.test.mjs#① ——# 起是用例名注记非路径）
+           cur.tests.push(posix(m[1].replace(/#.*$/, '')))
+diff --git a/src/test-bindings.js b/src/test-bindings.js
+index 3a9672e0..2703d2a6 100644
+--- a/src/test-bindings.js
++++ b/src/test-bindings.js
+@@ -24,7 +24,7 @@ import { gitQuiet } from './git-helper.js'
+ import { quicklogSidecarPath } from './quicklog.js'
+ 
+ const sha256 = (s) => createHash('sha256').update(String(s || '')).digest('hex')
+-export const ANCHOR_RE = /^(FR-[A-Za-z0-9-]+-\d+|FR-\d+|ql-[0-9]{8}-\d{3}-[0-9a-f]{4}|null)$/
++export const ANCHOR_RE = /^(FR-[A-Za-z0-9_-]+-\d+|FR-\d+|ql-[0-9]{8}-\d{3}-[0-9a-f]{4}|null)$/
+ const REASONS = ['spec', 'capability', 'regression']
+ const STATES = ['candidate', 'active']
+ const BINDING_BLOCK_HEAD = '测试绑定：'
+@@ -520,7 +520,7 @@ export function resolveTestFileOwners({ specBase, files }) {
+     if (existsSync(dir)) {
+       for (const f of readdirSync(dir).filter((x) => x.endsWith('.md')).sort()) {
+         const text = readFileSync(join(dir, f), 'utf8')
+-        for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
++        for (const m of text.matchAll(/^## (FR-[A-Za-z0-9_-]+-\d+) /gm)) {
+           for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
+             if (r.state !== 'active' || r.status === 'superseded') continue
+             // 剥锚后按文件面匹配（tests 条目可携带用例锚——2026-09-26-binding-anchor-fidelity）
+@@ -547,7 +547,7 @@ export function queryByChange({ specBase, knowledgeRoot, sourceChange }) {
+     const dir = join(knowledgeRoot, 'fr')
+     for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
+       const text = readFileSync(join(dir, f), 'utf8')
+-      for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
++      for (const m of text.matchAll(/^## (FR-[A-Za-z0-9_-]+-\d+) /gm)) {
+         for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
+           if (r.source_change === sourceChange) out.push(r)
+         }
+diff --git a/test/fr-anchor-underscore.test.mjs b/test/fr-anchor-underscore.test.mjs
+new file mode 100644
+index 00000000..6b2b5121
+--- /dev/null
++++ b/test/fr-anchor-underscore.test.mjs
+@@ -0,0 +1,141 @@
++/**
++ * 2026-11-26-fr-anchor-underscore-domain-align：FR 域词表两侧对齐（补下划线）。
++ *
++ * 病根（docs/sillyspec/2026-11-25-flow-done-test-binding-underscore-domain-rejected.md）：
++ * 发号侧域取自模块 id（tool_gateway 等目录名形态，下划线合法；决策域默认正则同含 _），
++ * 而绑定校验（ANCHOR_RE）与提炼/图解析正则的域字符类均不含 _——FR-tool_gateway-001
++ * 被拒「anchor 非法」（fail-open：归档提升静默失败）、FR_SECTION_RE 重读知识文件时
++ * 静默跳过带下划线节头。本文件按 FR-01/02/03 三组锁定对齐后行为；实现未动时全红。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++import { ANCHOR_RE, normalizeRow, upsertFrBindings, queryByChange, resolveTestFileOwners } from '../src/test-bindings.js'
++import { FR_SECTION_RE } from '../src/fr-index.js'
++import * as frIndex from '../src/fr-index.js'
++import { splitKnowledgeSections } from '../src/decision-distill.js'
++import { buildKnowledgeGraph } from '../src/knowledge-graph.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const UNDERSCORE_ID = 'FR-tool_gateway-001'
++
++function mkKnowledgeFile(root, frId, domainFile = 'tool_gateway') {
++  const knowledgeRoot = join(root, 'knowledge')
++  mkdirSync(join(knowledgeRoot, 'fr'), { recursive: true })
++  writeFileSync(join(knowledgeRoot, 'fr', `${domainFile}.md`), [
++    '# FR 需求索引',
++    '',
++    `## ${frId} 测试域词表行为`,
++    '',
++    '正文行',
++    '',
++  ].join('\n'))
++  return knowledgeRoot
++}
++
++/* ── FR-01：绑定行归档提升接受含下划线域锚 ──────────────────────────── */
++
++test('FR-01: ANCHOR_RE 接受含下划线域锚，normalizeRow 不再拒收', () => {
++  assert.equal(ANCHOR_RE.test(UNDERSCORE_ID), true)
++  assert.equal(ANCHOR_RE.test('FR-frontend_components-012'), true)
++  const row = normalizeRow({
++    anchor: UNDERSCORE_ID,
++    row_id: '2026-11-26-x:task-01:acc-1',
++    tests: ['test/foo.test.mjs'],
++    reason: 'spec',
++    state: 'candidate',
++  })
++  assert.equal(row.anchor, UNDERSCORE_ID)
++})
++
++test('FR-01: upsertFrBindings 以含下划线域锚成功写入知识文件机器子块', () => {
++  const root = mk('fr-anchor-us-')
++  const knowledgeRoot = mkKnowledgeFile(root, UNDERSCORE_ID)
++  const res = upsertFrBindings({
++    knowledgeRoot,
++    frId: UNDERSCORE_ID,
++    rows: [{
++      row_id: '2026-11-26-x:task-01:acc-1',
++      tests: ['test/foo.test.mjs'],
++      reason: 'spec',
++      state: 'candidate',
++      source_change: '2026-11-26-x',
++    }],
++  })
++  assert.equal(res.ok, true)
++  const after = readFileSync(join(knowledgeRoot, 'fr', 'tool_gateway.md'), 'utf8')
++  assert.ok(after.includes('2026-11-26-x:task-01:acc-1'), '绑定行应写入机器子块')
++})
++
++/* ── FR-02：提炼与消费两侧词表同源（重读/扫描/图解析不丢带下划线节） ── */
++
++test('FR-02: FR_SECTION_RE / FR_GLOBAL_ID_RE 接受含下划线域', () => {
++  const m = '## FR-tool_gateway-001 测试域词表行为'.match(FR_SECTION_RE)
++  assert.ok(m, 'FR_SECTION_RE 应命中带下划线域节头')
++  assert.equal(m[1], UNDERSCORE_ID)
++  assert.ok(frIndex.FR_GLOBAL_ID_RE, 'FR_GLOBAL_ID_RE 应导出（词表单源可测）')
++  assert.equal(frIndex.FR_GLOBAL_ID_RE.test(UNDERSCORE_ID), true)
++})
++
++test('FR-02: 知识文件重读不丢带下划线的 FR 节（splitKnowledgeSections 对齐消费口径）', () => {
++  const root = mk('fr-anchor-us-rd-')
++  const knowledgeRoot = mkKnowledgeFile(root, UNDERSCORE_ID)
++  const text = readFileSync(join(knowledgeRoot, 'fr', 'tool_gateway.md'), 'utf8')
++  const { sections } = splitKnowledgeSections(text, { sectionRegex: FR_SECTION_RE, buildId: (n) => n })
++  assert.ok(sections.some((s) => s.number === UNDERSCORE_ID), '带下划线节应被解析（此前静默丢节）')
++})
++
++test('FR-02: queryByChange / resolveTestFileOwners 扫描含下划线域节头', () => {
++  const root = mk('fr-anchor-us-scan-')
++  const knowledgeRoot = mkKnowledgeFile(root, UNDERSCORE_ID)
++  const row = {
++    row_id: '2026-11-26-x:task-02:acc-2',
++    tests: ['test/foo.test.mjs'],
++    reason: 'spec',
++    state: 'active',
++    confirmed_by: 'agent',
++    source_change: '2026-11-26-x',
++  }
++  const up = upsertFrBindings({ knowledgeRoot, frId: UNDERSCORE_ID, rows: [row] })
++  assert.equal(up.ok, true)
++
++  const byChange = queryByChange({ specBase: root, knowledgeRoot, sourceChange: '2026-11-26-x' })
++  assert.ok(byChange.some((r) => r.row_id === '2026-11-26-x:task-02:acc-2'), '按变更查询应命中带下划线域条目下的行')
++
++  const owners = resolveTestFileOwners({ specBase: root, files: ['test/foo.test.mjs'] })
++  const hit = [...(owners.get('test/foo.test.mjs') || [])]
++  assert.ok(hit.some((e) => e.anchor === UNDERSCORE_ID), '文件归属面应命中带下划线域锚')
++})
++
++test('FR-02: buildKnowledgeGraph 解析含下划线域 FR 节', () => {
++  const root = mk('fr-anchor-us-graph-')
++  mkKnowledgeFile(root, UNDERSCORE_ID)
++  const graph = buildKnowledgeGraph(root)
++  assert.ok(JSON.stringify(graph).includes(UNDERSCORE_ID), '图应包含带下划线域的 FR 节点')
++})
++
++/* ── FR-03：既有形态零回归 ──────────────────────────────────────────── */
++
++test('FR-03: 既有合法锚形态照常通过，既有非法形态照常拒收', () => {
++  // 既有合法形态
++  for (const ok of ['FR-auth-001', 'FR-01', 'FR-cli-entry-core-003', 'ql-20260821-001-abcd', 'null']) {
++    assert.equal(ANCHOR_RE.test(ok), true, `应继续接受：${ok}`)
++  }
++  assert.equal(normalizeRow({
++    anchor: 'FR-auth-001',
++    row_id: 'c:t:a',
++    tests: ['test/a.test.mjs'],
++    reason: 'spec',
++    state: 'candidate',
++  }).anchor, 'FR-auth-001')
++  // 既有非法形态（禁 CAP 第四空间等）
++  for (const bad of ['CAP-001', 'FR-tool_gateway', 'FR-001-x', 'random']) {
++    assert.equal(ANCHOR_RE.test(bad), false, `应继续拒绝：${bad}`)
++  }
++})
