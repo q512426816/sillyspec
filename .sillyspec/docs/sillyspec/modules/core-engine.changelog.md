@@ -134,3 +134,4 @@
 | 2026-11-25 | 2026-11-25-freeze-face-body-attribution-and-review-base-fallback | 冻结面读提交正文并补 review 基线回退 |
 | 2026-11-26 | 2026-11-26-verify-skip-switch | 验证阶段加跳过开关先止血 |
 | 2026-11-26 | 2026-11-26-fr-anchor-underscore-domain-align | FR 锚与提炼域词表对齐支持下划线域名 |
+| 2026-11-27 | 2026-11-27-changes-dir-platform-default | 2026-11-27-changes-dir-platform-default |

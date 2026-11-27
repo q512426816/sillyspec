@@ -1634,3 +1634,119 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-11-26-verify-skip-switch
   status: active
+
+## FR-skills-docs-091 doc_tracking 枚举配置与缺省回退
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+依据决策：D-003@v2、D-005@v1
+场景正文：
+- 场景：默认场景 — Given 任一 sillyspec 仓的 local.yaml；When 声明 `changes.doc_tracking` ∈ {platform, never, repo} 或缺省或解析失败；Then 缺省与解析失败一律回退 `platform` 并留痕警告；非法值被 config validate 拦截报错；枚举的行为差异面=收口 epilogue 输出形态
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-01
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-changes-dir-platform-default:flow:测试绑定FR-01
+  tests: test/doc-tracking-config.test.mjs「changes.doc_tracking 枚举校验与缺省/失败回退」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-changes-dir-platform-default
+  status: active
+
+## FR-skills-docs-092 收口 epilogue 与归档链暂存按 doc_tracking 分支
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow done 收口终态输出与归档链执行；When doc_tracking=repo；Then 输出与归档链暂存行为逐字不变（✅ 已落库单行 或 🚨 未落库尾块+幂等 commit 命令，computeArchiveLanding 照跑，changes/
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-02
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-changes-dir-platform-default:flow:测试绑定FR-02
+  tests: test/flow-epilogue-doc-tracking.test.mjs「归档链 changes/ 面暂存短路（:648/:704 不触 git add、knowledge 面照常）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-changes-dir-platform-default
+  status: active
+
+## FR-skills-docs-093 init 条件写 .gitignore
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given sillyspec init 建仓（specDir 内嵌项目）；When 生效 doc_tracking ≠ repo；Then 项目 .gitignore 幂等追加 `.sillyspec/changes/` 行；When = repo 不写该行；local.yaml.example 增
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-03
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-changes-dir-platform-default:flow:测试绑定FR-03
+  tests: test/init-doctor-doc-tracking.test.mjs「init ignoreRules 条件写入（≠repo 幂等写 / repo 不写 / 重入不重复）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-changes-dir-platform-default
+  status: active
+
+## FR-skills-docs-094 doctor 存量迁移指引与残留检测语义
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given doctor 全量扫描；When HEAD 树含 `.sillyspec/changes/` 存量且 doc_tracking 未显式声明；Then 输出 INFO 建议显式声明 `changes.doc_tracking: repo`；显式声明或无存量不触发；detectArchiveCommitResid
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-04
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-changes-dir-platform-default:flow:测试绑定FR-04
+  tests: test/init-doctor-doc-tracking.test.mjs「doctor 存量迁移 INFO 触发条件与残留检测语义回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-changes-dir-platform-default
+  status: active
+
+## FR-skills-docs-095 本仓切换到新默认（吃狗粮）
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 本仓 .gitignore 加 `.sillyspec/changes/` 行、local.yaml 显式 platform；When 新建变更目录或归档
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-05
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-changes-dir-platform-default:flow:测试绑定FR-05
+  tests: test/flow-epilogue-doc-tracking.test.mjs「platform 值收口两段式形态（本仓切换后的实际形态断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-changes-dir-platform-default
+  status: active
+
+## FR-skills-docs-096 文档族措辞同步
+变更：2026-11-27-changes-dir-platform-default
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given CLAUDE.md、AGENTS.md、.claude/skills/（sillyspec-archive/flow/commit 等）、docs/sillys；When 涉及「变更文档随提交入库/归档件提交」的惯例措辞与动作指引；Then 改写为按 doc_tracking 条件执行（repo 值才入库/提交归档件），与 CLI 实际行为一致
+全文：.sillyspec/changes/archive/2026-11-27-changes-dir-platform-default/requirements.md#FR-06
+最近确认：f9086f027c622b68172f5961ce3a5f6930412512

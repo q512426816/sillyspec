@@ -47,3 +47,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-11-23 | 2026-11-22-include-param-primitives | prompt include 参数化与首批纪律原语抽取 |
 | 2026-11-23 | 2026-11-23-worktree-fallback-consent | 主仓 worktree 降级改显式同意 |
 | 2026-11-26 | 2026-11-26-verify-skip-switch | 验证阶段加跳过开关先止血 |
+| 2026-11-27 | 2026-11-27-changes-dir-platform-default | 2026-11-27-changes-dir-platform-default |
