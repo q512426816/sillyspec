@@ -38,6 +38,7 @@ import { gitQuiet } from '../git-helper.js'
 import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles, QUICK_SID_RE } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
+import { readDocTrackingFromRepo } from '../config-schema.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate, buildGateAuditNote } from './quick-audit.js'
 import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes, countQuicklogEntries, collectGuardReservedQuicklogIds } from '../quicklog.js'
@@ -640,18 +641,27 @@ export function renderStageSourceSideMovesMessage(r) {
  * 独立函数（非内联）+ export 供 test 直接构造双变更目录场景驱动（不依赖 process.exit 的
  * archiveChangeDirectory 主链）。
  *
- * @param {{ cwd: string, specBase: string, destDir: string, destName: string }} opts
+ * @param {{ cwd: string, specBase: string, destDir: string, destName: string, extraDocs?: string[]|null, docTracking?: string }} opts
+ *   docTracking（2026-11-27-changes-dir-platform-default FR-02）：'platform'|'never' 时 changes/
+ *   侧 add 短路（.gitignore 在位时 git add ignored 路径报 fatal——每轮收口必现告警面）；
+ *   knowledge/extraDocs/docs 面与枚举解耦照常。未传='repo'——旧调用方零回归（新调用方显式传）。
  * @returns {{ docsAdded: string[]|null, fallbackDocs: boolean }} docsAdded=null 表示走了目录级回退
  */
-export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs = null }) {
-  // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）
-  safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
+export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs = null, docTracking = 'repo' }) {
+  // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）；
+  // doc_tracking 非 repo 时短路（D-004@v2——变更文档不入库，归档面不进暂存区）。
+  if (docTracking !== 'platform' && docTracking !== 'never') {
+    safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
+  }
 
   // knowledge 侧（cli-protocol-trust / R17 臂3 实证 distill 产物 untracked 漏提交）：本归档链
   // distill 刚写的 fr 域文件/decisions/INDEX 必在 status 面——按 status 窄化逐文件精确 add
   // （非目录级：避免扫入他侧并行会话的同目录 WIP；追加型共享面整文件提交与既有惯例一致）。
   try {
-    const _knSt = gitQuiet(cwd, ['status', '--porcelain'])
+    // -uall（2026-11-27-changes-dir-platform-default FR-02）：untracked 逐文件列出——缺省聚合形态
+    // 在 .sillyspec/ 整体 untracked 时输出顶层 `?? .sillyspec/` 一行，knowledge 前缀过滤零命中
+    // （platform 值下 changes 面不 add 恒现此形态，knowledge 面出口失效）。
+    const _knSt = gitQuiet(cwd, ['status', '--porcelain', '-uall'])
     if (_knSt) {
       const knFiles = String(_knSt).split('\n').map((l) => {
         const p = l.slice(3).trim().replace(/^"|"$/g, '')
@@ -900,6 +910,23 @@ export function renderArchiveLandingEpilogue({ landed, commitCommand }) {
   return lines.join('\n')
 }
 
+// ── 2026-11-27-changes-dir-platform-default FR-02：doc_tracking 两段式 epilogue ──────────
+// platform/never 值下替换 renderArchiveLandingEpilogue 的输出：①changes/ 面单行形态说明+回退
+// 指引（内联「需入库请设 repo」——cli-copy-selfsufficient 探针：报错一次给全）；②knowledge/docs
+// 面若暂存区存在本变更蒸馏面则保留落库指引（该面出口不因枚举消失——Design Grill 首轮 fail
+// 修复「暂存面无限累积无出口」）。repo 值不经本函数（现行为逐字不变）。纯函数零 git 依赖。
+export function renderDocTrackingEpilogue({ docTracking, changeName, stagedKnowledgeCells }) {
+  const cells = (Array.isArray(stagedKnowledgeCells) ? stagedKnowledgeCells : []).map((p) => String(p).replace(/\\/g, '/'))
+  const lines = [
+    `📁 变更文档不入库（changes.doc_tracking=${docTracking}）：spec 以平台同步为准（未接平台时仅存本机）；需入库请设 changes.doc_tracking: repo`,
+  ]
+  if (cells.length > 0) {
+    lines.push('📚 knowledge/docs 蒸馏面已入暂存（与变更文档跟踪策略解耦）——落库指引（幂等；pathspec 限本变更蒸馏面）：')
+    lines.push(`   git commit -m "chore(archive): ${changeName} 归档蒸馏留档" -- ${cells.join(' ')}`)
+  }
+  return lines.join('\n')
+}
+
 export function archiveLandedInHeadTree({ headTreeFiles, changeName }) {
   const prefix = '.sillyspec/changes/archive/'
   const name = String(changeName || '')
@@ -936,15 +963,25 @@ export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, he
   const changesPrefix = '.sillyspec/changes/'
   // 与旧实现同源的单元格收集（--name-status：R 行 src<TAB>dst 两格，A/M 单格）
   const mineCells = new Set()
+  // 暂存删除 src 侧（坑 2026-11-26-flow-done-archive-delete-pathspec-uncommittable）：R/D 行的
+  // 源路径 = 已暂存删除——部分 git 环境对「index 已无此路径」的 pathspec 提交报 did not match
+  // （本仓 2.5x 实测可过、坑环境不可过，版本/环境行为分裂）。单独收集供提示层给删除侧专用
+  // 指引（不进 pathspecs——能过的环境 src 侧照旧在列，本集合只是披露面）。
+  const stagedDeletionSrcSet = new Set()
   for (const line of String(stagedNameStatus || '').split('\n')) {
     if (!line.trim()) continue
-    for (const cell of line.split('\t').slice(1)) {
+    const cells = line.split('\t')
+    const status = (cells[0] || '').trim()
+    for (const cell of cells.slice(1)) {
       const p = cell.trim().replace(/^"|"$/g, '')
       if (!p) continue
       if (p.startsWith(changesPrefix + changeName + '/')
         || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
         || p.startsWith('.sillyspec/knowledge/')
         || p.startsWith('.sillyspec/docs/')) mineCells.add(p)
+      if ((status.startsWith('R') || status.startsWith('D')) && cell === cells[1]) {
+        stagedDeletionSrcSet.add(p) // R/D 行首格（cells[1]）即源路径
+      }
     }
   }
   const headSet = new Set(String(headTreeFiles || '').split('\n').map((s) => s.trim()).filter(Boolean))
@@ -964,7 +1001,8 @@ export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, he
     }
   }
   const pathspecs = [...(archiveHit ? [`${changesPrefix}archive/${changeName}/`] : []), ...srcPaths, ...sharedPaths]
-  return { pathspecs, dropped }
+  const stagedDeletionSrc = [...stagedDeletionSrcSet].filter((p) => p.startsWith(changesPrefix + changeName + '/'))
+  return { pathspecs, dropped, stagedDeletionSrc }
 }
 
 /**
@@ -1137,8 +1175,12 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   // done 路径从未生效（归档目录/knowledge/docs 自动暂存全失效，靠 agent 手工兜底——实测
   // porcelain 实证）。basename(destDir) 与调用方 destDir 恒一致（flow.js 与 run archive 同构）。
   const destName = basename(destDir)
+  // FR-02（2026-11-27-changes-dir-platform-default / D-004@v2）：changes/ 面暂存按
+  // changes.doc_tracking 分支——platform/never（不入库）下归档面短路（.gitignore 在位时
+  // add ignored 路径报 fatal=每轮收口告警面）；knowledge/docs 面与枚举解耦照常。
+  const docTracking = readDocTrackingFromRepo(cwd).value
   try {
-    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs })
+    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs, docTracking })
   } catch (e) {
     console.warn(`⚠️ 归档窄化 git add 异常（不阻断归档，交付面靠下方探测块兜底/agent git status 核对）: ${(e && e.message) || e}`)
   }
@@ -1151,7 +1193,9 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   //   他者：已暂存的 rename（`R  changes/<他人>/... -> changes/archive/<他人>/...`）→ 只 warn
   //         提示归属（不 stage 不动——别人的归别人的）。
   try {
-    const raw = gitQuiet(cwd, ['status', '--porcelain'], { trim: false, timeout: 30000 })
+    // -uall 同 knowledge 段（2026-11-27-changes-dir-platform-default）：untracked 逐文件化——
+    // 非 repo 值下 changes 面不 add，.sillyspec/ 顶层聚合会让 knowledgePending 漏检。
+    const raw = gitQuiet(cwd, ['status', '--porcelain', '-uall'], { trim: false, timeout: 30000 })
     if (raw && raw.trim()) {
       const changesPrefix = '.sillyspec/changes/'
       const minePaths = []
@@ -1191,7 +1235,7 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
           knowledgePending.push(dst)
         }
       }
-      if (minePaths.length > 0) {
+      if (minePaths.length > 0 && docTracking === 'repo') {
         // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
         // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
         // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
@@ -1202,7 +1246,8 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
         const msg = renderStageSourceSideMovesMessage(staged)
         if (msg) (staged.ok ? console.log : console.warn)(msg)
       }
-      if (untrackedArchiveHit) {
+      if (untrackedArchiveHit && docTracking === 'repo') {
+        // 非 repo（不入库）时同样短路——untracked 的 archive/<me>/ 面是设计态，不补暂存不打提示
         // 文件级枚举补暂存（守 AGENTS.md 规则 11 不用目录级 add；实际仅窄化 add 降级时可达）
         try {
           const archFiles = []

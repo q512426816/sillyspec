@@ -36,6 +36,7 @@ import { scopeTelemetryRefs } from './knowledge-graph.js'
 // 防「改一处漏一处」的口径漂移。
 import { isRecallRelevant, isRecallRelevantScored } from './knowledge-match.js'
 import { writeAtomicSync } from './fs-atomic.js'
+import { readDocTrackingFromRepo } from './config-schema.js'
 // 变更身份行单一来源（2026-11-15-change-key-visibility）：新建横幅与 adopt 收编两处接线
 import { renderChangeIdentityLine } from './change-identity.js'
 import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
@@ -1954,7 +1955,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 变更根前缀（2026-11-24-token-commit-change-dir-attribution）：无名 task 提交按触及的变更
         // 目录归属，目录口径取自 specBase（不写死 .sillyspec）。
         const { changesDirPrefixFor } = await import('./foreign-declared.js')
-        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase), ownAuthors: ownAuthorSet })
+        // 声明面信号入参（2026-11-25-flow-patch-freeze-before-commit 族末路兜底）：design 文件
+        // 变更清单（剥 NEW: 前缀）——归属四信号全失效形态下按声明文件在冻结后窗口 diff 的
+        // 事实变动触发重冻结（detectPatchDrift 内判定，仅在零信号命中时介入）。
+        let _declaredPaths = []
+        try {
+          const { parseFileChangeListDetailed } = await import('./change-list.js')
+          _declaredPaths = parseFileChangeListDetailed(join(changeDir, 'design.md'))
+            .map((e) => String(e.path).replace(/^NEW:/, ''))
+            .filter((p) => p && !p.startsWith('.sillyspec/'))
+        } catch { /* 清单缺失/不可解析 → 无声明面信号（走既有归属语义） */ }
+        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head, changesDirPrefix: changesDirPrefixFor(cwd, specBase), ownAuthors: ownAuthorSet, declaredPaths: _declaredPaths })
         if (drift.drifted) {
           drifted = true
           console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
@@ -3069,9 +3080,25 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 「✅ flow done 完成」假成功，归档件滞留共享暂存区（并行 index 手术可丢，同日三变更实证）。
   // 此处独立重算（不依赖归档子步中间变量——断点续跑轮归档子步 skip 同样生效）；
   // exit code 保持 0（未落库属设计内人工交接，不与收口失败的 exit≠0 语义混用）。
+  // 2026-11-27-changes-dir-platform-default FR-02：doc_tracking 非 repo（不入库）时走两段式
+  // ——changes/ 面不跑 git 重算（computeArchiveLanding 短路，省 ls-tree/diff 子进程）；knowledge/docs
+  // 面有暂存则保留落库指引（该面出口不因枚举消失——D-004@v2）。repo 值现行为逐字不变。
   try {
-    const { computeArchiveLanding, renderArchiveLandingEpilogue } = await import('./run/complete-handlers.js')
-    console.log(renderArchiveLandingEpilogue(computeArchiveLanding({ cwd, changeName: change })))
+    const { value: docTracking } = readDocTrackingFromRepo(cwd)
+    const { computeArchiveLanding, renderArchiveLandingEpilogue, renderDocTrackingEpilogue } = await import('./run/complete-handlers.js')
+    if (docTracking !== 'repo') {
+      const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
+      const cells = String(stagedRaw || '').split('\n').flatMap((l) => {
+        if (!l.trim()) return []
+        return l.split('\t').slice(1).map((c) => c.trim().replace(/^"|"$/g, ''))
+      }).filter((p) => {
+        const posix = p.replace(/\\/g, '/')
+        return posix.startsWith('.sillyspec/knowledge/') || posix.startsWith('.sillyspec/docs/')
+      })
+      console.log(renderDocTrackingEpilogue({ docTracking, changeName: change, stagedKnowledgeCells: cells }))
+    } else {
+      console.log(renderArchiveLandingEpilogue(computeArchiveLanding({ cwd, changeName: change })))
+    }
   } catch { /* 尾块 best-effort，不阻断协议面 */ }
   return { change, substeps: doneList }
 }

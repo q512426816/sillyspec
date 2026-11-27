@@ -6,7 +6,7 @@ description: 用于归档已验证完成的变更。适合用户说"归档、arc
 ## 何时使用
 
 - 用户说"归档、archive、收尾这个变更"
-- execute 已完成（四阶段：brainstorm → plan → execute → archive；verify 已退役，收口实测随归档首步执行），把变更包归档沉淀
+- verify 已通过，把变更包归档沉淀
 - 5 步：任务完成度检查 → 模块影响分析 → 同步模块文档 → 确认归档 → 更新路线图
 
 > 🔧 模块影响分析步：先跑 `sillyspec module-impact --change <变更名>` 生成 module-impact.md 骨架——文件×模块归属按 `_module-map.yaml` paths 前缀匹配预填 + 未匹配文件清单，你只需逐行填「影响类型」与 review 标记（以 git diff 为准，真实 > 声明）；已存在不覆盖。
@@ -71,10 +71,12 @@ sillyspec run archive --continue --answer "确认写入"
 ## 阶段流转
 
 ```
-execute → archive（含收口实测门）→ git commit
+execute → archive → git commit（仅 doc_tracking=repo）
 ```
 
-archive 完成后，运行 `/sillyspec:commit` 提交归档结果（`git add .sillyspec/changes/`）。
+archive 完成后，按 `.sillyspec/local.yaml` 的 `changes.doc_tracking` 决定归档件提交动作：
+- `repo`（显式声明入库）：运行 `/sillyspec:commit` 提交归档结果（`git add .sillyspec/changes/`）
+- `platform`（缺省，平台管）/`never`（单机自担）：变更文档不入库——收口输出为单行说明+knowledge/docs 蒸馏面落库指引（该面有暂存时才出现），无需提交归档件；需恢复入库行为改 `changes.doc_tracking: repo`
 
 ## 铁律
 

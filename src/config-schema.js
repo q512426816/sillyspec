@@ -20,6 +20,8 @@
  * - declared    代码/JSDoc/prompt 声明过，但无 reader 真读 local.yaml（或调用方未传），配了不生效。
  *               诚实标出，避免 agent 白配 + 暴露待接线债。
  */
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 /**
  * @typedef {Object} SchemaKey
@@ -88,6 +90,14 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'metrics_routes.<name>.paths', type: 'array', optional: true, status: 'live', readers: ['extractMetricsRoutes (src/verify-postcheck.js)'], desc: 'gate 的路径前缀集合（仓根相对）——段全等匹配：frontend/ 不命中 frontend-v2/；引号数组 `["a/", "b/"]` 或逗分裸串均可。', example: '["frontend/", "packages/web/"]' },
         { path: 'metrics_routes.<name>.command', type: 'string', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 的指标门命令——gate 命中（变更文件面 ∩ paths 非空）才执行，非零退出=门红；gate 子进程注入 SILLYSPEC_CHANGE_FILES=该 gate 命中子集（gate 内工具可增量扫）。', example: 'npx --prefix frontend eslint . --max-warnings 0' },
         { path: 'metrics_routes.<name>.timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 级超时秒数——优先级 本键 > 调用侧快照帽 > commands.metrics_timeout_sec > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180。', example: '300' },
+      ],
+    },
+    {
+      id: 'changes',
+      title: '变更文档 git 跟踪策略',
+      note: '【2026-11-27-changes-dir-platform-default】变更文档默认不入库（缺省 platform——平台管/单机自担）；想随 git 入库的仓显式 repo。行为差异面=收口 epilogue 输出形态 + 归档链 changes/ 面暂存（knowledge/docs 面与枚举解耦）。变更目录不在项目工作树（外部 specDir）时差异仅剩 epilogue 形态。',
+      keys: [
+        { path: 'changes.doc_tracking', type: 'enum', values: ['platform', 'never', 'repo'], optional: true, status: 'live', readers: ['resolveDocTracking (src/config-schema.js)'], desc: '变更文档 git 跟踪策略：platform（缺省——变更文档权威在平台，不入库；未接平台时仅存本机）| never（不入库，单机自担）| repo（随 git 跟踪、随提交入库——存量入库仓升级后显式声明此值保持原行为）。缺省/解析失败回退 platform 并留痕；非法值 config validate 拦截。init 按生效值≠repo 幂等写 .gitignore 忽略行。', example: 'repo' },
       ],
     },
     {
@@ -459,6 +469,10 @@ commands:
 #     timeout_sec: 300         # gate 级超时（缺省 180）；gate 子进程注入 SILLYSPEC_CHANGE_FILES=命中子集
   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
 
+# ── 变更文档 git 跟踪策略（缺省 platform=不入库；想随 git 入库的仓显式 repo）──
+# changes:
+#   doc_tracking: repo        # platform（缺省，平台管/单机自担）| never（不入库单机自担）| repo（随 git 入库）
+
 # ── 影子存档（task tick 快照；缺省开启零配置，仅在显式调优时写）──
 # checkpoint:
 #   enabled: true             # 影子存档开关（false 关闭，tick 照常）
@@ -679,4 +693,43 @@ docs-check:
 #     - prefixes: [src/my-daemon/]
 #       tier: S3
 `;
+}
+
+// ── 2026-11-27-changes-dir-platform-default FR-01：changes.doc_tracking 读取（D-004@v2）──
+// 形态对齐 readCheckpointConfig（src/checkpoint.js）先例：轻量逐行解析不依赖 yaml 库；
+// fail-soft——缺省/解析失败一律回退 platform（不入库语义），invalid 标志供调用方留痕警告。
+// 非法值不算 explicit（doctor「存量+未显式声明」迁移 INFO 不被非法值误导）。
+export const DOC_TRACKING_VALUES = ['platform', 'never', 'repo']
+export const DOC_TRACKING_DEFAULT = 'platform'
+
+export function resolveDocTracking(yamlText) {
+  const fallback = { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: false }
+  if (typeof yamlText !== 'string' || !yamlText.trim()) return fallback
+  let inBlock = false
+  let raw
+  for (const rawLine of yamlText.split(/\r?\n/)) {
+    const line = rawLine.replace(/\t/g, '  ')
+    if (/^changes:\s*(#.*)?$/.test(line)) { inBlock = true; continue }
+    if (!inBlock) continue
+    if (/^\S/.test(line)) break // 出块：下一个顶层键
+    const m = line.match(/^\s+([\w.-]+):\s*(.*?)\s*(#.*)?$/)
+    if (m && m[1] === 'doc_tracking' && m[2] !== '') { raw = m[2]; break }
+  }
+  if (raw === undefined) return fallback
+  const v = String(raw).trim().toLowerCase()
+  if (!DOC_TRACKING_VALUES.includes(v)) return { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: true }
+  return { value: v, explicit: true, invalid: false }
+}
+
+/** FR-01：从仓读 doc_tracking（readCheckpointConfig 同款形态）——文件缺失=缺省，非法值留痕警告。 */
+export function readDocTrackingFromRepo(repoRoot) {
+  try {
+    const p = join(repoRoot, '.sillyspec', 'local.yaml')
+    if (!existsSync(p)) return { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: false }
+    const r = resolveDocTracking(readFileSync(p, 'utf8'))
+    if (r.invalid) console.warn(`⚠️ changes.doc_tracking 值非法（允许 ${DOC_TRACKING_VALUES.join('/')}）——已回退缺省 ${DOC_TRACKING_DEFAULT}（不入库）`)
+    return r
+  } catch {
+    return { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: false }
+  }
 }

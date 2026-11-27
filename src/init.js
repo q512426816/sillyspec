@@ -5,6 +5,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 import { getVersion } from './version.js';
+import { readDocTrackingFromRepo } from './config-schema.js';
 import { injectCommandCards } from './command-cards.js';
 import { gitQuiet } from './git-helper.js';
 import { renderExample } from './config-schema.js';
@@ -272,6 +273,23 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
+/**
+ * FR-03（2026-11-27-changes-dir-platform-default）：项目 .gitignore 规则集。
+ * doc_tracking≠repo（platform 缺省/never）追加 `.sillyspec/changes/`——新变更目录不入库；
+ * repo 值不追加（写行会反向拦截用户想入库的变更文档）。既有规则与枚举无关恒在。
+ * 纯函数导出供测试。
+ * @param {string} docTracking 'platform'|'never'|'repo'
+ * @returns {string[]}
+ */
+export function buildSillyspecIgnoreRules(docTracking) {
+  const rules = [
+    '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/',
+    '.sillyspec-platform.json', '.sillyspec-platform-managed', '.sillyspec-platform-cleaned',
+  ];
+  if (docTracking !== 'repo') rules.push('.sillyspec/changes/');
+  return rules;
+}
+
 async function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
@@ -404,10 +422,10 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
     const gitignorePath = join(projectDir, '.gitignore');
     // 平台模式项目根落盘物（指针/声明/cleaned 标记）为本地运行时状态，不入库。
     // 注意平台模式（外部 specDir）不进此分支——那两个文件照样不提交，由用户项目自己 ignore。
-    const ignoreRules = [
-      '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/',
-      '.sillyspec-platform.json', '.sillyspec-platform-managed', '.sillyspec-platform-cleaned',
-    ];
+    // FR-03（2026-11-27-changes-dir-platform-default）：changes/ 忽略行按 changes.doc_tracking
+    // 分支——生效值≠repo（platform 缺省/never）追加；repo（用户想入库）不写该行（写行反向拦截）。
+    const docTracking = readDocTrackingFromRepo(projectDir).value;
+    const ignoreRules = buildSillyspecIgnoreRules(docTracking);
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf8');
       let updated = content.trimEnd();

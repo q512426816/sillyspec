@@ -31,6 +31,7 @@ import { createHash } from 'crypto';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join, relative, resolve, dirname } from 'path';
 import { gitQuiet } from './git-helper.js'
+import { readDocTrackingFromRepo, DOC_TRACKING_DEFAULT } from './config-schema.js'
 import jsYaml from 'js-yaml';
 import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
@@ -975,6 +976,40 @@ export function detectArchiveCommitResidue(cwd) {
   }
 }
 
+// ── 2026-11-27-changes-dir-platform-default FR-04：doc_tracking 迁移指引（advisory）─────────
+// 存量入库仓（HEAD 树含 .sillyspec/changes/）升级后 doc_tracking 缺省=platform（不入库）——
+// epilogue 形态翻转、归档件不再自动暂存。依赖「🚨+commit 命令」做归档提交的存量仓需要显式
+// 声明 repo 才保持原行为——本检查只读提示该迁移点（R-01 缓解通道），不阻断。
+export function detectDocTrackingMigration(cwd) {
+  const base = { name: 'doc_tracking_migration', label: '变更文档跟踪策略迁移指引', safe_actions: [] }
+  try {
+    const insideRepo = String(gitQuiet(cwd, ['rev-parse', '--is-inside-work-tree']) || '').trim()
+    if (insideRepo !== 'true') {
+      return { ...base, findings: ['非 git 仓（或 git 不可用）——skipped'], pass: true, severity: null, skipped: true }
+    }
+    const cfg = readDocTrackingFromRepo(cwd)
+    if (cfg.explicit) {
+      return { ...base, findings: [`已显式声明 changes.doc_tracking=${cfg.value}（行为按声明生效）`], pass: true, severity: CHECK_SEVERITY.PASSED }
+    }
+    const headTree = String(gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']) || '')
+    const hasLegacy = headTree.split('\n').some((l) => l.trim().replace(/\\/g, '/').startsWith('.sillyspec/changes/'))
+    if (!hasLegacy) {
+      return { ...base, findings: ['HEAD 树无 .sillyspec/changes/ 存量——新默认（platform 不入库）即正确形态'], pass: true, severity: CHECK_SEVERITY.PASSED }
+    }
+    return {
+      ...base,
+      findings: [
+        `HEAD 树含 .sillyspec/changes/ 存量（${cfg.value === DOC_TRACKING_DEFAULT ? '缺省' : `当前生效 ${cfg.value}`}）且 changes.doc_tracking 未显式声明——缺省 platform=变更文档不入库（收口不再提示归档提交命令、归档件不自动暂存）。若想保持「文档随提交入库」原行为，请在 .sillyspec/local.yaml 显式声明 changes.doc_tracking: repo`,
+      ],
+      pass: true,
+      severity: CHECK_SEVERITY.PASSED,
+      safe_actions: [{ action: `echo 'changes:\n  doc_tracking: repo' >> .sillyspec/local.yaml  # 存量入库仓保持原行为`, risk: 'low' }],
+    }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
 export function detectWorktreeHealth(cwd) {
   const base = { name: 'worktree_health', label: 'worktree 隔离健康', safe_actions: [] }
   try {
@@ -1850,7 +1885,9 @@ export async function runDoctorDiagnostics({ cwd }) {
   const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
   // 2026-11-09-archive-landing-visibility FR-02：归档提交残留（只读 WARNING）
   const archiveCommitResidue = detectArchiveCommitResidue(cwd)
-  const dimensions = [multiDb, pointerHealth, changesSplit, retiredVerify, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue];
+  // 2026-11-27-changes-dir-platform-default FR-04：存量仓 doc_tracking 迁移指引（advisory）
+  const docTrackingMigration = detectDocTrackingMigration(cwd)
+  const dimensions = [multiDb, pointerHealth, changesSplit, retiredVerify, changeDb, executeMismatch, docBloat, injectionBudget, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity, archiveCommitResidue, docTrackingMigration];
 
   return {
     dimensions,
