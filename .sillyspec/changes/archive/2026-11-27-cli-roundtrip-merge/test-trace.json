@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-27-cli-roundtrip-merge",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-27-cli-roundtrip-merge:flow:测试绑定FR-01",
+      "tests": [
+        "test/cli-roundtrip-merge.test.mjs「--done 尾接段在场 + 幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-27-cli-roundtrip-merge"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-27-cli-roundtrip-merge:flow:测试绑定FR-02",
+      "tests": [
+        "test/cli-roundtrip-merge.test.mjs「execute prompt 含引导段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-27-cli-roundtrip-merge"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-27-cli-roundtrip-merge",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "c74c2fee8dcb641170ebd30f35398a36a75c9b56",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "测试仅整文件源码正则：未覆盖 autoMeta 排除与运行时尾接，且锚点不唯一",
+      "evidence": "三条断言均为 readFileSync+assert.match 的整文件正则（test/cli-roundtrip-merge.test.mjs:20-22/:27-28/:33-34）。① 未断言 `if (!autoMeta)` 守卫（src/run/prompt.js:2169）：删掉守卫后 auto 模式会冒出该引导句而测试仍全绿——相邻的 `（--output 可省略…）` 已有同款 auto 排除的行为断言先例可照抄（test/output-synthesis-and-gate-precheck.test.mjs:66-67 的 captureOutputStep 缝直接可用）。② /await outputStep(stageName, nextPendingIdx/ 在 complete.js 命中 3 处（:1021/:2314/:2372），并不专门锁 printNext 尾接调用；`if (printNext) {` 虽唯一，但源码正则对无害重构（改名/拆 helper）会假红。③ 实测（seedStage + completeStep）可直接断言行为：正常 --done 的 stdout 含下一步全 prompt + 本引导句，autoMeta 传对象时两者皆无——测试未采用该行为断言。requirements.md:29 的测试绑定「--done 尾接段在场 + 幂等」因此未真正兑现。",
+      "location": "test/cli-roundtrip-merge.test.mjs:18"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "「只有阶段切换才需要新调用」过度绝对：同阶段内存在需新调用的路径",
+      "evidence": "src/run/prompt.js:2170「只有阶段切换（run <下一阶段>）才需要新调用」在正常单步推进成立（complete.js:1020-1021 实测 --done 尾接下一步 prompt），但同阶段内存在反例：① execute Wave 边界 advisory 在同一 stdout 末尾明确要求新会话执行 `sillyspec run execute --change <名>`（complete.js:1041-1044）；② reopen stale 无 --confirm 时 --done 早退不尾接，并给出 `--done --confirm` / `sillyspec run <stage>` 两条新调用出路（complete.js:776）；③ burst 模式（local.yaml stage.burst，缺省 off）printNext 恒 false（complete.js:1345），逐轮不尾接。上述路径输出均自带显式下一步命令（「照它执行即可」兜底），实际误导风险低；建议文案限定「正常推进/同会话」范围，避免同屏指令面相矛盾。",
+      "location": "src/run/prompt.js:2170"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "design.md 文件变更清单/接口定义仍描述已取消的 complete.js 改动",
+      "evidence": "本提交已按 D-004 把总体方案改为「机制已在，仅 prompt 引导」，但 design.md:60 文件变更清单仍列「修改 src/run/complete.js（~15 行）」，frontmatter scale 注释（:5）仍写「触及 complete.js + stages/execute.js」，:65 接口定义称 completeStep「新增内部行为：完成时尾接渲染下一步」——均与 decisions.md D-004「complete.js 零改动」及 change.patch 实际 3 文件（prompt.js/execute.js/test）矛盾，易误导后续读者以为 complete.js 有改动。",
+      "location": ".sillyspec/changes/2026-11-27-cli-roundtrip-merge/design.md:60"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-27T08:25:11.0784301+08:00"
+}

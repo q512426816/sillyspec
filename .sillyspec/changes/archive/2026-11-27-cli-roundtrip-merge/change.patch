@@ -1,0 +1,72 @@
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 801b2c25..e899c1a0 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -2162,6 +2162,13 @@ ${maskVolatileForGuide(guideTemplate)}
+   if (!autoMeta) {
+     console.log(`（--output 可省略：省略时 CLI 按门禁与 diff 事实合成事实性摘要；方案取舍/用户反馈等语义说明才需要手写）`)
+   }
++  // 往返合并引导（2026-11-27-cli-roundtrip-merge D-004 实证修正）：completeStep 的 printNext
++  // 分支（src/run/complete.js:1021）在 --done 时已把下一步 prompt 尾接在同一次 stdout 里——
++  // 平台日志实证（fire-equipment run：Step 2/8 完成的 tool_result 直接跟 step 3/8 全 prompt）。
++  // agent 常见冗余是 --done 后再调 run <stage> 重复渲染；本行显式告诉它不必。
++  if (!autoMeta) {
++    console.log(`（下一步已尾接：本步 --done 的输出末尾会直接跟下一步 prompt——照它执行即可，**不要再调 \`run ${cmdStage}\` 重复渲染**；只有阶段切换（run <下一阶段>）才需要新调用）`)
++  }
+ 
+   // ── SS-META 机器可读元数据块（change: 2026-09-08-auto-driver，D-002@v1，FR-01）──
+   // 单行 HTML 注释内 JSON，agent 低噪可读、脚本一行正则可提取（<!--SS-META:(.*)-->）。
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 84184771..e6ff1f53 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -1498,7 +1498,7 @@ ${worktreeNoticeSingle}
+ 
+ **主代理直写（execution_mode: main）——你直接实现，不派子代理。**
+ 
+-逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
++逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → **本 task 的全部文件编辑攒到 task 完成时合并为一次提交**（不要每改一个文件就 wt-commit——合并提交省协议轮次，消息一次带全 task token）→ \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
+ 
+ worktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。
+ 
+diff --git a/test/cli-roundtrip-merge.test.mjs b/test/cli-roundtrip-merge.test.mjs
+new file mode 100644
+index 00000000..ea2e6b68
+--- /dev/null
++++ b/test/cli-roundtrip-merge.test.mjs
+@@ -0,0 +1,35 @@
++/**
++ * cli-roundtrip-merge.test.mjs — 协议往返合并引导（2026-11-27-cli-roundtrip-merge）
++ *
++ * 语境：completeStep 的 printNext 分支（src/run/complete.js:1021）早在 --done 时尾接下一步
++ * prompt（平台日志实证）——本轮实际改动是两段 prompt 引导，非机制：
++ *   - run/prompt.js 完成契约：显式告知「下一步已尾接，勿重复 run <stage>」
++ *   - stages/execute.js Wave 闭环：多次编辑合并为一次 wt-commit
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++
++test('run/prompt.js 完成契约：含「下一步已尾接，勿重复 run」引导', () => {
++  const src = read('src/run/prompt.js')
++  assert.match(src, /下一步已尾接/, '引导句标题在场')
++  assert.match(src, /不要再调/, '明确禁止重复渲染调用')
++  assert.match(src, /阶段切换/, '给出唯一合法例外（阶段切换）')
++})
++
++test('stages/execute.js Wave 闭环：含「合并为一次提交」引导', () => {
++  const src = read('src/stages/execute.js')
++  assert.match(src, /合并为一次提交/, '合并提交引导在场')
++  assert.match(src, /不要每改一个文件就 wt-commit/, '反例明示（逐文件立即提交）')
++})
++
++test('complete.js 尾接机制仍在（引导句依赖的事实锚）', () => {
++  const src = read('src/run/complete.js')
++  assert.match(src, /if \(printNext\) \{/, 'printNext 分支在场')
++  assert.match(src, /await outputStep\(stageName, nextPendingIdx/, '尾接渲染调用在场')
++})

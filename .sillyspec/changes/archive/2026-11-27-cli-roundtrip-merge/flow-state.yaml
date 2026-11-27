@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+adopted_from: brainstorm
+review_force: null
+baseline_commit: 1a6854b82bc0f25280a325c0bbdd5185f86bbd89
+updatedAt: '2026-11-27T00:26:08.110Z'
+baseline_sha256: cf3ddfbe4f059c852a2be3d68f1c33b661310f7b3e806568bf4c1afe472edc31
+spec_approved: true
+spec_approved_at: '2026-11-27T00:12:01.037Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（15.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261127001627\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 12 个
+accept_dirty_gap:
+  at: '2026-11-27T00:16:39.551Z'
+  files:
+    - docs/sillyspec/platform-interface-map.md
+    - src/machine-interface.js
+    - src/run/complete-handlers.js
+    - test/autocheck-review-change-stamp.test.mjs
+  by: null
+

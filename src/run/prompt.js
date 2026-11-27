@@ -2162,6 +2162,13 @@ ${maskVolatileForGuide(guideTemplate)}
   if (!autoMeta) {
     console.log(`（--output 可省略：省略时 CLI 按门禁与 diff 事实合成事实性摘要；方案取舍/用户反馈等语义说明才需要手写）`)
   }
+  // 往返合并引导（2026-11-27-cli-roundtrip-merge D-004 实证修正）：completeStep 的 printNext
+  // 分支（src/run/complete.js:1021）在 --done 时已把下一步 prompt 尾接在同一次 stdout 里——
+  // 平台日志实证（fire-equipment run：Step 2/8 完成的 tool_result 直接跟 step 3/8 全 prompt）。
+  // agent 常见冗余是 --done 后再调 run <stage> 重复渲染；本行显式告诉它不必。
+  if (!autoMeta) {
+    console.log(`（下一步已尾接：本步 --done 的输出末尾会直接跟下一步 prompt——照它执行即可，**不要再调 \`run ${cmdStage}\` 重复渲染**；只有阶段切换（run <下一阶段>）才需要新调用）`)
+  }
 
   // ── SS-META 机器可读元数据块（change: 2026-09-08-auto-driver，D-002@v1，FR-01）──
   // 单行 HTML 注释内 JSON，agent 低噪可读、脚本一行正则可提取（<!--SS-META:(.*)-->）。

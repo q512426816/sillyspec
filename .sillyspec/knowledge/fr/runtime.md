@@ -2081,3 +2081,51 @@ superseded_by：FR-cli-entry-102
 - 场景：真机集成验证 — Given multi-agent-platform 仓（活跃变更在场+codegraph 索引就绪）；When `node sillyspec/bin/sillyspec.js run scan --standard`；Then 输出 Scan Profile 与各项目路径判定行（不再出现 ⛔ 升厚门拦截与 libuv 崩溃退出）
 全文：.sillyspec/changes/archive/2026-11-15-auxiliary-scan-no-stick/requirements.md#FR-03
 最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61
+
+## FR-runtime-128 --done 尾接下一步渲染
+变更：2026-11-27-cli-roundtrip-merge
+状态：active
+摘要：（无场景名）
+依据决策：D-001@v1
+全文：.sillyspec/changes/archive/2026-11-27-cli-roundtrip-merge/requirements.md#FR-01
+最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-cli-roundtrip-merge:flow:测试绑定FR-01
+  tests: test/cli-roundtrip-merge.test.mjs「--done 尾接段在场 + 幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-cli-roundtrip-merge
+  status: active
+
+## FR-runtime-129 execute prompt 合并引导
+变更：2026-11-27-cli-roundtrip-merge
+状态：active
+摘要：（无场景名）
+依据决策：D-002@v1
+全文：.sillyspec/changes/archive/2026-11-27-cli-roundtrip-merge/requirements.md#FR-02
+最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-27-cli-roundtrip-merge:flow:测试绑定FR-02
+  tests: test/cli-roundtrip-merge.test.mjs「execute prompt 含引导段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-27-cli-roundtrip-merge
+  status: active
+
+## FR-runtime-130 watcher 事件密度减半
+变更：2026-11-27-cli-roundtrip-merge
+状态：active
+摘要：（无场景名）
+依据决策：D-003@v1
+全文：.sillyspec/changes/archive/2026-11-27-cli-roundtrip-merge/requirements.md#FR-03
+最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56

@@ -265,3 +265,20 @@
 理由：机器门（测试实测+PID 回收）挂载架构选哪种？
 故障面：noAI 步执行异常（runner 挂起/超时）——沿用 verify-quality-scan 既有超时与指纹落盘机制，失败不盖 completed 可重入。
 退役判据：若 pre-push/CI 需要脱离阶段机独立调用收口门（见 D-006 复潮条件），本内嵌形态升级为命令门。
+
+## D-unmapped-517@v1 --done 尾接下一步渲染（方案 A）
+状态：implemented
+变更：2026-11-27-cli-roundtrip-merge
+原编号：D-001@v1
+锚点：未记录
+最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56
+理由：--done 合并的技术形态？
+故障面：--done 输出过长时下一步 prompt 被截断（CLI 输出截断上限需检查）；agent 侧旧会话不认识尾接段可能忽略。
+
+## D-unmapped-518@v1 实证修正：--done 尾接机制已存在，代码改动降级为 prompt 引导
+状态：implemented
+变更：2026-11-27-cli-roundtrip-merge
+原编号：D-004@v1
+锚点：src/run/complete.js:1021
+最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56
+理由：平台日志核验发现 src/run/complete.js:1021 的 printNext 分支早已在同一次 stdout 里 outputStep 渲染下一步（fire-equipment run 的 tool_result 样本：Step 2/8 完成后直接跟 step 3/8 的完整 prompt）。D-001 的「每步两次调用」前提不成立——多余调用是 agent 习惯性重复 run <stage>。

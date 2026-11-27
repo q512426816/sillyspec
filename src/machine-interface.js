@@ -214,7 +214,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     const r = runValidators(stage, cwd, changeName, {
       projectName: progress.project,
       specRoot,
-      ...(apiFaceLive ? { apiFaceLive } : {}),
+      
       ...(sharedEvidence ? { evidence: sharedEvidence } : {}),
     });
     checks.push({
@@ -622,7 +622,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
         const r = runValidators(currentStage, cwd, changeName, {
           projectName: progress.project,
           specRoot,
-          ...(apiFaceLive ? { apiFaceLive } : {}),
+          
         });
         data = { ok: r.ok, errors: r.errors, warnings: r.warnings };
         ok = r.ok;
