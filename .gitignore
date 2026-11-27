@@ -40,5 +40,3 @@ sa-rename-probe/
 
 # 变更文档默认不入库（changes.doc_tracking=platform，2026-11-27-changes-dir-platform-default）——存量已跟踪文件不受 gitignore 影响，新变更目录不再入库
 .sillyspec/changes/*
-# 本变更自身的 spec 目录豁免（已入库跟踪中；其余新变更目录按上行忽略）
-!.sillyspec/changes/2026-11-27-changes-dir-platform-default/
