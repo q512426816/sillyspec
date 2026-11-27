@@ -68,6 +68,11 @@ test('FR-01④ CRLF 换行与行内注释兼容', () => {
   assert.equal(r.explicit, true)
 })
 
+test('FR-01② YAML 引号写法剥引号后判值（收口评审 P3）', () => {
+  assert.deepEqual(resolveDocTracking('changes:\n  doc_tracking: "repo"\n'), { value: 'repo', explicit: true, invalid: false })
+  assert.deepEqual(resolveDocTracking("changes:\n  doc_tracking: 'never'\n"), { value: 'never', explicit: true, invalid: false })
+})
+
 test('FR-01⑤ DOC_TRACKING_VALUES 与 schema 注册面同源', () => {
   assert.deepEqual([...DOC_TRACKING_VALUES], ['platform', 'never', 'repo'])
 })

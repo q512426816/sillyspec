@@ -1003,7 +1003,7 @@ export function detectDocTrackingMigration(cwd) {
       ],
       pass: true,
       severity: CHECK_SEVERITY.PASSED,
-      safe_actions: [{ action: `echo 'changes:\n  doc_tracking: repo' >> .sillyspec/local.yaml  # 存量入库仓保持原行为`, risk: 'low' }],
+      safe_actions: [{ action: `在 .sillyspec/local.yaml 末尾追加两行（收口评审 P2：echo \\n 跨 shell 不解释，给编辑指引不给命令——跨平台）：「changes:」与「  doc_tracking: repo」——存量入库仓保持原行为`, risk: 'low' }],
     }
   } catch (e) {
     return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }

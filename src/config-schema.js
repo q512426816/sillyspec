@@ -716,7 +716,8 @@ export function resolveDocTracking(yamlText) {
     if (m && m[1] === 'doc_tracking' && m[2] !== '') { raw = m[2]; break }
   }
   if (raw === undefined) return fallback
-  const v = String(raw).trim().toLowerCase()
+  // 收口评审 P3：YAML 引号写法（doc_tracking: "repo"）剥引号后再判值
+  const v = String(raw).trim().replace(/^["']|["']$/g, '').toLowerCase()
   if (!DOC_TRACKING_VALUES.includes(v)) return { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: true }
   return { value: v, explicit: true, invalid: false }
 }
@@ -729,7 +730,9 @@ export function readDocTrackingFromRepo(repoRoot) {
     const r = resolveDocTracking(readFileSync(p, 'utf8'))
     if (r.invalid) console.warn(`⚠️ changes.doc_tracking 值非法（允许 ${DOC_TRACKING_VALUES.join('/')}）——已回退缺省 ${DOC_TRACKING_DEFAULT}（不入库）`)
     return r
-  } catch {
+  } catch (e) {
+    // 收口评审 P3：IO 失败留痕（FR-01「解析失败留痕警告」字面兑满）——fail-soft 不拦主流程
+    console.warn(`⚠️ 读取 changes.doc_tracking 失败（${e?.message || e}）——已回退缺省 ${DOC_TRACKING_DEFAULT}（不入库）`)
     return { value: DOC_TRACKING_DEFAULT, explicit: false, invalid: false }
   }
 }
