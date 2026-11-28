@@ -136,7 +136,10 @@ console.log('\n--- 4. keep-local 重推仍冲突 → 冲突文件保留 ---')
 console.log('\n--- 5. resolve --take-platform → 按服务器版本覆盖本地 + 清冲突文件 ---')
 {
   const sm = new SyncManager(cwd)
-  const r = await sm.resolve(CN, 'take-platform')
+  // 2026-11-28-spec-downstream-write-arbitration FR-02：不带 --force 时本地有未同步改动
+  // 的文件会被保留；本场景验证「用户显式裁决以服务器为准」，故带 force 走原覆盖语义
+  // （保留本地的情况由 spec-downstream-arbitration 用例覆盖）。
+  const r = await sm.resolve(CN, 'take-platform', { force: true })
   assert(r.ok === true && r.resolved === true, `take-platform 成功（实得 ${JSON.stringify(r)}）`)
   assert((r.reason || '').includes('覆盖 1 个'), `reason 披露覆盖数（${r.reason}）`)
   assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === SERVER_A_MD, '本地 a.md 已被服务器版本覆盖（本地改动放弃）')

@@ -105,8 +105,64 @@ async function main() {
     process.exit(2) // exit code 2 = 阻止工具执行
   }
 
+  // ── 写入层乐观锁（2026-11-28-file-write-optimistic-lock FR-02）──
+  // worktree-guard 放行后追加：读→写窗口内文件被他人改写 → 阻止并提示重读。
+  // 恒 fail-open：任何异常只留痕不阻断（乐观锁是增强，不是正确性依赖）。
+  if (mappedTool === 'Write' || mappedTool === 'Edit' || mappedTool === 'MultiEdit') {
+    const targets = []
+    if (opts.filePath) targets.push(opts.filePath)
+    if (Array.isArray(opts.filePaths)) targets.push(...opts.filePaths)
+    if (targets.length > 0) {
+      const specRoot = findSpecRoot(parsed.cwd || process.cwd())
+      if (specRoot) {
+        try {
+          const fg = await import('../file-guard.js')
+          const seen = new Set()
+          for (const fp of targets) {
+            const abs = path.resolve(fp)
+            if (seen.has(abs)) continue
+            seen.add(abs)
+            const check = fg.checkBeforeWrite({
+              specRoot,
+              sessionId: parsed.session_id,
+              filePath: abs,
+            })
+            if (check.block) {
+              // eslint-disable-next-line no-console
+              console.error(
+                `[sillyspec] ❌ 文件已被他人改写，请重读后再写: ${check.path || fp}\n` +
+                `   该文件自本会话读取后内容已变化（乐观锁检测，防旧快照整文件覆盖）。` +
+                `请重新 Read 该文件确认最新内容后重试。`
+              )
+              // 留痕（取证）
+              console.error(
+                `[sillyspec-hook] stale-read blocked: session=${String(parsed.session_id || '').slice(0, 12)} path=${check.path || fp} baselineAt=${check.baselineAt || ''}`
+              )
+              process.exit(2)
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error(`[sillyspec-hook] file-guard 异常（放行）: ${e && e.message}`)
+        }
+      }
+    }
+  }
+
   // 放行
   process.exit(0)
+}
+
+/** 从 cwd 向上找 spec 根（有 .sillyspec 的最近祖先；找不到 → null）。 */
+function findSpecRoot(startDir) {
+  let dir = path.resolve(startDir || process.cwd())
+  for (let i = 0; i < 12; i++) {
+    if (fs.existsSync(path.join(dir, '.sillyspec'))) return path.join(dir, '.sillyspec')
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return null
 }
 
 function readStdin() {

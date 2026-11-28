@@ -308,6 +308,7 @@ modules:
     review_reasons: []
     paths:
       - src/hooks/
+      - src/file-guard.js
 
   workflow:
     status: active
