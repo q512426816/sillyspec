@@ -23,8 +23,12 @@ import { join } from 'path'
 
 import { runtimeStatePath } from './runtime-paths.js'
 
-/** 同步基线快照文件名（与 spec-sync.js BASE_SNAPSHOT / sync.js 读写点同源）。 */
-export const SPEC_SYNC_BASE_FILENAME = 'spec-sync-base.json'
+/**
+ * 同步基线快照文件名（与 spec-sync.js BASE_SNAPSHOT / sync.js 读写点同源）。
+ * 模块私有：src/test 无外部消费（2026-11-28-spec-sync-guard-dead-exports 清 22e-b
+ * 死码），需要复用时按实际调用面重新导出。
+ */
+const SPEC_SYNC_BASE_FILENAME = 'spec-sync-base.json'
 
 /**
  * 读同步基线 hash 表（`specDir/.runtime/spec-sync-base.json` 的 hashes 键）。
@@ -43,8 +47,8 @@ export function readBaseHashes(specDir) {
   }
 }
 
-/** 单文件内容 sha256（读失败/不存在 → null）。 */
-export function hashFileContent(absPath) {
+/** 单文件内容 sha256（读失败/不存在 → null）。模块私有（同上，无外部消费）。 */
+function hashFileContent(absPath) {
   try {
     return createHash('sha256').update(readFileSync(absPath)).digest('hex')
   } catch {
