@@ -2129,3 +2129,133 @@ superseded_by：FR-cli-entry-102
 依据决策：D-003@v1
 全文：.sillyspec/changes/archive/2026-11-27-cli-roundtrip-merge/requirements.md#FR-03
 最近确认：c74c2fee8dcb641170ebd30f35398a36a75c9b56
+
+## FR-runtime-131 单块推送超时按块字节自适应，2MB 块在 32KB/s 保守底速率下不会被 30s 硬超
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：2MB 块在慢链路上不被硬超；env 显式配置优先
+场景正文：
+- 场景：2MB 块在慢链路上不被硬超 — Given 上行按 32KB/s 估算、块 base64 字节数为 2MB，When 发起该块推送，Then 该请求的超时预算 ≥ 75s，不会在 30s 处被掐断。
+- 场景：env 显式配置优先 — Given 设置了 `SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS=90000`，When 任意块推送，Then 使用 90000ms 而非自适应
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-01
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-01
+  tests: test/sync-push-adaptive-timeout.test.mjs「2MB 块自适应超时 ≥75s；env 优先不覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active
+
+## FR-runtime-132 单块推送超时或网络失败时二分降级重试，最小拆到单 op，成功块不受影响
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：多 op 块超时后拆半成功；单 op 块超时不无限重试；HTTP 500 不重试
+场景正文：
+- 场景：多 op 块超时后拆半成功 — Given 一个含 8 ops 的块在超时预算处超时，When 降级逻辑介入，Then 该块被拆为两个 4 ops 子块分别推送，两个子块成功则本轮继续后续块。
+- 场景：单 op 块超时不无限重试 — Given 降级到单 op 块仍超时，When 达到拆分下限，Then 该轮记为失败（ok:false），日志记录待下轮重试，不进入无限拆分。
+- 场景：HTTP 500 不重试 — Given 块推送返回 HTTP 500，When 响应处理，Then 直接按既有语义失败本轮，不触发二分降级。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-02
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-02
+  tests: test/sync-push-adaptive-timeout.test.mjs「多 op 块超时二分成功；单 op 超时记失败；HTTP 500 不降级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active
+
+## FR-runtime-133 默认块字节上限从 2MB 降到 1MB，单块失败成本减半
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：缺省切块按 1MB
+场景正文：
+- 场景：缺省切块按 1MB — Given 未设置任何 chunk 环境变量、估算总量 3MB 的 ops，When 切块，Then 块数按 1MB 上限计算（≥3 块），而非按 2MB 上限（2 块）。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-03
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-03
+  tests: test/sync-push-adaptive-timeout.test.mjs「缺省 1MB 上限切块」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active
+
+## FR-runtime-134 连续失败计数按错误类别分键，超时与 HTTP 业务错误互不掩盖
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：超时不掩盖 HTTP 错误；成功后清空全部类别
+场景正文：
+- 场景：超时不掩盖 HTTP 错误 — Given 先连续 2 次超时失败、再 1 次 HTTP 422，When 读取计数，Then 超时键为 2、HTTP 键为 1（不合并成 3）。
+- 场景：成功后清空全部类别 — Given 某标签下同时存在 timeout 与 http 计数，When 本轮同步成功，Then 该标签下所有类别计数被清除。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-04
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-04
+  tests: test/sync-push-adaptive-timeout.test.mjs「超时与 HTTP 分键计数；成功清空全类别」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active
+
+## FR-runtime-135 后台同步单轮预算与总帽随块级推送上调（与块数无关的 45s 熔断是收敛放大器）
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：多块积压在单轮内推完
+场景正文：
+- 场景：多块积压在单轮内推完 — Given 311 ops 切 7 块、平台单块响应约 10-15s，When 后台上单单轮同步启动，Then 该轮预算为 120s，不再在 45s 处只落地 1 块即熔断
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-06
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-06
+  tests: test/spec-sync-bg.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active
+
+## FR-runtime-136 既有 sync-push-chunking 等相关测试全绿，新增自适应超时与降级重试用例
+变更：2026-11-28-spec-sync-push-adaptive-timeout
+状态：active
+摘要：相关测试与 lint 通过
+场景正文：
+- 场景：相关测试与 lint 通过 — Given 本变更代码落地，When 运行本变更相关测试与仓内 lint，Then 全部通过。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-push-adaptive-timeout/requirements.md#FR-05
+最近确认：a45d7b267c4001356bbe7cec02ee549fb1c8be83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-push-adaptive-timeout:flow:测试绑定FR-05
+  tests: test/sync-push-chunking.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-push-adaptive-timeout
+  status: active

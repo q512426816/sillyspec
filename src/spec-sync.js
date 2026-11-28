@@ -59,12 +59,29 @@ const MANIFEST_FULL_TIMEOUT_MS = 120_000;
 // 断点续传（锚点刷新后已落地路径自动出 diff）。env 仅调优，缺省零回归（小批量一块直发）。
 const PUSH_TIMEOUT_DEFAULT_MS = 30_000;
 const CHUNK_OPS_DEFAULT = 128;
-const CHUNK_BYTES_DEFAULT = 2 * 1024 * 1024;
+// 2026-11-28-spec-sync-push-adaptive-timeout FR-03：缺省块 2MB → 1MB。生产实证
+// （multi-agent-platform 连续 13 轮超时）单块失败成本与块大小成正比，1MB 块在
+// 劣化链路上把「必超」缩成「可拆可重试」。
+const CHUNK_BYTES_DEFAULT = 1 * 1024 * 1024;
+// 自适应超时基线（FR-01）：握手 + 服务端 apply 的固定开销（历史实测 apply 数秒级），
+// 加上块字节按保守底速率折算的传输时间——固定 30s 与块大小无关是「宽带上行必超」的根因。
+const PUSH_TIMEOUT_BASE_MS = 15_000;
+// 保守底速率 32KB/s（约 256Kbps）：覆盖劣化宽带/弱网；2MB 块 → 15s+64s=79s。
+const PUSH_MIN_BYTES_PER_SEC = 32 * 1024;
+// 二分降级深度上限（FR-02）：128 ops 块最细拆到 8 ops/块；再细下去请求数收益递减。
+const PUSH_SPLIT_MAX_DEPTH = 4;
 
-function resolvePushTimeoutMs() {
+/**
+ * 单块推送超时（FR-01）：env 显式值优先（向后兼容），否则按块字节自适应。
+ * 无参调用 = 纯基线（等同旧 30s 缺省语义，仓内既有调用/测试零回归）。
+ */
+export function resolvePushTimeoutMs(chunkBytes = 0) {
   const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_PUSH_TIMEOUT_MS);
   if (Number.isFinite(raw) && raw >= 1000) return Math.floor(raw);
-  return PUSH_TIMEOUT_DEFAULT_MS;
+  const transferMs = chunkBytes > 0
+    ? Math.ceil((chunkBytes / PUSH_MIN_BYTES_PER_SEC) * 1000)
+    : 0;
+  return Math.max(PUSH_TIMEOUT_DEFAULT_MS, PUSH_TIMEOUT_BASE_MS + transferMs);
 }
 
 function resolveChunkOps() {
@@ -77,6 +94,18 @@ function resolveChunkBytes() {
   const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_CHUNK_BYTES);
   if (Number.isFinite(raw) && raw >= 1024) return Math.floor(raw);
   return CHUNK_BYTES_DEFAULT;
+}
+
+/** 单 op 上线字节估算（行宽粗估：base64 content + 路径两份 + 包裹；仅作分块比例）。 */
+function estimateOpBytes(op) {
+  return (op.content ? op.content.length : 0) + op.path.length * 2 + 96;
+}
+
+/** 块字节估算（FR-01 超时折算与 FR-02 拆分阈值共用同一公式，防两处漂移）。 */
+function estimateChunkBytes(chunk) {
+  let total = 0;
+  for (const op of chunk) total += estimateOpBytes(op);
+  return total;
 }
 
 /**
@@ -93,7 +122,7 @@ export function chunkOpsForPush(ops, opts = {}) {
   let cur = [];
   let curBytes = 0;
   for (const op of ops) {
-    const size = (op.content ? op.content.length : 0) + op.path.length * 2 + 96;
+    const size = estimateOpBytes(op);
     if (cur.length > 0 && (cur.length >= maxOps || curBytes + size > maxBytes)) {
       chunks.push(cur);
       cur = [];
@@ -104,6 +133,47 @@ export function chunkOpsForPush(ops, opts = {}) {
   }
   if (cur.length > 0) chunks.push(cur);
   return chunks;
+}
+
+/**
+ * 推送块异常分类（FR-02）：HTTP 非 2xx 是「服务端明确拒绝」——不重试不拆，
+ * 维持既有失败即停语义（防放大服务端错误）；超时与网络类可降级重试。
+ */
+class PushHttpError extends Error {
+  constructor(status, raw) {
+    super(`HTTP ${status}`);
+    this.name = 'PushHttpError';
+    this.status = status;
+    this.raw = raw;
+  }
+}
+
+function isRetriablePushError(err) {
+  if (!err) return false;
+  // TimeoutError = AbortSignal.timeout 到期；TypeError = fetch 网络层失败。
+  // AbortError 是外部总熔断（opts.signal）——不重试（熔断即整体让路）。
+  return err.name === 'TimeoutError' || err instanceof TypeError;
+}
+
+/**
+ * 单块推送 + 二分降级（FR-02）：超时/网络失败时把块拆半递归重试，
+ * 深度上限 PUSH_SPLIT_MAX_DEPTH、单 op 不拆。返回 {ok, bodies[], err}——
+ * bodies 为各落地子块的响应体（外层合并 server_versions/platform_deleted）。
+ */
+async function pushChunkWithFallback(sendChunk, chunk, depth = 0) {
+  try {
+    return { ok: true, bodies: [await sendChunk(chunk)] };
+  } catch (err) {
+    if (isRetriablePushError(err) && chunk.length > 1 && depth < PUSH_SPLIT_MAX_DEPTH) {
+      const mid = Math.ceil(chunk.length / 2);
+      const left = await pushChunkWithFallback(sendChunk, chunk.slice(0, mid), depth + 1);
+      if (!left.ok) return left;
+      const right = await pushChunkWithFallback(sendChunk, chunk.slice(mid), depth + 1);
+      if (!right.ok) return right;
+      return { ok: true, bodies: [...left.bodies, ...right.bodies], split: (left.split || 0) + (right.split || 0) + 1 };
+    }
+    return { ok: false, err };
+  }
 }
 
 function debugLog(msg) {
@@ -179,6 +249,28 @@ export function clearFailStreak(specRoot, label) {
     writeAtomicSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n');
   } catch {
     // fail-soft：残留计数只是少清一次，下次成功再清
+  }
+}
+
+/**
+ * 按标签前缀清空全部类别计数（2026-11-28-spec-sync-push-adaptive-timeout FR-04）：
+ * 分键后键形如 `<label>:timeout|http|net`，成功时须清该标签下所有类别；同时兼容
+ * 历史遗留的无类别单键（旧版写入的 `<label>`）——两形态一并删除。
+ */
+export function clearFailStreakPrefix(specRoot, labelPrefix) {
+  const all = readFailStreak(specRoot);
+  let changed = false;
+  for (const key of Object.keys(all)) {
+    if (key === labelPrefix || key.startsWith(`${labelPrefix}:`)) {
+      delete all[key];
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  try {
+    writeAtomicSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n');
+  } catch {
+    // fail-soft：同上
   }
 }
 
@@ -873,12 +965,13 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
       // 自动同步重刷同一行，淹没门禁输出；其余状态码（4xx 业务态）每轮该看见。
       const raw = await res.text().catch(() => '');
       const detail = describeErrorBody(res.status, raw);
-      const failCount = bumpFailStreak(specRoot, logLabel, detail);
+      // FR-04：清单拉取失败按 http 类分键（与推送超时/网络错互不掩盖）。
+      const failCount = bumpFailStreak(specRoot, `${logLabel}:http`, detail);
       const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
       if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
       if (failCount >= FAIL_STREAK_ESCALATE_AT) {
-        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次 HTTP 同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
       }
       return { synced: 0, ok: false };
     }
@@ -897,10 +990,10 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
         signal: withSignal(MANIFEST_FULL_TIMEOUT_MS), // 倒退对账=全量大响应（FR-02 同档）
       });
       if (!full.ok) {
-        const failCount = bumpFailStreak(specRoot, logLabel, `倒退对账全量 HTTP ${full.status}`);
+        const failCount = bumpFailStreak(specRoot, `${logLabel}:http`, `倒退对账全量 HTTP ${full.status}`);
         console.warn(`[spec-sync] 倒退对账全量拉取失败 HTTP ${full.status}（文件树本次未同步，下次自动重试）: ${logLabel}`);
         if (failCount >= FAIL_STREAK_ESCALATE_AT) {
-          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次 HTTP 同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
         }
         return { synced: 0, ok: false };
       }
@@ -919,7 +1012,9 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
       clearManifestCache(specRoot);
     }
   } catch (err) {
-    const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
+    // FR-04：清单拉取异常按 timeout/net 类分键。
+    const manifestCategory = err && err.name === 'TimeoutError' ? 'timeout' : 'net';
+    const failCount = bumpFailStreak(specRoot, `${logLabel}:${manifestCategory}`, describeSyncError(err));
     const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
@@ -971,7 +1066,7 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
   if (ops.length === 0) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${logLabel}`);
     clearStaleTombstoneMarkers(specRoot);
-    clearFailStreak(specRoot, logLabel);
+    clearFailStreakPrefix(specRoot, logLabel);
     return { synced: 0, ok: true };
   }
 
@@ -983,37 +1078,60 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
       console.log(`[spec-sync] 推送分批：${ops.length} ops 切 ${chunks.length} 块顺序提交（块上限 ${resolveChunkOps()} ops / ${Math.round(resolveChunkBytes() / 1024)}KB 估算）: ${logLabel}`);
     }
     let landedChunks = 0;
-    const body = { conflict: false, server_versions: {}, platform_deleted: [] };
-    for (let ci = 0; ci < chunks.length; ci++) {
+    // 2026-11-28-spec-sync-push-adaptive-timeout：单块发送器（超时按块字节自适应，FR-01）；
+    // 失败分两类——HTTP 非 2xx 抛 PushHttpError（不降级），超时/网络抛原生错误（可降级）。
+    const sendChunk = async (subChunk) => {
       const res = await fetch(syncUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${platform.token}`,
         },
-        body: JSON.stringify({ ops: chunks[ci] }),
-        signal: withSignal(resolvePushTimeoutMs()),
+        body: JSON.stringify({ ops: subChunk }),
+        signal: withSignal(resolvePushTimeoutMs(estimateChunkBytes(subChunk))),
       });
       if (!res.ok) {
         const raw = await res.text().catch(() => '');
-        const detail = describeErrorBody(res.status, raw);
-        const failCount = bumpFailStreak(specRoot, logLabel, detail);
+        throw new PushHttpError(res.status, raw);
+      }
+      return await res.json().catch(() => ({}));
+    };
+    const body = { conflict: false, server_versions: {}, platform_deleted: [] };
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const result = await pushChunkWithFallback(sendChunk, chunks[ci]);
+      if (!result.ok) {
+        const err = result.err;
         const landedNote = landedChunks > 0 ? `（前 ${landedChunks}/${chunks.length} 块已落地，下轮自动续传未落地部分）` : '';
-        const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）${landedNote}: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
-        if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
-        else console.warn(line);
-        if (failCount >= FAIL_STREAK_ESCALATE_AT) {
-          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+        if (err instanceof PushHttpError) {
+          const detail = describeErrorBody(err.status, err.raw);
+          // FR-04：失败计数按类别分键（http），超时/网络错误不掩盖服务端业务错误。
+          const failCount = bumpFailStreak(specRoot, `${logLabel}:http`, detail);
+          const line = `[spec-sync] 同步请求失败 HTTP ${err.status}（文件树本次未同步，下次自动重试）${landedNote}: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
+          if (isConnectionClassStatus(err.status)) syncConnectionWarn(line);
+          else console.warn(line);
+          if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+            console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次 HTTP 同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+          }
+        } else {
+          const category = err && err.name === 'TimeoutError' ? 'timeout' : 'net';
+          const failCount = bumpFailStreak(specRoot, `${logLabel}:${category}`, describeSyncError(err));
+          const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）${landedNote}: ${logLabel}: ${describeSyncError(err)}`;
+          syncConnectionWarn(line);
+          if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+            console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次${category === 'timeout' ? '超时' : '网络'}同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+          }
         }
         return { synced: 0, ok: false };
       }
-      const chunkBody = await res.json().catch(() => ({}));
       landedChunks += 1;
+      if (result.split > 0) debugLog(`[spec-sync] 第 ${ci + 1} 块经 ${result.split} 次二分降级后落地（${chunks[ci].length} ops）`);
       // 块响应合并成单批等价形状：conflict 任一块命中即真；server_versions /
       // platform_deleted 逐块累积（块间路径互斥——computeSpecOps 每 path 至多一 op）。
-      if (chunkBody.conflict) body.conflict = true;
-      Object.assign(body.server_versions, chunkBody.server_versions || {});
-      if (Array.isArray(chunkBody.platform_deleted)) body.platform_deleted.push(...chunkBody.platform_deleted);
+      for (const chunkBody of result.bodies) {
+        if (chunkBody.conflict) body.conflict = true;
+        Object.assign(body.server_versions, chunkBody.server_versions || {});
+        if (Array.isArray(chunkBody.platform_deleted)) body.platform_deleted.push(...chunkBody.platform_deleted);
+      }
       if (chunks.length > 1) debugLog(`[spec-sync] 分批 ${ci + 1}/${chunks.length} 落地（${chunks[ci].length} ops）`);
     }
     if (body.conflict) {
@@ -1084,7 +1202,7 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
         writeBaseSnapshot(specRoot, localFiles);
         clearSpecConflictMarker(specRoot, conflictLabel);
         noteSyncSuccess();
-        clearFailStreak(specRoot, logLabel);
+        clearFailStreakPrefix(specRoot, logLabel);
         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${conflictLabel}`);
         return { synced: Math.max(ops.length - followers.length, 0), ok: true, conflict: false, autoResolved: followers.length };
       }
@@ -1116,7 +1234,7 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
     noteSyncSuccess();
-    clearFailStreak(specRoot, logLabel);
+    clearFailStreakPrefix(specRoot, logLabel);
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${logLabel}`);
     // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
     // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）。全树入口
@@ -1134,11 +1252,12 @@ async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length, ok: true };
   } catch (err) {
-    const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
+    const outerCategory = err && err.name === 'TimeoutError' ? 'timeout' : 'net';
+    const failCount = bumpFailStreak(specRoot, `${logLabel}:${outerCategory}`, describeSyncError(err));
     const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
-      console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+      console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次${outerCategory === 'timeout' ? '超时' : '网络'}同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
     }
     return { synced: 0, ok: false };
   }

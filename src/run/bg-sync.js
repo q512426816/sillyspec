@@ -50,10 +50,15 @@ export function bgSyncLogPath(runtimeRoot) {
 
 // 后台轮参数：单轮预算下限（与 env SILLYSPEC_SYNC_TIMEOUT_MS 取 max）、轮数与总预算帽
 // （防慢平台下无限续轮）；锁时效（pid 活性之外的第二道判死——pid 复用假活兜底，
-// 子进程自身总预算 ~2.5min + 收尾余量远小于该值，超时必是异常残留）。
-const BG_ROUND_FLOOR_MS = 45_000;
+// 子进程自身总预算 ~5min + 收尾余量远小于该值，超时必是异常残留）。
+// 2026-11-28-spec-sync-push-adaptive-timeout FR-06：单轮下限 45s→120s。
+// 实证（multi-agent-platform）：311 ops 切 7 块，45s 内清单拉取吃掉大半后仅
+// 1 块落地即熔断——轮预算与待推块数无关，是「连续多轮不收敛」的放大器。
+// 120s 与 SILLYSPEC_SYNC_TIMEOUT_MS 上限对齐（roundTimeout 取 max）；总帽
+// 150s→300s 留两轮余量，防总帽先于轮预算截断。
+const BG_ROUND_FLOOR_MS = 120_000;
 const BG_MAX_ROUNDS = 5;
-const BG_TOTAL_BUDGET_MS = 150_000;
+const BG_TOTAL_BUDGET_MS = 300_000;
 const LOCK_STALE_MS = 15 * 60 * 1000;
 const LOG_TRUNCATE_THRESHOLD = 1_000_000;
 const LOG_TRUNCATE_KEEP = 512 * 1024;

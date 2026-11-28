@@ -106,3 +106,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-26-flow-help-flag-shortcircuit | flow 帮助旗标短路不再误立项
 - 2026-11-27-cli-roundtrip-merge | 2026-11-27-cli-roundtrip-merge
 - 2026-11-27-changes-dir-platform-default | 2026-11-27-changes-dir-platform-default
+- 2026-11-28-spec-sync-push-adaptive-timeout | 文件树推送超时改为按块自适应并在失败时二分降级
