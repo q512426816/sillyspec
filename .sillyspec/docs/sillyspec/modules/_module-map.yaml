@@ -230,6 +230,7 @@ modules:
       - src/sync.js
       - src/deleted-ledger.js
       - src/spec-sync.js
+      - src/spec-sync-guard.js
       - src/final-sync.js
       - src/sync-noise.js
       - src/write-audit.js

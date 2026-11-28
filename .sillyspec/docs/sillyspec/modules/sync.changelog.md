@@ -26,3 +26,4 @@
 - 2026-11-08-hindsight-tasks-ratio-retire | route-hindsight 任务改写率指标退役
 - 2026-11-15-sentinel-evidence-channel | 修复哨兵 review 证据通道死代码并增轻量道第三通道
 - 2026-11-28-spec-sync-push-adaptive-timeout | 文件树推送超时改为按块自适应并在失败时二分降级
+- 2026-11-28-spec-downstream-write-arbitration | spec 树下行覆盖加本地优先仲裁

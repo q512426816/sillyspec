@@ -12639,3 +12639,90 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-26-flow-help-flag-shortcircuit
   status: active
+
+## FR-cli-entry-667 下行覆盖点（take-platform / pull --spec）覆盖前逐文件比对本地 hash 与同步基线 hash，本地有未同步改动时保留本地并告警列名
+变更：2026-11-28-spec-downstream-write-arbitration
+状态：active
+摘要：本地改动被保留（不覆盖）；本地未改动时正常接受服务器版本；基线缺失保守保留
+场景正文：
+- 场景：本地改动被保留（不覆盖） — Given 冲突路径 `decisions.md` 本地内容与同步基线 hash 不同（本地改过），When 执行 `resolve --take-platform`，Th
+- 场景：本地未改动时正常接受服务器版本 — Given 冲突路径本地内容与基线 hash 一致（本地未改），When 执行 `resolve --take-platform`，Then 正常用服务器版本覆盖，行为与现
+- 场景：基线缺失保守保留 — Given `.runtime/spec-sync-base.json` 不存在或损坏，When 执行 `pull --spec` 且本地该文件存在，Then 该文件保留不
+全文：.sillyspec/changes/archive/2026-11-28-spec-downstream-write-arbitration/requirements.md#FR-01
+最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-downstream-write-arbitration:flow:测试绑定FR-01
+  tests: test/spec-downstream-arbitration.test.mjs「本地改动保留；未改动覆盖；基线缺失保守保留；删除方向同判」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-downstream-write-arbitration
+  status: active
+
+## FR-cli-entry-668 显式 --force 时维持现有整树覆盖语义（用户显式裁决优先）
+变更：2026-11-28-spec-downstream-write-arbitration
+状态：active
+摘要：take-platform --force 覆盖本地改动；pull --force 仍保留本地改动，--overwrite-local 才覆盖
+场景正文：
+- 场景：take-platform --force 覆盖本地改动 — Given 本地有未同步改动，When 执行 `resolve --take-platform --force`，Then 文件被服务器版本覆盖，审计行 force=tru
+- 场景：pull --force 仍保留本地改动，--overwrite-local 才覆盖 — Given 本地有未同步改动，When 执行 `pull --spec --force`，Then 本地脏文件仍被保留；When 改用 `pull --spec --ove
+全文：.sillyspec/changes/archive/2026-11-28-spec-downstream-write-arbitration/requirements.md#FR-02
+最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-downstream-write-arbitration:flow:测试绑定FR-02
+  tests: test/spec-downstream-arbitration.test.mjs「--force 跳过仲裁整树覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-downstream-write-arbitration
+  status: active
+
+## FR-cli-entry-669 被保留的本地文件不进基线重置（不把本地改动标记成已同步）
+变更：2026-11-28-spec-downstream-write-arbitration
+状态：active
+摘要：保留文件的基线不回写服务器 hash
+场景正文：
+- 场景：保留文件的基线不回写服务器 hash — Given `decisions.md` 本地已改（基线 A、本地 B），When take-platform 因仲裁保留该文件，Then 基线中该路径仍为 A（或移除），
+全文：.sillyspec/changes/archive/2026-11-28-spec-downstream-write-arbitration/requirements.md#FR-03
+最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-downstream-write-arbitration:flow:测试绑定FR-03
+  tests: test/spec-downstream-arbitration.test.mjs「保留路径基线不写服务器 hash」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-downstream-write-arbitration
+  status: active
+
+## FR-cli-entry-670 既有 pull/take-platform/resolve 相关测试全绿，新增加仲裁用例
+变更：2026-11-28-spec-downstream-write-arbitration
+状态：active
+摘要：相关测试与 lint 通过
+场景正文：
+- 场景：相关测试与 lint 通过 — Given 本变更代码落地，When 运行本变更相关测试与仓内 lint，Then 全部通过。
+全文：.sillyspec/changes/archive/2026-11-28-spec-downstream-write-arbitration/requirements.md#FR-04
+最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-downstream-write-arbitration:flow:测试绑定FR-04
+  tests: test/spec-downstream-arbitration.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-downstream-write-arbitration
+  status: active

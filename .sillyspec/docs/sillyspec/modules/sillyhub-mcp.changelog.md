@@ -16,3 +16,4 @@
 | 2026-10-17 | 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化 |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-21 | 2026-10-21-review-dispatch-answer-salvage | 修独立评审回收链：answer 原文兜底 |
+| 2026-11-28 | 2026-11-28-spec-downstream-write-arbitration | spec 树下行覆盖加本地优先仲裁 |

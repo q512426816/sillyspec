@@ -37,3 +37,12 @@
 文件：src/sentinel-assertions.js, test/sentinel-unified-evidence.test.mjs
 最近确认：1058bb4d523b67fdd558ff52fbf33a7ba9c9c7d4
 理由：哨兵（detectFakeCheckCompletion，src/sentinel-assertions.js）的 review 证据通道是死代码：listReviewEvidence（:49-70）扫描 `join(dirname(changeDir), '.runtime', 'execute-runs')` = `.sillyspec/changes/.runtime/execute-runs`——错位一级目录，真实产物在 `.sillyspec/.runtime/execute-runs/`（specBase/.runtime，实测在场），该通道从未命中过（完整流程也一直只靠 commit token 过门——上游 2026-11-14-scan-incremental 的 wt-commit 每笔带 task-NN 正因此）。轻量变更（flow 道）更无 execute-runs，唯一通道=commit token，而 .sillyspec-gitignored 仓的勾选留档不可入库——结构性依赖提交消息带 token，忘带即卡死（2026-11-15-scan-audit-domain 实证三次确认卡超时）。 修复两刀（都在 src/sentinel-assertions.js）：①路径修正 `dirname(dirname(changeDir))`（变更目录的父级 changes 的父级=specBase）——复活 execute 通道（完整流程受益）；②detectFakeCheckCompletion 增第三通道：变更目录下 review.json（轻量道收口评审产物）文本含 task id 即认——轻量道不再单独依赖 commit token。
+
+## D-sync-005@v1 2026-11-28-spec-downstream-write-arbitration——实证病灶（2026-11-28 multi-agent-platform）：decisions.md 被旧副本覆盖、一分钟后又变回，双向抖动。
+状态：implemented
+变更：2026-11-28-spec-downstream-write-arbitration
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-28-spec-downstream-write-arbitration/design.md
+文件：src/index.js, src/spec-sync-guard.js, src/sync.js, test/pull-spec-bundle-resurrect-guard.test.mjs, test/spec-downstream-arbitration.test.mjs
+最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
+理由：实证病灶（2026-11-28 multi-agent-platform）：decisions.md 被旧副本覆盖、一分钟后又变回，双向抖动。调研确认下行写点五处，其中两处缺「本地改动保护」：`resolve --take-platform`（`src/sync.js:2038 _takePlatformSpecPaths`，冲突提示直接引导执行，逐文件裸 `writeFileSync` 且随后把基线刷成服务器 hash——本地改动就此被标记成已同步、彻底丢失）、`pull --spec`（整树 rm+解包，只有 --force 门槛与 resurrect 抑制，无本地改动判定）。daemon 侧 `pullSpecBundle` 已有 D-008 回灌闸，但其 mtime 判定在 git 操作后失真、门控只数 daemon 会话（另一 CLI 窗口的编辑不算）——本次先补 CLI 两处，daemon 侧 hash 化单列。 改法：新增统一仲裁纯函数 `shouldKeepLocal(localPath, baseHashes, force)`——读本地内容算 sha256，与同步基线 `spec-sync-base.json` 中该路径 hash 比对：基线有且不同 = 本地改过 → 保留；基线有且相同 = 本地未改 → 可覆盖；基线缺失 = 保守保留（首次同步/损坏时不赌）。仲裁只做「跳过 + 告警 + 审计」，不改写用户内容；`--force` 全旁路（用户显式裁决优先）。被保留路径不写新基线值，防止「保留却被记成已同步」。

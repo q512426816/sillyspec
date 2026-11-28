@@ -126,3 +126,4 @@
 | 2026-11-26 | 2026-11-26-flow-help-flag-shortcircuit | flow 帮助旗标短路不再误立项 |
 | 2026-11-27 | 2026-11-27-changes-dir-platform-default | 2026-11-27-changes-dir-platform-default |
 | 2026-11-28 | 2026-11-28-design-file-list-h1-heading | design 文件清单节兼容任意标题层级 |
+| 2026-11-28 | 2026-11-28-spec-downstream-write-arbitration | spec 树下行覆盖加本地优先仲裁 |
