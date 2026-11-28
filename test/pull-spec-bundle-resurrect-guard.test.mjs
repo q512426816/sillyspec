@@ -16,6 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { join, dirname, resolve } from 'path'
 import { tmpdir } from 'os'
 import { fileURLToPath } from 'url'
+import { createHash } from 'crypto'
 import { SyncManager, pullSpecBundle } from '../src/sync.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -77,8 +78,17 @@ function okTarResponse(tarBuf, specVersion = '43') {
  * 键为 specDir 相对 POSIX 路径（walkSpecTree 产物口径）。
  */
 function writeBaseSnapshot(specDir, paths) {
+  // 2026-11-28-spec-downstream-write-arbitration：存在文件写**真实内容 hash**（= 本地自
+  // 上次同步后未改），否则 pull 的本地优先仲裁会按「本地脏」保留它们。盘面不存在的路径
+  // 仍写占位 hash——防复活抑制只依赖「路径在基线且有、盘面无」，不读 hash 值。
   const hashes = {}
-  for (const p of paths) hashes[p] = 'fake-hash-' + p.replace(/[^a-z0-9]/g, '')
+  for (const p of paths) {
+    try {
+      hashes[p] = createHash('sha256').update(readFileSync(join(specDir, p))).digest('hex')
+    } catch {
+      hashes[p] = 'fake-hash-' + p.replace(/[^a-z0-9]/g, '')
+    }
+  }
   mkdirSync(join(specDir, '.runtime'), { recursive: true })
   mkdirSync(join(specDir, '.runtime', 'state'), { recursive: true })
   writeFileSync(join(specDir, '.runtime', 'state', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8')

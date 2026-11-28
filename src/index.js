@@ -4182,7 +4182,7 @@ SillySpec platform — SillyHub 平台同步
                                              不带 --change 全树 spec 文件同步
   sillyspec platform sync-docs [--change <name>]
   sillyspec platform pull [--change <name>]
-  sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>
+  sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort> [--force]
   sillyspec platform status
   sillyspec platform pointer [--cleanup]
   sillyspec platform approve <change-name>
@@ -4424,8 +4424,9 @@ SillySpec platform — SillyHub 平台同步
               resolveName = pendingConflicts[0].change;
               console.log(`ℹ️ 自动选中唯一未决冲突: ${resolveName}`);
             } else {
-              console.error('❌ 用法: sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>');
-              console.error('   或: sillyspec platform resolve --change <name> <--keep-local|--take-platform|--abort>');
+              console.error('❌ 用法: sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort> [--force]');
+              console.error('   或: sillyspec platform resolve --change <name> <--keep-local|--take-platform|--abort> [--force]');
+              console.error('   --take-platform 默认保留本地未同步改动（加 --force 强制以服务器为准）');
               if (pendingConflicts.length > 1) {
                 console.error(`   现有 ${pendingConflicts.length} 个未决冲突，请指定变更名:`);
                 for (const c of pendingConflicts) console.error(`   - ${c.change}`);
@@ -4445,7 +4446,10 @@ SillySpec platform — SillyHub 平台同步
           assertSafeChangeName(resolveName, 'platform resolve 变更名');
           const modeMap = { '--keep-local': 'keep-local', '--take-platform': 'take-platform', '--abort': 'abort' };
           const resolveMode = modeMap[resolveFlags[0]];
-          const r = await syncModule.resolve(resolveName, resolveMode, dir);
+          // 2026-11-28-spec-downstream-write-arbitration FR-02：--force 让 take-platform 跳过
+          // 本地优先仲裁（用户显式裁决「以服务器为准」，覆盖本地未同步改动）。
+          const resolveForce = args.includes('--force');
+          const r = await syncModule.resolve(resolveName, resolveMode, dir, { force: resolveForce });
           if (r.ok && r.resolved) {
             console.log(`✅ ${resolveName} [${resolveMode}]: ${r.reason}`);
           } else {
@@ -5464,6 +5468,8 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       // 本地已删文件挡在快照回放外（删除 op 未上行成功时不被服务器旧文件复活）；
       // --restore-deleted = 用户显式意志优先，恢复纯快照回放语义。
       const pullSpecRestoreDeleted = pullSpecArgs.includes('--restore-deleted');
+      // FR-02 / D-001：--force 只确认整树替换，本地改动仲裁保持生效；放弃仲裁需显式 --overwrite-local。
+      const pullSpecOverwriteLocal = pullSpecArgs.includes('--overwrite-local');
       const syncModule = await import('./sync.js');
       // 未连接明确提示不崩（对齐 platform pull :2289 先例）
       const smForSpecPull = new syncModule.SyncManager(dir);
@@ -5471,12 +5477,17 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         console.error('❌ 未连接平台，请先 sillyspec platform connect');
         process.exit(1);
       }
-      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir, restoreDeleted: pullSpecRestoreDeleted });
+      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir, restoreDeleted: pullSpecRestoreDeleted, overwriteLocal: pullSpecOverwriteLocal });
       if (specR.ok && specR.pulled) {
         console.log(`✅ 已拉取 spec 快照 → ${specR.specDir}${specR.specVersion ? `（平台 spec_version: ${specR.specVersion}）` : ''}`);
         console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
         if (Array.isArray(specR.resurrectSkipped) && specR.resurrectSkipped.length > 0) {
           console.log('   防复活抑制已生效：本地已删除文件未从快照恢复（基线有、盘面无=本地删除尚未上行成功，抑制防被服务器旧文件复活）；确要从快照恢复用 --restore-deleted。');
+        }
+        if (Array.isArray(specR.keptLocal) && specR.keptLocal.length > 0) {
+          const names = specR.keptLocal.slice(0, 5).map((k) => k.path).join('、');
+          console.log(`   ⚠️ 本地有未同步改动已保留 ${specR.keptLocal.length} 个文件（未被快照覆盖）：${names}${specR.keptLocal.length > 5 ? ' 等' : ''}`);
+          console.log('   如确认以服务器快照为准：加 --force 重跑；或先提交/推送本地改动。');
         }
       } else if (/非空/.test(specR.reason || '')) {
         console.error(`❌ ${specR.reason}`);

@@ -16,6 +16,7 @@ import { join, dirname, basename, isAbsolute, relative, resolve as pathResolve }
 import { homedir } from 'os';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
+import { shouldKeepLocal, readBaseHashes, KEEP_REASON_LABEL } from './spec-sync-guard.js';
 import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
@@ -1945,6 +1946,46 @@ export class SyncManager {
         return { ok: false, pulled: false, specDir, reason: `local.yaml 备份失败，已拒绝整树覆盖（防丢连接凭据）: ${err.message}` };
       }
     }
+    // 2026-11-28-spec-downstream-write-arbitration FR-01/FR-03：整树 rm 之前先识别「本地有
+    // 未同步改动」的文件并把内容读进内存——rm 后本地证据不存在，事后无法仲裁。解包时跳过
+    // 这些路径、解包后原样写回（字节级），基线门禁放最前：force 旁路时零开销。
+    const keptLocal = []; // [{ path, reason }]
+    const keptContents = new Map(); // relPath → Buffer
+    const KEEP_BUDGET_BYTES = 50 * 1024 * 1024; // 脏文件内存上限（超出转告警并放弃保留，防 OOM）
+    if (opts.overwriteLocal !== true) {
+      const baseHashesForPull = readBaseHashes(specDir);
+      if (baseHashesForPull) {
+        let budget = KEEP_BUDGET_BYTES;
+        for (const rel of Object.keys(baseHashesForPull)) {
+          const norm = String(rel).replace(/\\/g, '/').replace(/^\.\//, '');
+          if (!norm || norm === 'local.yaml' || norm.startsWith('.runtime/')) continue;
+          const abs = join(specDir, norm);
+          if (!existsSync(abs)) continue;
+          let guard;
+          try {
+            guard = shouldKeepLocal({ specDir, relPath: norm, baseHashes: baseHashesForPull, force: false });
+          } catch { continue; }
+          if (!guard.keep) continue;
+          try {
+            const buf = readFileSync(abs);
+            if (buf.length > budget) {
+              console.warn(`[sync] 待保留文件超出内存预算（累计 >${KEEP_BUDGET_BYTES / 1024 / 1024}MB），后续本地改动不再保留；请改用 --force 或先提交本地改动: ${norm}`);
+              break;
+            }
+            budget -= buf.length;
+            keptContents.set(norm, buf);
+            keptLocal.push({ path: norm, reason: guard.reason });
+          } catch { /* 读失败按不保留（与现状一致：被覆盖） */ }
+        }
+        if (keptLocal.length > 0) {
+          const names = keptLocal.slice(0, 5).map((k) => `${k.path}（${KEEP_REASON_LABEL[k.reason] ?? k.reason}）`).join('、');
+          console.warn(
+            `⚠️ [sync] ${keptLocal.length} 个文件本地有未同步改动，整树拉取将保留它们不被覆盖：${names}${keptLocal.length > 5 ? ' 等' : ''}\n` +
+            `   如确认以服务器为准：加 --force 重跑；或先提交/推送本地改动`
+          );
+        }
+      }
+    }
     try {
       rmSync(specDir, { recursive: true, force: true });
     } catch (err) {
@@ -1964,6 +2005,9 @@ export class SyncManager {
         if (!e.isDir && suppressResurrect.has(relName)) {
           resurrectSkipped.push(relName); // 基线有、盘面无=本地删除：不从快照复活
           continue;
+        }
+        if (!e.isDir && keptContents.has(relName)) {
+          continue; // FR-01：本地有未同步改动 → 跳过解包，解包后原样写回
         }
         const fullPath = join(specDir, e.name);
         if (e.isDir) {
@@ -1991,6 +2035,8 @@ export class SyncManager {
           crlfCount: crlfPaths.length,
           force: opts.force === true,
           resurrectSkippedCount: resurrectSkipped.length,
+          kept: keptLocal.length,
+          keptPaths: keptLocal.map((k) => k.path).slice(0, WRITE_AUDIT_FILE_CAP),
         });
       } catch { /* 审计 fail-open */ }
       if (localYamlSaved !== null) {
@@ -1998,6 +2044,35 @@ export class SyncManager {
         writeAtomicSync(localYamlPath, localYamlSaved); // fs-atomic 契约：hook/probe 并发读 local.yaml
         try { chmodSync(localYamlPath, 0o600); } catch { /* SEC-04 best-effort，同 writeLocalYamlRaw */ }
         if (!existsSync(localYamlPath)) throw new Error('local.yaml 恢复后校验缺失');
+      }
+      // FR-01/FR-03：被仲裁保留的本地文件原样写回（字节级），并回写基线为「本地当前 hash」
+      // ——基线此时被 rm 连带删除，重建时把保留路径按本地内容记入，使其在下次同步里仍是
+      // 「本地未改动」（内容与基线一致）而不是「本地脏」；但这并不掩盖本地改动：改动本身
+      // 仍在盘面，随下一次 sync 正常上行。不写服务器 hash，避免 FR-03 的「记成已同步」。
+      if (keptContents.size > 0) {
+        for (const [rel, buf] of keptContents) {
+          try {
+            const abs = join(specDir, rel);
+            mkdirSync(dirname(abs), { recursive: true });
+            writeFileSync(abs, buf);
+          } catch (err) {
+            console.warn(`[sync] 保留文件写回失败（本地改动可能丢失）: ${rel}: ${err.message}`);
+          }
+        }
+        try {
+          const baseFile = runtimeStatePath(join(specDir, '.runtime'), 'spec-sync-base.json');
+          const hashes = {};
+          for (const [rel, buf] of keptContents) {
+            hashes[rel] = createHash('sha256').update(buf).digest('hex');
+          }
+          mkdirSync(join(specDir, '.runtime'), { recursive: true });
+          let merged = hashes;
+          try {
+            const oldBase = JSON.parse(readFileSync(baseFile, 'utf8'));
+            if (oldBase && typeof oldBase.hashes === 'object') merged = { ...oldBase.hashes, ...hashes };
+          } catch { /* 旧基线缺失 → 只记保留面 */ }
+          writeFileSync(baseFile, JSON.stringify({ ts: Date.now(), hashes: merged }, null, 2) + '\n', 'utf8');
+        } catch { /* 基线写失败只损失下次防回推精度 */ }
       }
       // ③ 成功路径：兜底使命完成，清理 .bak（force:true 容忍本就无 .bak 的路径）
       rmSync(localYamlBakPath, { force: true });
@@ -2016,7 +2091,7 @@ export class SyncManager {
       return { ok: false, pulled: false, specDir, reason: `解压 spec bundle 失败: ${err.message}` };
     }
     console.log(`[sync] 已拉取 spec 快照并解压到 ${specDir}${specVersion ? `（平台 spec_version: ${specVersion}，打包时刻快照非实时）` : ''}`);
-    return { ok: true, pulled: true, specDir, specVersion, ...(resurrectSkipped.length > 0 ? { resurrectSkipped } : {}) };
+    return { ok: true, pulled: true, specDir, specVersion, ...(resurrectSkipped.length > 0 ? { resurrectSkipped } : {}), ...(keptLocal.length > 0 ? { keptLocal } : {}) };
   }
 
   /**
@@ -2035,7 +2110,7 @@ export class SyncManager {
    * @param {string[]} paths 冲突路径（POSIX 相对 specDir，来自冲突文件 conflicting_paths）
    * @returns {Promise<{ok: boolean, overwritten?: number, removed?: number, skipped?: string[], reason?: string}>}
    */
-  async _takePlatformSpecPaths(specDir, paths) {
+  async _takePlatformSpecPaths(specDir, paths, opts = {}) {
     const platform = this._getPlatform();
     if (!platform) return { ok: false, reason: '未连接平台（take-platform 需拉平台 bundle）' };
     if (!Array.isArray(paths) || paths.length === 0) return { ok: false, reason: '冲突文件缺 conflicting_paths，无可接受路径' };
@@ -2074,11 +2149,20 @@ export class SyncManager {
     let removed = 0;
     const skipped = [];
     const writtenEntries = []; // [path, data] 对——写后审计 CRLF 画像用（2026-09-17 反馈⑥②法证收口）
+    // 2026-11-28-spec-downstream-write-arbitration FR-01：本地优先仲裁——本地自上次同步后
+    // 改过的路径不被服务器版本（可能是他端旧副本）覆盖；保留路径同时不刷基线（FR-03）。
+    const baseHashes = readBaseHashes(specDir);
+    const keptLocal = [];
     for (const p of normalized) {
       try {
         _assertSafeTarName(p, specDir);
         const data = serverFiles.get(p);
         if (data !== undefined) {
+          const guard = shouldKeepLocal({ specDir, relPath: p, baseHashes, force: opts.force === true });
+          if (guard.keep) {
+            keptLocal.push({ path: p, reason: guard.reason });
+            continue;
+          }
           const full = join(specDir, p);
           mkdirSync(dirname(full), { recursive: true });
           writeFileSync(full, data);
@@ -2107,6 +2191,8 @@ export class SyncManager {
       appendWriteAudit(specDir, {
         via: 'platform-resolve-take-platform',
         overwritten, removed,
+        kept: keptLocal.length,
+        keptPaths: keptLocal.map((k) => k.path).slice(0, WRITE_AUDIT_FILE_CAP),
         files: writtenEntries.map(([p]) => p).slice(0, WRITE_AUDIT_FILE_CAP)
           .concat(writtenEntries.length > WRITE_AUDIT_FILE_CAP ? [`…+${writtenEntries.length - WRITE_AUDIT_FILE_CAP}`] : []),
         crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
@@ -2114,14 +2200,27 @@ export class SyncManager {
       });
     } catch { /* 审计 fail-open */ }
 
+    if (keptLocal.length > 0) {
+      const names = keptLocal.slice(0, 5).map((k) => `${k.path}（${KEEP_REASON_LABEL[k.reason] ?? k.reason}）`).join('、');
+      console.warn(
+        `⚠️ [sync] ${keptLocal.length} 个文件本地有未同步改动，已保留未覆盖（服务器版本可能落后于本地）：${names}${keptLocal.length > 5 ? ' 等' : ''}\n` +
+        `   如确认以服务器为准：sillyspec resolve … 后带 --force 重跑，或先提交/推送本地改动` +
+        `（明细: .runtime/write-audit.jsonl）`
+      );
+    }
+
     // 基线快照刷新（best-effort）：被覆盖路径回写当前盘面 hash（= 服务器内容 hash）、被删
     // 路径移除条目——下次同步这些路径按「本地未改动」豁免回推（take-platform 语义闭环）。
+    // FR-03：被仲裁保留的路径**不**刷新（否则本地改动被记成「已同步」，后续同步视为未改动
+    // 而永久丢失）——保留路径的基线条目维持原值；原基线无该条目则继续无条目。
     try {
       const baseFile = runtimeStatePath(join(specDir, '.runtime'), 'spec-sync-base.json');
       let base = null;
       try { base = JSON.parse(readFileSync(baseFile, 'utf8')); } catch { base = null; }
       const hashes = base && typeof base.hashes === 'object' ? base.hashes : {};
+      const keptSet = new Set(keptLocal.map((k) => k.path));
       for (const p of normalized) {
+        if (keptSet.has(p)) continue; // 保留路径不重置基线（FR-03）
         try { hashes[p] = createHash('sha256').update(readFileSync(join(specDir, p))).digest('hex'); }
         catch { delete hashes[p]; }
       }
@@ -2129,7 +2228,7 @@ export class SyncManager {
       writeFileSync(baseFile, JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8');
     } catch { /* 快照失败只损失下次的防回推精度，覆盖结果本身已成立 */ }
 
-    return { ok: true, overwritten, removed, skipped };
+    return { ok: true, overwritten, removed, skipped, keptLocal };
   }
 
   /**
@@ -2148,7 +2247,7 @@ export class SyncManager {
    * @param {'keep-local'|'take-platform'|'abort'} mode
    * @returns {Promise<{ok: boolean, resolved: boolean, mode?: string, reason: string}>}
    */
-  async resolve(changeName, mode) {
+  async resolve(changeName, mode, opts = {}) {
     const cf = this.readConflictFile(changeName);
     const specCf = this.readSpecConflictFile(changeName);
     if (!cf && !specCf) {
@@ -2292,15 +2391,18 @@ export class SyncManager {
         const paths = Array.isArray(specCf.conflicting_paths) && specCf.conflicting_paths.length > 0
           ? specCf.conflicting_paths
           : Object.keys(specCf.server_versions || {});
-        const r = await this._takePlatformSpecPaths(specDir, paths);
+        const r = await this._takePlatformSpecPaths(specDir, paths, { force: opts.force === true });
         if (r.ok) {
           this.clearSpecConflictFile(changeName);
           const skippedNote = r.skipped && r.skipped.length > 0
             ? `，${r.skipped.length} 个路径异常跳过（${r.skipped.slice(0, 3).join(', ')}${r.skipped.length > 3 ? ' 等' : ''}）`
             : '';
+          const keptNote = r.keptLocal && r.keptLocal.length > 0
+            ? `，${r.keptLocal.length} 个文件因本地有未同步改动已保留未覆盖（${r.keptLocal.slice(0, 3).map((k) => k.path).join(', ')}${r.keptLocal.length > 3 ? ' 等' : ''}；确认以服务器为准请加 --force）`
+            : '';
           specOutcome = {
             ok: true, resolved: true,
-            reason: `spec 树已接受服务器版本：覆盖 ${r.overwritten} 个冲突文件${r.removed > 0 ? `、删除 ${r.removed} 个（服务器已删）` : ''}${skippedNote}，本地改动已放弃`,
+            reason: `spec 树已接受服务器版本：覆盖 ${r.overwritten} 个冲突文件${r.removed > 0 ? `、删除 ${r.removed} 个（服务器已删）` : ''}${skippedNote}${keptNote}`,
           };
         } else {
           specOutcome = { ok: false, resolved: false, reason: `spec 树 take-platform 失败: ${r.reason}（可重试；或手动对齐本地文件后 --keep-local）` };
@@ -2465,8 +2567,9 @@ export async function pullSpecBundle(cwd, opts) {
 }
 
 // task-13 / D-002 / D-010 / D-013 / FR-05：冲突解决三选一（index.js platform resolve 子命令用）
-export async function resolve(changeName, mode, cwd) {
-  return new SyncManager(cwd).resolve(changeName, mode);
+// 2026-11-28-spec-downstream-write-arbitration：透传 opts（take-platform 的 --force 仲裁旁路）。
+export async function resolve(changeName, mode, cwd, opts = {}) {
+  return new SyncManager(cwd).resolve(changeName, mode, opts);
 }
 
 // task-14 / FR-05：扩展 status（连接信息 + 落后标记 + 未决冲突列表），index.js platform status 用
