@@ -1072,3 +1072,66 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-11-15-sentinel-evidence-channel
   status: active
+
+## FR-sync-064 spec-sync-guard.js 不再对这两个符号做 named export，模块内使用不受影响
+变更：2026-11-28-spec-sync-guard-dead-exports
+状态：active
+摘要：死码降级
+场景正文：
+- 场景：死码降级 — Given `shouldKeepLocal` / `readBaseHashes` / `KEEP_REASON_LABEL` 仍被 `src/sync.js` 与测试消；When 阅读 `src/spec-sync-guard.js`；；Then 上述三个符号仍为 named export，`SPEC_SYNC_BASE_FILENAME` 与 `hashFileContent` 不再带 `export`
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-guard-dead-exports/requirements.md#FR-01
+最近确认：c8d156930188f059c5b20f32a008f8f436c89016
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-guard-dead-exports:flow:测试绑定FR-01
+  tests: test/check-syntax.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-guard-dead-exports
+  status: active
+
+## FR-sync-065 node test/check-syntax.mjs 退出码为 0
+变更：2026-11-28-spec-sync-guard-dead-exports
+状态：active
+摘要：lint 转绿
+场景正文：
+- 场景：lint 转绿 — Given 死码已降级；；When 运行 `node test/check-syntax.mjs`；；Then 退出码为 0 且输出无未引用导出条目。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-guard-dead-exports/requirements.md#FR-02
+最近确认：c8d156930188f059c5b20f32a008f8f436c89016
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-guard-dead-exports:flow:测试绑定FR-02
+  tests: test/check-syntax.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-guard-dead-exports
+  status: active
+
+## FR-sync-066 spec-downstream-arbitration 既有测试不回归
+变更：2026-11-28-spec-sync-guard-dead-exports
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 清理完成；；When 运行该测试文件；；Then 全部用例通过。
+全文：.sillyspec/changes/archive/2026-11-28-spec-sync-guard-dead-exports/requirements.md#FR-03
+最近确认：c8d156930188f059c5b20f32a008f8f436c89016
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-spec-sync-guard-dead-exports:flow:测试绑定FR-03
+  tests: test/spec-downstream-arbitration.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-spec-sync-guard-dead-exports
+  status: active

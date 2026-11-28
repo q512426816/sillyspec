@@ -46,3 +46,12 @@
 文件：src/index.js, src/spec-sync-guard.js, src/sync.js, test/pull-spec-bundle-resurrect-guard.test.mjs, test/spec-downstream-arbitration.test.mjs
 最近确认：e6c2673cd827bcfdcde602607c4fbf59d2607574
 理由：实证病灶（2026-11-28 multi-agent-platform）：decisions.md 被旧副本覆盖、一分钟后又变回，双向抖动。调研确认下行写点五处，其中两处缺「本地改动保护」：`resolve --take-platform`（`src/sync.js:2038 _takePlatformSpecPaths`，冲突提示直接引导执行，逐文件裸 `writeFileSync` 且随后把基线刷成服务器 hash——本地改动就此被标记成已同步、彻底丢失）、`pull --spec`（整树 rm+解包，只有 --force 门槛与 resurrect 抑制，无本地改动判定）。daemon 侧 `pullSpecBundle` 已有 D-008 回灌闸，但其 mtime 判定在 git 操作后失真、门控只数 daemon 会话（另一 CLI 窗口的编辑不算）——本次先补 CLI 两处，daemon 侧 hash 化单列。 改法：新增统一仲裁纯函数 `shouldKeepLocal(localPath, baseHashes, force)`——读本地内容算 sha256，与同步基线 `spec-sync-base.json` 中该路径 hash 比对：基线有且不同 = 本地改过 → 保留；基线有且相同 = 本地未改 → 可覆盖；基线缺失 = 保守保留（首次同步/损坏时不赌）。仲裁只做「跳过 + 告警 + 审计」，不改写用户内容；`--force` 全旁路（用户显式裁决优先）。被保留路径不写新基线值，防止「保留却被记成已同步」。
+
+## D-sync-006@v1 2026-11-28-spec-sync-guard-dead-exports——答：`src/spec-sync-guard.js` 的 `SPEC_SYNC_BASE_FILENAME` / `hashFileContent` 只在本模块
+状态：implemented
+变更：2026-11-28-spec-sync-guard-dead-exports
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-28-spec-sync-guard-dead-exports/design.md
+文件：src/spec-sync-guard.js
+最近确认：c8d156930188f059c5b20f32a008f8f436c89016
+理由：答：`src/spec-sync-guard.js` 的 `SPEC_SYNC_BASE_FILENAME` / `hashFileContent` 只在本模块内使用（`readBaseHashes`、`shouldKeepLocal`、default 聚合），`src`/`test` 其余文件零引用；`test/check-syntax.mjs` 的 22e-b 死码判据按文本引用检查，default export 聚合不算引用，因此 lint 恒红。修法：去掉两个符号的 `export` 关键字，降级为模块私有；保留 default 聚合与内部调用（零行为变化），不扩大到「让 sync.js 共享常量」的跨文件重构。
