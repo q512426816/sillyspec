@@ -324,3 +324,89 @@ created_at: 2026-09-27T13:23:17.271Z
   confirmed_at: null
   source_change: 2026-10-13-declared-paren-strip
   status: active
+
+## FR-change-management-017 design.md 用一级标题「# 文件变更清单」时 parseFileChangeList 能解析出表格路径
+变更：2026-11-28-design-file-list-h1-heading
+状态：active
+摘要：一级标题；四级及以下标题
+场景正文：
+- 场景：一级标题 — Given design.md 含 `# 文件变更清单` 与合法三列表格；；When 调用 `parseFileChangeList`；；Then 返回表格中的全部路径（与写成 `##` 时结果相同）。
+- 场景：四级及以下标题 — Given design.md 含 `#### 文件变更清单`；；When 调用 `parseFileChangeList`；；Then 同样解析出路径（标题层级不再影响识别）。
+全文：.sillyspec/changes/archive/2026-11-28-design-file-list-h1-heading/requirements.md#FR-01
+最近确认：661d2194f31bbcdc7f9b0b4fdd1dc7591af0a1f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-design-file-list-h1-heading:flow:测试绑定FR-01
+  tests: test/change-list-heading-level.test.mjs「一级标题解析」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-design-file-list-h1-heading
+  status: active
+
+## FR-change-management-018 清单节存在但解析为空时 flow verify-drafts 报错并提示标题层级与表头要求
+变更：2026-11-28-design-file-list-h1-heading
+状态：active
+摘要：节在但表格非法；未写清单节
+场景正文：
+- 场景：节在但表格非法 — Given design.md 有 `## 文件变更清单` 但表格只有一列或没有路径列；；When 运行 `flow verify-drafts`；；Then 输出含清单节格式要求的 violation，按未通过处理。
+- 场景：未写清单节 — Given design.md 完全没有清单节；；When 运行 `flow verify-drafts`；；Then 不新增任何与清单相关的 violation（存量变更零回归）。
+全文：.sillyspec/changes/archive/2026-11-28-design-file-list-h1-heading/requirements.md#FR-02
+最近确认：661d2194f31bbcdc7f9b0b4fdd1dc7591af0a1f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-design-file-list-h1-heading:flow:测试绑定FR-02
+  tests: test/change-list-heading-level.test.mjs「verify-drafts 兜底：节在但表格非法」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-design-file-list-h1-heading
+  status: active
+
+## FR-change-management-019 2~6 级标题解析结果与现有一致
+变更：2026-11-28-design-file-list-h1-heading
+状态：active
+摘要：既有形态零回归
+场景正文：
+- 场景：既有形态零回归 — Given 既有 change-list 测试覆盖的全部 design 形态；；When 运行既有测试套件；；Then 全部通过，无新增失败。
+全文：.sillyspec/changes/archive/2026-11-28-design-file-list-h1-heading/requirements.md#FR-03
+最近确认：661d2194f31bbcdc7f9b0b4fdd1dc7591af0a1f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-design-file-list-h1-heading:flow:测试绑定FR-03
+  tests: test/change-list-operation.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-design-file-list-h1-heading
+  status: active
+
+## FR-change-management-020 新增单测通过且既有 change-list/flow-draft 测试不回归
+变更：2026-11-28-design-file-list-h1-heading
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 实现完成；；When 运行上述测试文件；；Then 全部通过。
+全文：.sillyspec/changes/archive/2026-11-28-design-file-list-h1-heading/requirements.md#FR-04
+最近确认：661d2194f31bbcdc7f9b0b4fdd1dc7591af0a1f6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-design-file-list-h1-heading:flow:测试绑定FR-04
+  tests: test/change-list-heading-level.test.mjs | test/flow-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-design-file-list-h1-heading
+  status: active

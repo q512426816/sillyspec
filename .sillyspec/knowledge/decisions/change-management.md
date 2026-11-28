@@ -46,3 +46,12 @@ created_at: 2026-08-23T22:40:00+08:00
 锚点：未记录
 最近确认：d8fd9ce
 理由：CLI 在 prompt 组装时用任务描述跑 matchKnowledge，命中文件内容直接注入 prompt（top-3 限额，仿「📦 模块上下文」注入先例）+ 每次命中落 .runtime/knowledge-hits.jsonl（仿既有 decision-hits.json 遥测先例）+ 新子命令 knowledge stats 输出命中矩阵（从未命中的文件列死重清单）。明确不做「必须消费」硬门禁——先遥测后优化，数据说话再决定是否升级门禁。
+
+## D-change-management-006@v1 2026-11-28-design-file-list-h1-heading——答：`src/change-list.js` 的 `FILE_LIST_SECTION_RE` 只认 2～3 级标题，design.md 写成一级 `# 文件变
+状态：implemented
+变更：2026-11-28-design-file-list-h1-heading
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-28-design-file-list-h1-heading/design.md
+文件：src/change-list.js, src/flow-draft.js, test/change-list-heading-level.test.mjs
+最近确认：661d2194f31bbcdc7f9b0b4fdd1dc7591af0a1f6
+理由：答：`src/change-list.js` 的 `FILE_LIST_SECTION_RE` 只认 2～3 级标题，design.md 写成一级 `# 文件变更清单` 时整节解析为空，`hunk-attribution` 的未归因判定与 stage-contract 的风险判级一起失明（multi-agent-platform 2026-11-28 实证）。改法：正则放宽到捕获 1～6 级标题的级别，节截取改为「遇到同级或更高级标题才断」（原硬编码 `^##`）；同时导出 `detectFileListSectionIssue`，供 `src/flow-draft.js` 的 `verifyThinDocsV2` 在「清单节在场但解析为空」时提前给出格式 violation，把问题从 done 阶段前移到 verify-drafts。不改表格解析规则、不改既有 2～3 级行为。
