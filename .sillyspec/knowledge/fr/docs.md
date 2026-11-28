@@ -2653,3 +2653,101 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-11-26-unavailable-wording-fix
   status: active
+
+## FR-docs-151 Read 后按会话记录目标文件内容 sha256 基线（仅 .sillyspec 前缀，路径可配置）
+变更：2026-11-28-file-write-optimistic-lock
+状态：active
+摘要：读取后记录基线；重读刷新基线；前缀外文件不记录
+场景正文：
+- 场景：读取后记录基线 — Given 会话 S 读取 `.sillyspec/changes/x/decisions.md`，When PostToolUse(Read) 触发，Then 基线文件出
+- 场景：重读刷新基线 — Given 该路径已有旧 hash 记录，When 再次读取（内容已变），Then 记录被更新为最新 hash。
+- 场景：前缀外文件不记录 — Given 读取 `src/sync.js`（不在 .sillyspec/ 下），When PostToolUse(Read) 触发，Then 基线文件无该条目。
+全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-01
+最近确认：2c560803290281d6ba139bb1750f3df7aa594059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-file-write-optimistic-lock:flow:测试绑定FR-01
+  tests: test/file-guard.test.mjs「读取记录基线 / 重读刷新 / 前缀外不记录 / 过期清理」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-file-write-optimistic-lock
+  status: active
+
+## FR-docs-152 Write/Edit/MultiEdit 前比对基线，hash 不一致时阻止写入并输出「文件已被他人改写，请重读后再写」
+变更：2026-11-28-file-write-optimistic-lock
+状态：active
+摘要：读后被他人改写 → 阻止；读后未被改写 → 放行
+场景正文：
+- 场景：读后被他人改写 → 阻止 — Given 会话 S 读取 decisions.md（基线 hash A），随后另一进程把内容改成 B，When S 执行 Write 覆盖该文件，Then 写入被阻止，s
+- 场景：读后未被改写 → 放行 — Given 基线 hash 与当前盘面一致，When 执行 Edit，Then 放行（exit 0）。
+全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-02
+最近确认：2c560803290281d6ba139bb1750f3df7aa594059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-file-write-optimistic-lock:flow:测试绑定FR-02
+  tests: test/file-guard.test.mjs「读后被改写阻止 / 未改写放行 / MultiEdit 逐一比对」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-file-write-optimistic-lock
+  status: active
+
+## FR-docs-153 无读取基线（新文件/未读）时放行，不阻断正常创建
+变更：2026-11-28-file-write-optimistic-lock
+状态：active
+摘要：新建文件放行；基线损坏放行
+场景正文：
+- 场景：新建文件放行 — Given 会话从未读取 `new-file.md`，When Write 创建它，Then 放行。
+- 场景：基线损坏放行 — Given 基线文件是坏 JSON，When 执行任何写操作，Then 全部放行且 stderr 留痕。
+全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-03
+最近确认：2c560803290281d6ba139bb1750f3df7aa594059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-file-write-optimistic-lock:flow:测试绑定FR-03
+  tests: test/file-guard.test.mjs「新文件放行 / 基线缺失或损坏放行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-file-write-optimistic-lock
+  status: active
+
+## FR-docs-154 既有 worktree-guard 拦截行为零回归，hook 异常一律放行（fail-open）并留痕
+变更：2026-11-28-file-write-optimistic-lock
+状态：active
+摘要：worktree-guard 拦截优先；file-guard 异常不阻断
+场景正文：
+- 场景：worktree-guard 拦截优先 — Given 在 worktree 限制场景下执行违法写操作，When PreToolUse 触发，Then 仍按 worktree-guard 原因为由阻止，文案与现状一致
+- 场景：file-guard 异常不阻断 — Given file-guard 抛异常，When 任意写操作，Then 放行且 stderr 有 `[sillyspec-hook]` 留痕。
+全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-04
+最近确认：2c560803290281d6ba139bb1750f3df7aa594059
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-28-file-write-optimistic-lock:flow:测试绑定FR-04
+  tests: test/file-guard.test.mjs「worktree-guard 优先级与文案不变（hook 集成断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-28-file-write-optimistic-lock
+  status: active
+
+## FR-docs-155 无 hook 引擎降级路径有明确文档说明；daemon mtime→hash 评估结论落文档
+变更：2026-11-28-file-write-optimistic-lock
+状态：active
+摘要：文档齐备
+场景正文：
+- 场景：文档齐备 — Given 本变更落地，When 打开该文档，Then 能看到 hook 配置样例、降级说明、局限与 daemon 评估结论四节。
+全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-05
+最近确认：2c560803290281d6ba139bb1750f3df7aa594059
