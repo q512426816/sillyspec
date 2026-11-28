@@ -680,7 +680,7 @@ supersedes：D-001@v1
 锚点：.sillyspec/changes/2026-11-07-knowledge-accept-channel/design.md
 文件：src/knowledge-classify.js, src/knowledge-digest.js, src/stages/knowledge.js, test/knowledge-accept-channel.test.mjs
 最近确认：26e955214b2179a03f78992127ef72a125a97d31
-理由：proposed/ 待审区只进不出（CLI 侧核查实证：classify 只吃 uncategorized.md，proposed 零消费方，SKILL.md「仅用户明确要求才合并」指向不存在的命令）。方案：在 src/knowledge-classify.js 新增导出 `acceptProposedEntry` + CLI 入口 `cmdKnowledgeAccept`（stages/knowledge.js 二级路由挂 `accept` case）——读 proposed/<slug>.md 解析 frontmatter（category）/ `#` 标题 / 正文（剥 cmdPropose 生成的尾注分隔行），迁移原语全部复用 classify 既有私有件（normalizeTargetFile/categoryForTarget/resolveKeywords/detectEol/insertRouteLine + 同款追加块与 duplicate 判定，src/knowledge-classify.js:198-296），落盘顺序沿用「先追加后删除」（条目不丢可手工 revert），源清理=删除整个 proposed 文件（区别于 classify 删 uncategorized 段）。选复用而非改 classifyUncategorizedEntry 签名：该函数强耦合 uncategorized 寻址/删段（三通道寻址 qlId），扩参会牵动既有契约；平行函数共享私有件零回归。
+理由：proposed/ 待审区只进不出（CLI 侧核查实证：classify 只吃 uncategorized.md，proposed 零消费方，SKILL.md「仅用户明确要求才合并」指向不存在的命令）。方案：在 src/knowledge-classify.js 新增导出 `acceptProposedEntry` + CLI 入口 `cmdKnowledgeAccept`（stages/knowledge.js 二级路由挂 `accept` case）——读 proposed/<slug>.md 解析 frontmatter（category）/ `#` 标题 / 正文（剥 cmdPropose 生成的尾注分隔行），迁移原语全部复用 classify 既有私有件（normalizeTargetFile/categoryForTarget/resolveKeywords/detectEol/insertRouteLine + 同款追加块与 duplicate 判定，src/knowledge-classify.js:335），落盘顺序沿用「先追加后删除」（条目不丢可手工 revert），源清理=删除整个 proposed 文件（区别于 classify 删 uncategorized 段）。选复用而非改 classifyUncategorizedEntry 签名：该函数强耦合 uncategorized 寻址/删段（三通道寻址 qlId），扩参会牵动既有契约；平行函数共享私有件零回归。
 
 ## D-core-engine-048@v1 2026-11-07-knowledge-k-shape-minimal——K 形态契约的完整字段化（独立发号/解析器/退役判据机器化）是更大设计，本变更只落三件最小事：①目标集扩展——knowledge-classify.js 的 C
 状态：implemented
@@ -709,14 +709,14 @@ supersedes：D-001@v1
 最近确认：a2ff988adc92c46be407c9f6d8d4e108b5df424a
 理由：生产实证（multi-agent-platform 仓 2026-11-09 三变更）：flow done 归档子步把「未落库 🚨 警告」打在输出中段，最后一行是「✅ flow done 完成」——尾部消费（agent tail / 人扫一眼）得到假成功，归档件滞留共享暂存区（并行 index 手术曾丢提交）。归档提交由 agent 手工执行是既有设计（共享仓竞态 + pre-commit hook 纪律，complete-handlers.js 注释论证），本变更不动它，补两处： - **终态可见性**：flow.js 在终态成功行打印时独立重算落库状态（git ls-tree HEAD + archiveLandedInHeadTree），新增导出纯函数 `renderArchiveLandingEpilogue`（complete-handlers.js，落库→单行确认 / 未落库→🚨 尾块含 resolveArchiveCommitPathspecs 构成的幂等命令）作为输出最后内容；exit code 保持 0。 - **doctor 兜底**：doctor-diagnostics.js 新增只读检查项 `detectArchiveCommitResidue`——暂存区条目（src/dst 任一侧）落在 changes/<名>/ 或 changes/archive/<名>/ 且该名未落 HEAD → WARNING + safe_actions 修复命令；干净 PASSED、非仓 skipped。
 
-## D-core-engine-051@v1 2026-11-11-deps-hub-symbol-narrow——现行 import 依赖回归面（`discoverModuleDependentTests`，src/verify-postcheck.js:1180）按**模
+## D-core-engine-051@v1 2026-11-11-deps-hub-symbol-narrow——现行 import 依赖回归面（`discoverModuleDependentTests`，src/verify-postcheck.js:1130）按**模
 状态：implemented
 变更：2026-11-11-deps-hub-symbol-narrow
 原编号：D-000@v1
 锚点：.sillyspec/changes/2026-11-11-deps-hub-symbol-narrow/design.md
 文件：src/deps-symbol-narrow.js, src/index.js, src/verify-postcheck.js, test/deps-symbol-narrow.test.mjs
 最近确认：5bfa52450e168cf326f7037243bfab23133dfd96
-理由：现行 import 依赖回归面（`discoverModuleDependentTests`，src/verify-postcheck.js:1180）按**模块路径子串**匹配：变更枢纽模块任一导出，全部引用该路径的测试入面（「只可能多跑不漏」——2026-09-26-dynamic-test-inference 契约），枢纽模块（依赖方众多的 mcp_tools 类）单符号改动拖全量面。本变更加一层**符号收敛**：从变更 diff 提取「触达导出符号集」，模块路径命中且命名导入不含任何触达符号的依赖测试出面。收敛只在枢纽面激活（模块路径命中数 > 8，常量 `DEPS_SYMBOL_NARROW_HUB_MIN`，无配置键——默认零配置可用纪律）；所有不确定形态 fail-open 保留（多跑侧不变量只在「命名导入且全不触达」这一可判定形态上放开，该放开正是本变更的目的、用户显式决策）。语言面：JS/TS 适配器先行；Python 等其他语言无符号信息 → 整体回落模块路径匹配（不锁死语言，新增语言加提取适配即可）。
+理由：现行 import 依赖回归面（`discoverModuleDependentTests`，src/verify-postcheck.js:1130）按**模块路径子串**匹配：变更枢纽模块任一导出，全部引用该路径的测试入面（「只可能多跑不漏」——2026-09-26-dynamic-test-inference 契约），枢纽模块（依赖方众多的 mcp_tools 类）单符号改动拖全量面。本变更加一层**符号收敛**：从变更 diff 提取「触达导出符号集」，模块路径命中且命名导入不含任何触达符号的依赖测试出面。收敛只在枢纽面激活（模块路径命中数 > 8，常量 `DEPS_SYMBOL_NARROW_HUB_MIN`，无配置键——默认零配置可用纪律）；所有不确定形态 fail-open 保留（多跑侧不变量只在「命名导入且全不触达」这一可判定形态上放开，该放开正是本变更的目的、用户显式决策）。语言面：JS/TS 适配器先行；Python 等其他语言无符号信息 → 整体回落模块路径匹配（不锁死语言，新增语言加提取适配即可）。
 
 ## D-core-engine-052@v1 2026-11-12-verify-probes-md-facts-refresh——改 `src/verify-probes.js` 的 `writeVerifyFacts`（verify-probes 命令的 facts 落盘点）：合并 pr
 状态：implemented

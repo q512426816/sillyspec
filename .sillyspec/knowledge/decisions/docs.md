@@ -174,3 +174,12 @@
 文件：docs/sillyspec/file-lifecycle.md, src/stages/archive.js
 最近确认：fe8f2eb82f23077004fbe816502adc814bcb7c15
 理由：只做三处文案订正，零逻辑改动： 1. `.sillyspec/local.yaml`：commands 段注释改为如实描述——`test: unavailable` 仅取消显式命令，`extractTestCommand` 返回 null 后 `runFullCommand` 回退 `inferFullTestCommand` 结构推断照跑（引 `src/verify-postcheck.js:3056-3068`）；删除「unavailable→skip 逃逸」「关闭亲跑」表述。 2. `src/stages/archive.js:12`：首步注释同款订正（删除「D-008 关闭亲跑」）。 3. `docs/sillyspec/file-lifecycle.md:53`：archive 行「D-008 关闭亲跑留痕归 CI」改为如实语义。 选择「只改文字、不改配置取值」：用户明确选择「保持测试照跑 + 只订正文案」；改取值为空命令或 skip 都会改变实测行为，与选择相悖。
+
+## D-docs-014@v1 2026-11-28-docs-anchor-repair——答：pre-push 的 docs gate 按「失效数 ≤ 基线」ratchet 拦截推送，当前工作区 155 处失效（HEAD 模式 186）— 绝大多数是
+状态：implemented
+变更：2026-11-28-docs-anchor-repair
+原编号：D-000@v1
+锚点：.sillyspec/changes/2026-11-28-docs-anchor-repair/design.md
+文件：docs/sillyspec/archify-reference-analysis-2026-09-04.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/doc-consistency-debt.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, docs/sillyspec/review-2026-08-20-full-audit.md, docs/sillyspec/sillyhub-path-a-contract.md, docs/troubleshooting.md
+最近确认：3790c73790f0fafd315e9435cc9254fa62c3b255
+理由：答：pre-push 的 docs gate 按「失效数 ≤ 基线」ratchet 拦截推送，当前工作区 155 处失效（HEAD 模式 186）— 绝大多数是 `repo://sillyhub/...` 跨仓引用随代码重构产生的行号漂移，以及 `2026-11-26-verify-stage-retire` 删除 verify 阶段后的过时路径。使用工具自带 `docs check --fix` 批量重锚可自动定位项（D-006 保守：歧义/无 token 线索保留待人工），一次性消除 93 处，剩余 62 处按原样留作存量（不硬改语义）。

@@ -298,7 +298,7 @@
 锚点：未记录
 文件：.gitignore, src/flow.js, src/run/complete-handlers.js
 最近确认：f9086f027c622b68172f5961ce3a5f6930412512
-理由：我的判断：local.yaml 显式配置项（变更文档 git 跟踪策略，枚举 `changes.doc_tracking`，缺省 platform=不入库，词汇对齐 D-004@v2）作为 CLI 行为真源；init 模板同步往项目 .gitignore 写忽略行（文件事实与配置声明一致）。理由：①收口落库 epilogue（src/flow.js:3083 调 renderArchiveLandingEpilogue，src/run/complete-handlers.js:875 computeArchiveLanding）在「不入库」仓里若继续按未落库打 🚨+commit 命令就是常驻噪音，需要稳定的行为分支真源；②git check-ignore 纯探测对「存量保留+新增不入库」形态（D-002）有歧义——已跟踪存量与新 ignore 并存，探测结果不能表达「用户选择跟踪」语义；③对齐知识库 conventions「门禁/定价类输入必须项目声明」口径（local.yaml gitignore 当共享价目表已被 D-008@2026-11-14-scan-incremental 否决过的是「把声明塞 gitignore 当配置」——本条正相反：声明进 local.yaml，gitignore 只是 init 的机械副产物）。
+理由：我的判断：local.yaml 显式配置项（变更文档 git 跟踪策略，枚举 `changes.doc_tracking`，缺省 platform=不入库，词汇对齐 D-004@v2）作为 CLI 行为真源；init 模板同步往项目 .gitignore 写忽略行（文件事实与配置声明一致）。理由：①收口落库 epilogue（src/flow.js:3083 调 renderArchiveLandingEpilogue，src/run/complete-handlers.js:921 computeArchiveLanding）在「不入库」仓里若继续按未落库打 🚨+commit 命令就是常驻噪音，需要稳定的行为分支真源；②git check-ignore 纯探测对「存量保留+新增不入库」形态（D-002）有歧义——已跟踪存量与新 ignore 并存，探测结果不能表达「用户选择跟踪」语义；③对齐知识库 conventions「门禁/定价类输入必须项目声明」口径（local.yaml gitignore 当共享价目表已被 D-008@2026-11-14-scan-incremental 否决过的是「把声明塞 gitignore 当配置」——本条正相反：声明进 local.yaml，gitignore 只是 init 的机械副产物）。
 supersedes：D-003@v1（布尔词汇升版为枚举词汇，机制核心——显式声明优于运行时探测——不变）
 故障面：local.yaml 未升级的存量仓（配置缺省=platform）在升级后收口 epilogue 从「🚨+commit 命令」变为两段式形态——已依赖该提示做归档提交的存量用户习惯被改变，需 doctor/文档给迁移指引（显式声明 repo 恢复原行为）
 退役判据：若平台侧后续把「文档版本历史」建成一级能力且 spec-pull 一键化闭环，枚举词汇需随平台策略词汇（platform-native/repo-native 类）二次对齐时重议

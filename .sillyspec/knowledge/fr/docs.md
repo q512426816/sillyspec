@@ -2751,3 +2751,30 @@ created_at: 2026-10-15T09:21:13.934Z
 - 场景：文档齐备 — Given 本变更落地，When 打开该文档，Then 能看到 hook 配置样例、降级说明、局限与 daemon 评估结论四节。
 全文：.sillyspec/changes/archive/2026-11-28-file-write-optimistic-lock/requirements.md#FR-05
 最近确认：2c560803290281d6ba139bb1750f3df7aa594059
+
+## FR-docs-156 docs check --fix 后工作区失效数由 155 降至 62
+变更：2026-11-28-docs-anchor-repair
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 工作区当前失效 155 处；；When 运行 `docs check --fix`；；Then 修复回执显示「修复前 155 → 重锚 93 → 修复后 62」。
+全文：.sillyspec/changes/archive/2026-11-28-docs-anchor-repair/requirements.md#FR-01
+最近确认：3790c73790f0fafd315e9435cc9254fa62c3b255
+
+## FR-docs-157 修复提交后 docs gate --against HEAD 计数不高于基线 110
+变更：2026-11-28-docs-anchor-repair
+状态：active
+摘要：推送门放行
+场景正文：
+- 场景：推送门放行 — Given 修复提交已落库；；When 运行 `docs gate --against HEAD`；；Then 退出码为 0 且文案不含「真增量」。
+全文：.sillyspec/changes/archive/2026-11-28-docs-anchor-repair/requirements.md#FR-02
+最近确认：3790c73790f0fafd315e9435cc9254fa62c3b255
+
+## FR-docs-158 修复面仅文档（不改 src/test 代码）
+变更：2026-11-28-docs-anchor-repair
+状态：active
+摘要：提交面核对
+场景正文：
+- 场景：提交面核对 — Given 工作区同时存在并行会话的代码改动；；When 执行本变更提交；；Then `git show --stat` 的文件清单仅含文档路径。
+全文：.sillyspec/changes/archive/2026-11-28-docs-anchor-repair/requirements.md#FR-03
+最近确认：3790c73790f0fafd315e9435cc9254fa62c3b255

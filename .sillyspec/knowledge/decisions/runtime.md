@@ -292,7 +292,7 @@ supersedes：无（修订 design 初稿注入时机）
 原编号：D-007@v1
 锚点：未记录
 最近确认：9f9450d0
-理由：放 src/run/shared.js export `readStageBurst(cwd)`：复用既有 `readLocalYamlRaw(cwd)`（src/run/shared.js:2041）+ js-yaml 动态 import 读 `doc?.stage?.burst === true`——与 resolveLivingDocs 读 `docs-check.living-docs` 同款范式（src/run/shared.js:1560），绕开 parseSimpleYaml 缩进坑（known-issues 实证）。env 覆写：`SILLYSPEC_STAGE_BURST=0` → false / `=1` → true，优先于配置；坏 YAML/读失败 → false。锚定 cwd 而非 specBase：burst 是仓库本地开发偏好（与 resolveLivingDocs 同锚定），不随平台/worktree specRoot 漂移。
+理由：放 src/run/shared.js export `readStageBurst(cwd)`：复用既有 `readLocalYamlRaw(cwd)`（src/run/shared.js:2108）+ js-yaml 动态 import 读 `doc?.stage?.burst === true`——与 resolveLivingDocs 读 `docs-check.living-docs` 同款范式（src/run/shared.js:1627），绕开 parseSimpleYaml 缩进坑（known-issues 实证）。env 覆写：`SILLYSPEC_STAGE_BURST=0` → false / `=1` → true，优先于配置；坏 YAML/读失败 → false。锚定 cwd 而非 specBase：burst 是仓库本地开发偏好（与 resolveLivingDocs 同锚定），不随平台/worktree specRoot 漂移。
 故障面：js-yaml 动态 import 失败 → false（fail-safe 回缺省）。
 退役判据：无。
 
@@ -410,14 +410,14 @@ supersedes：D-004@v1
 最近确认：b25433622f64beed7d0cd99ffa7e485beab6375b
 理由：复用既有 detached 后台通道（bg-sync）承载终态推送，前台只落 marker 不等待。三件套： 1. **新模块 `src/final-sync.js`**：终态 marker 的读写与两段消费逻辑。marker 落 `runtimeTempPath(runtimeRoot, 'final-sync/<change>.json')`（temp 分层，可随时删），内容 `{change, status:'pending'|'ok'|'failed', ts, detail}`。导出 `writeFinalSyncMarker` / `readFinalSyncMarkers` / `finalizePendingFinalSyncMarkers`（bg 子进程侧：对 pending 逐个调 `sync()` 按 `treeOk` 写 ok/failed）/ `consumeFinalSyncMarkers`（命令侧：ok 静默删；failed 打 🚨+自救命令后删；pending 超 `FINAL_SYNC_PENDING_TTL_MS=10min` 做一次验证性 sync，成功删、失败报后删——解析失败/IO 异常一律跳过不阻断主命令）。 2. **`src/run/shared.js` 终态强校验分支改造**：`triggerSyncTerminalStrictImpl` 终态路径先判 `SILLYSPEC_SYNC_BG==='0'` 或后台不可用 → 走原内联路径（原代码原样保留，含 raceWithAbort/🚨/exitCode=1）；否则写 pending marker → 显式调 `bg.spawnBackgroundSync`（经 `opts.bgImpl` 注入缝，对齐 syncImpl 惯例）→ `spawned`/`coalesced` 返回 `{confirmed:false, delegated:'background'}`（不设 exitCode），其余结果/抛异常 → 降级内联旧路径。 3. **`src/run/bg-sync.js` 子进程收敛**：`runBgSyncFromEnv` 主轮结束后（终态补推段旁）调 `finalizePendingFinalSyncMarkers`——主轮 triggerSync 已把树推完，此处对 pending marker 的补推通常为增量 no-op、仅取 `treeOk` 结果收敛 marker。 不卡前台的关键：内联等待（45s 预算 race）只保留在逃生阀与降级路径；主路径前台只做本地文件写 + spawn，毫秒级。大 patch（MB 级，多会话并行仓常规态）传输在后台子进程完成（总预算 150s，2026-11-09 实证 5.8MB@1Mbps≈45-80s 可容纳）；超预算残留由 pending marker 的下条命令验证/重试闭环兜住。
 
-## D-runtime-025@v1 2026-11-15-auxiliary-scan-no-stick——run <stage> 入口（src/run/command.js:1425）在无 --change 时经 `resolveChangeName` 兜底吸附仓内
+## D-runtime-025@v1 2026-11-15-auxiliary-scan-no-stick——run <stage> 入口（src/run/command.js:1454）在无 --change 时经 `resolveChangeName` 兜底吸附仓内
 状态：implemented
 变更：2026-11-15-auxiliary-scan-no-stick
 原编号：D-000@v1
 锚点：.sillyspec/changes/2026-11-15-auxiliary-scan-no-stick/design.md
 文件：src/run/command.js, test/auxiliary-scan-no-stick.test.mjs
 最近确认：66a47c0e9a42f5accb891df92479e8ae5556cd61
-理由：run <stage> 入口（src/run/command.js:1425）在无 --change 时经 `resolveChangeName` 兜底吸附仓内活跃变更，随后 :1456 混跑回退块把「在轻量跑道变更上跑 run <stage>」当升厚意图拦进 --upgrade-thick 同意门——scan（辅助阶段，definition.auxiliary: true，无变更归属）也被一并吸附：仓里任一活跃轻量变更在场即整仓跑不了 scan（2026-11-14 端到端实测在 multi-agent-platform 被拦+libuv 崩溃；且行为状态敏感——currentChange 指向谁取决于并行会话推进，不可预测）。 修复：command.js 在 effectiveChange 解析前判定 stage ∈ 无变更归属辅助子集（本变更界定为 scan 与 explore——quick/archive 虽在 AUXILIARY_STAGES 但有变更归属语义（quick 会话/archive 收口锚定变更），不豁免；status/doctor 已有 READONLY 分流不受影响），命中则 effectiveChange=null——不吸附、不注册变更、不触发混跑回退门，辅助阶段直接执行。
+理由：run <stage> 入口（src/run/command.js:1454）在无 --change 时经 `resolveChangeName` 兜底吸附仓内活跃变更，随后 :1456 混跑回退块把「在轻量跑道变更上跑 run <stage>」当升厚意图拦进 --upgrade-thick 同意门——scan（辅助阶段，definition.auxiliary: true，无变更归属）也被一并吸附：仓里任一活跃轻量变更在场即整仓跑不了 scan（2026-11-14 端到端实测在 multi-agent-platform 被拦+libuv 崩溃；且行为状态敏感——currentChange 指向谁取决于并行会话推进，不可预测）。 修复：command.js 在 effectiveChange 解析前判定 stage ∈ 无变更归属辅助子集（本变更界定为 scan 与 explore——quick/archive 虽在 AUXILIARY_STAGES 但有变更归属语义（quick 会话/archive 收口锚定变更），不豁免；status/doctor 已有 READONLY 分流不受影响），命中则 effectiveChange=null——不吸附、不注册变更、不触发混跑回退门，辅助阶段直接执行。
 
 ## D-runtime-026@v1 2026-11-23-worktree-fallback-consent——改 `worktree.js create()` 的 worktree add 失败分支（:882-893）：删「可能是沙箱权限限制」的静默降级，改 fail-
 状态：implemented

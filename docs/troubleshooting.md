@@ -134,7 +134,7 @@ D-001@v1 的类型标为 `scope`，因此归档时 `flow-state` 虽记录 `disti
 
 **第二层：即使入库，意图查询也召不回。**
 
-`matchKnowledge`（`src/knowledge-match.js:708`）在路由零命中后有两条词片兜底，都不足以救回 D-001@v1：
+`matchKnowledge`（`src/knowledge-match.js:724`）在路由零命中后有两条词片兜底，都不足以救回 D-001@v1：
 
 - `fallbackByQueryShingles`（`:390`）覆盖正常域文件，但要求词片在「标题 + 理由」中出现次数落在 `2 <= n <= ceil`（`:411`，`ceil = max(2, 条目数*5%)`）——单次词面命中不召回。
 - 停车场兜底（`:713`）只对 `isParkingFile`（`decisions/unmapped.md` / `fr/unmapped.md`，`:335`）且 `status === 'rejected' || deathPath` 的条目生效——正常域的 `implemented` 决策（如 D-001@v1）不在覆盖范围。

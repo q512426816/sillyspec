@@ -55,3 +55,4 @@
 | 2026-11-26 | 2026-11-26-unavailable-wording-fix | 订正收口实测门配置文案与语义 |
 | 2026-11-27 | 2026-11-27-changes-dir-platform-default | 2026-11-27-changes-dir-platform-default |
 | 2026-11-28 | 2026-11-28-file-write-optimistic-lock | spec 文档写入层乐观锁 hook |
+| 2026-11-28 | 2026-11-28-docs-anchor-repair | 批量重锚文档失效引用 |

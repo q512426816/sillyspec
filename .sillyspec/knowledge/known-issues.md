@@ -18,7 +18,7 @@ created_at: 2026-06-23 02:00:00
 ## 🟢 daemon 重启 session 恢复已修复（gap-8.3 / commit 40e21d3）
 - 状态：已修复
 
-daemon 重启后 interactive session 丢失致 turn 卡死的根因（`sillyhub-daemon/src/cli.ts` 漏传 persistence/recoveryClient）**已修复**（2026-06-20，commit 40e21d3，变更 `2026-06-19-fix-interactive-daemon-lifecycle` gap-8.3）：`repo://sillyhub/sillyhub-daemon/src/cli.ts:773-776` 与 `:1214` 已装配 `JsonSessionPersistence` + `recoveryClient`（client 即 HubClient，实现 RecoveryCoordinator），backend 加 recovery 端点。有 `cli-session-manager-injection.test.ts` 守护。改 daemon session 逻辑可基于此已恢复前提。
+daemon 重启后 interactive session 丢失致 turn 卡死的根因（`sillyhub-daemon/src/cli.ts` 漏传 persistence/recoveryClient）**已修复**（2026-06-20，commit 40e21d3，变更 `2026-06-19-fix-interactive-daemon-lifecycle` gap-8.3）：`repo://sillyhub/sillyhub-daemon/src/cli.ts:87` 与 `:1214` 已装配 `JsonSessionPersistence` + `recoveryClient`（client 即 HubClient，实现 RecoveryCoordinator），backend 加 recovery 端点。有 `cli-session-manager-injection.test.ts` 守护。改 daemon session 逻辑可基于此已恢复前提。
 
 ## 🟡 AgentRunLog 无 metadata 列 / 三层日志 metadata 丢失
 - 状态：观察
@@ -408,7 +408,7 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 
 > 来源：ql-20260729-001-b3af（GET /api/llm-providers 500 修复）。
 
-- 现象：GET /api/llm-providers 返回 500（及所有走 `CredentialCipher` 的接口：llm_provider / git_identity / worktree 等）。后端日志 `ValueError: non-hexadecimal number found in fromhex() arg at position 0`，栈顶在 `repo://sillyhub/backend/app/modules/llm_provider/service.py:170 _default_cipher` → `repo://sillyhub/backend/app/core/crypto.py:58 bytes.fromhex`。
+- 现象：GET /api/llm-providers 返回 500（及所有走 `CredentialCipher` 的接口：llm_provider / git_identity / worktree 等）。后端日志 `ValueError: non-hexadecimal number found in fromhex() arg at position 0`，栈顶在 `repo://sillyhub/backend/app/modules/llm_provider/service.py:243 _default_cipher` → `repo://sillyhub/backend/app/core/crypto.py:58 bytes.fromhex`。
 - 根因：`deploy/.env` 的 `SILLYSPEC_MASTER_KEY` 被填成人类可读标识串 `msk-sillyhub-dev-90d223fd-...`（看着像密钥，实则非十六进制）。`crypto._load_master_key()` 只对**空值**抛友好 `MasterKeyMissing`，非空但非 hex 直接走 `bytes.fromhex(hex_key)` → 裸 `ValueError` → `get_cipher()` 构造期崩溃 → 任何 `new LlmProviderService(session)` / `WorktreeService(...)` 立即 500（list 接口构造 service 时就炸，根本到不了 SQL）。
 - 修复（ql-20260729-001-b3af）：`deploy/.env` 第5行换成合法 `v1:<secrets.token_hex(32) 生成的 64位hex>`；`docker compose up -d --force-recreate backend` 重建容器重读 env。零数据风险：`llm_providers`/`git_identities` 表均空、`api_keys` 为 hash 存储不依赖 master key。
 - 通用坑：① `SILLYSPEC_MASTER_KEY` 格式必须是 `<key_id>:<64位hex>`（如 `v1:ab12...`）或裸 64 位 hex，**不能**填标识串/base64/明文密码；生成命令 `python -c "import secrets; print(f'v1:{secrets.token_hex(32)}')"`（`repo://sillyhub/backend/app/core/crypto.py:42` MasterKeyMissing 的 hint 已给）。② `deploy/.env` 被 `.gitignore`，改它不进 `git status`，靠重建容器重读 env 落地（`docker compose up -d` 检测到 backend env 变化会自动 recreate，保险用 `--force-recreate backend`）。③ `_load_master_key` 对「非空但格式非法」抛裸 ValueError 是健壮性缺陷——建议后续把 `bytes.fromhex` 包 try/except 转 `MasterKeyMissing`（带 hint），避免 500 时栈里只有裸 fromhex 难定位。

@@ -47,13 +47,13 @@ SillySpec 侧调用（`src/sillyhub-mcp/client.js#dispatchWorker`）已按此契
 - caller 提供 → **跳过自建 worktree/分支**，`root_path = caller worktree_path`，分支 = caller `branch`。
 - caller 未提供 → 原自建逻辑不变（:217-221 的 `and not worktree_path` 短路）。
 
-⚠️ **路径 A 不写 `run.worktree_branch`**（DB 列保持 None）——该列是 team 模式 converge finalize 查 merge 的触发字段（`repo://sillyhub/backend/app/modules/agent/finalizer.py:255`）。路径 A 写它会触发 `git merge --no-ff <branch>` 污染 caller 主仓（R-01）。`branch` 入参仅作 lease metadata 记录，**不落 `run.worktree_branch` 列**。已由单测 `test_dispatch_worker_caller_worktree.py` 锁定（断言该列不被写）。
+⚠️ **路径 A 不写 `run.worktree_branch`**（DB 列保持 None）——该列是 team 模式 converge finalize 查 merge 的触发字段（`repo://sillyhub/backend/app/modules/agent/finalizer.py:281`）。路径 A 写它会触发 `git merge --no-ff <branch>` 污染 caller 主仓（R-01）。`branch` 入参仅作 lease metadata 记录，**不落 `run.worktree_branch` 列**。已由单测 `test_dispatch_worker_caller_worktree.py` 锁定（断言该列不被写）。
 
 daemon `workspace.ts` 分支 0（目录已存在 → 直接 cwd）已支持；路径 A 复用此分支。
 
 ### 3. `render_worker_prompt` 路径 A 下 worker 不 git commit（关键，UB-1）— 已落地
 
-`render_worker_prompt` 仍为 team 模式输出 `git add -A && git commit`（team 行为零回归）。路径 A 走方式 (b)：`dispatch_worker` 的 `worker_prompt` 覆写参数让 caller 直接控制 worker prompt——`repo://sillyhub/backend/app/modules/agent/execution.py:638` `prompt = worker_prompt if worker_prompt is not None else render_worker_prompt(run)`，SillySpec 侧 `worker_prompt` 已传「不 commit 留工作区」覆写。caller 传 → 完全替代 render（含 commit 指令被消除）。
+`render_worker_prompt` 仍为 team 模式输出 `git add -A && git commit`（team 行为零回归）。路径 A 走方式 (b)：`dispatch_worker` 的 `worker_prompt` 覆写参数让 caller 直接控制 worker prompt——`repo://sillyhub/backend/app/modules/agent/execution.py:644` `prompt = worker_prompt if worker_prompt is not None else render_worker_prompt(run)`，SillySpec 侧 `worker_prompt` 已传「不 commit 留工作区」覆写。caller 传 → 完全替代 render（含 commit 指令被消除）。
 
 ## mission "external" 模式（D-007，路径 A 配套）— 已落地
 
@@ -79,14 +79,14 @@ SillyHub daemon 的 `ws.root_path` / `daemon_instances.allowed_roots`（`assertW
 
 SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:225-240`）已实现 root_path 校验：caller 传 `rootPath` 或 `client.getRootPath()` 拿到时，校验 `worktreePath` 在内，越界 → `{available:false, reason:'worktree-outside-root'}` → fallback Local。
 
-> ⚠️ **限制 ①（已知 gap，暂不阻断生产）**：当前 SillyHub MCP gateway 的 `tools/list` 响应仅返 `{tools:[...]}`，**不在顶层暴露 `root_path`**；daemon 亦无独立 MCP tool 查 `root_path`。故 SillySpec `client.getRootPath()`（`client.js:391-409`，defensively 读 `result.root_path`）**实际返回 null** → `probe.js` 的 worktree 越界校验在真实派发流程里**不触发**（生产不会因这个误判 fallback；但越界保护等于暂未生效）。`task-12 constraints` 已预见此 gap。待 daemon 暴露 `root_path`（如 `tools/list` 顶层增字段或增能力查询 tool）后，该校验自动生效——届时更新本节并补单测。
+> ⚠️ **限制 ①（已知 gap，暂不阻断生产）**：当前 SillyHub MCP gateway 的 `tools/list` 响应仅返 `{tools:[...]}`，**不在顶层暴露 `root_path`**；daemon 亦无独立 MCP tool 查 `root_path`。故 SillySpec `client.getRootPath()`（`client.js:416`，defensively 读 `result.root_path`）**实际返回 null** → `probe.js` 的 worktree 越界校验在真实派发流程里**不触发**（生产不会因这个误判 fallback；但越界保护等于暂未生效）。`task-12 constraints` 已预见此 gap。待 daemon 暴露 `root_path`（如 `tools/list` 顶层增字段或增能力查询 tool）后，该校验自动生效——届时更新本节并补单测。
 
 ## SillySpec 侧行为（路径 A 已落地）
 
 - `isPathASupported()`（`src/dispatch/backends/sillyhub-mcp.js:104-109`）改为探测：
   1. `process.env.SILLYHUB_PATH_A === '1'` → 强制 true（spike-01 备选 / 手动启用，最高优先级）；
   2. 否则读 probe 预热的 schema 探测缓存（`_pathAProbe.supported`）：`probe.js` `preheatPathAProbe`(:109-120) 调 `client.listTools()` → `detectPathAFromTools`(:92-99) 查 `dispatch_worker.inputSchema.properties` 含 `worktree_path` **和** `worker_prompt` 全命中 → true，任一缺失/探测失败 → false（保守，R-04 不硬试）。
-- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:699`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:619) **同步读缓存**，不每 Wave 探测。
+- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:772`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:619) **同步读缓存**，不每 Wave 探测。
 - `killLease`（`client.js`）：无专用 kill tool，best-effort `report_progress` 带 kill 标记 + 保守 `killed=false`。路径 A 后续建议 SillyHub 增专用 kill/lease-revoke tool。
 
 > ⚠️ **限制 ②（已知 gap，需运行时配置绕过）**：`execute.js` **自身不调 `probeSillyHub`**（grep 确认：execute.js 无 probe import / warming 调用，`getDispatchMode` 是同步读缓存）。`probeSillyHub` 预热只在 `src/index.js` 的 `dispatch-hint` CLI 子命令(:983/:1012)触发。故走 `sillyspec execute` 主流程时，schema 探测缓存**未被预热** → `isPathASupported()` 走分支 2 返回 false → dispatchMode 退 `local-fallback`，路径 A 不会自动启用。**两种启用方式**：(a) 设 env `SILLYHUB_PATH_A=1` 强制 true（推荐，绕过预热）；(b) 先跑一次 `sillyspec dispatch probe`（或 dispatch-hint）预热缓存再 execute。后续应在 execute 启动期接 `probeSillyHub` 预热（一次性）以消除该手动步骤——届时更新本节。
@@ -134,12 +134,12 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:225-240`）已实现 root
 - [x] `dispatch_worker` 接受 `worktree_path`/`branch`/`worker_prompt` 可选参数，不传走原逻辑（链路 A/B + daemon 三入口同构，spike-01 live schema 确认）
 - [x] execution.py caller 提供 worktree → 跳过自建，root_path/分支用 caller 的（`repo://sillyhub/backend/app/modules/agent/execution.py:533`，task-08 单测）
 - [x] 路径 A 不写 `run.worktree_branch`（execution.py 仅 team 分支:260 写；task-08 单测断言不写，D-008）
-- [x] `render_worker_prompt` 路径 A 下 worker 不 commit —— 走 `worker_prompt` 覆写（`repo://sillyhub/backend/app/modules/agent/execution.py:638`；SillySpec 侧 worker_prompt 文本「不 commit 留工作区」）
-- [x] mission external 模式：`create_mission` `orchestration_mode` 参（team 默认零回归）；external 跳 orchestrator spawn（task-07 单测 + spike-01 live main_run_id=null）；converge external 跳 finalize/cleanup（`repo://sillyhub/backend/app/modules/agent/finalizer.py:824`，task-07 单测，R-01 根解）
+- [x] `render_worker_prompt` 路径 A 下 worker 不 commit —— 走 `worker_prompt` 覆写（`repo://sillyhub/backend/app/modules/agent/execution.py:656`；SillySpec 侧 worker_prompt 文本「不 commit 留工作区」）
+- [x] mission external 模式：`create_mission` `orchestration_mode` 参（team 默认零回归）；external 跳 orchestrator spawn（task-07 单测 + spike-01 live main_run_id=null）；converge external 跳 finalize/cleanup（`repo://sillyhub/backend/app/modules/agent/finalizer.py:857`，task-07 单测，R-01 根解）
 - [x] daemon `allowed_roots` 含仓根（`["C:\\Users\\qinyi"]` 覆盖 multi-agent-platform 仓根 + worktree；check-dispatch-allowed-roots.mjs 前置校验脚本 + sillyspec-dispatch.md 指引）
 - [x] 字段名统一 `branch`（D-009，跨仓契约 / client.js / 三入口一致，round-1 `worktree_branch` 漂移已收敛）
 - [x] SillySpec 侧 `isPathASupported()` 改 schema 探测（client.js listTools + probe.js 预热 + detectPathAFromTools；SILLYHUB_PATH_A=1 env 备选）
-- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:509/:292-294/:329）
+- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:517/:292-294/:329）
 - [ ] daemon 暴露 `root_path`（限制 ①）：当前 tools/list 不返 root_path，probe 越界校验生产不触发——待后续 daemon 增暴露后补勾
 - [ ] execute 启动期接 `probeSillyHub` 预热（限制 ②）：当前需 SILLYHUB_PATH_A=1 或先跑 dispatch probe——待后续 execute 接预热后补勾
 - [ ] （建议）专用 kill/lease-revoke tool（替代 `report_progress` kill 标记）

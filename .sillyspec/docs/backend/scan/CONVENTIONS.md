@@ -45,9 +45,9 @@ generator: sillyspec-scan
 
 ### 3. Service 是「持有 session 的有状态类」，查询走 `session.execute + scalars`
 
-- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:151`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
+- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:195`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
 - 查询统一 SQLAlchemy 2.x 形态：`(await self._session.execute(stmt)).scalar() or 0`、`.scalars().all()`、`.scalars().first()`（`repo://sillyhub/backend/app/modules/change/service.py:184,192,204,224,241`）。
-- Service 间组合**复用同一 session**（不要各自开新事务）：`repo://sillyhub/backend/app/modules/change/service.py:163` `SpecWorkspaceService(self._session).get(...)`。
+- Service 间组合**复用同一 session**（不要各自开新事务）：`repo://sillyhub/backend/app/modules/change/service.py:211` `SpecWorkspaceService(self._session).get(...)`。
 - router 之外（后台任务/启动钩子）手动开 session 用 `async with get_session_factory()() as session:`，不要 `Depends(get_session)`（`backend/app/core/db.py` 的 `get_session_factory` 懒加载单例 + conftest `_redirect_session_factory` 印证）。
 
 ### 4. 异常分层：`AppError` 基类 + 中文 message + UPPER_SNAKE code，路由层不手写 `HTTPException`
@@ -63,7 +63,7 @@ generator: sillyspec-scan
 
 ### 6. 日志：`structlog` + 模块级 `get_logger(__name__)`，事件名点分蛇形
 
-不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:95`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:112` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
+不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:95`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:128` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
 
 ### 7. 权限/归属校验放 service 层（PPM 范式）
 
@@ -71,7 +71,7 @@ generator: sillyspec-scan
 
 ### 8. 审计：写操作走 `AsyncSession.info` 的 `audit_context`，不要另起一套
 
-审计上下文放在 `AsyncSession.info["audit_context"]`，由 ORM 事件钩子读取落 `audit_logs` 表：`repo://sillyhub/backend/app/core/audit_hooks.py:89-110`（`_get_audit_context` 从 connection.info 回退 session.info 提取）。手工审计场景（登录/settings 等）也复用同一上下文通道。
+审计上下文放在 `AsyncSession.info["audit_context"]`，由 ORM 事件钩子读取落 `audit_logs` 表：`repo://sillyhub/backend/app/core/audit_hooks.py:117`（`_get_audit_context` 从 connection.info 回退 session.info 提取）。手工审计场景（登录/settings 等）也复用同一上下文通道。
 
 ### 9. SQLModel 模型风格
 
@@ -88,7 +88,7 @@ generator: sillyspec-scan
 ## 典型模式速查
 
 1. **标准 CRUD 端点**：`repo://sillyhub/backend/app/modules/worktree/router.py:23-68`——`APIRouter(prefix="/workspaces/{workspace_id}")` + `SessionDep`/`Annotated[User, Depends(require_permission(...))]` 注入 + `async def` handler 调 service。
-2. **service 组合复用同 session**：`repo://sillyhub/backend/app/modules/change/service.py:163`——`SpecWorkspaceService(self._session).get(...)`，不新开事务。
+2. **service 组合复用同 session**：`repo://sillyhub/backend/app/modules/change/service.py:211`——`SpecWorkspaceService(self._session).get(...)`，不新开事务。
 3. **出网 URL SSRF 校验**：`repo://sillyhub/backend/app/modules/llm_provider/service.py:541-546`——解析 host → `await ToolPolicyService.assert_public_hostname(host)` → 再 httpx 请求。
 4. **新错误类**：`repo://sillyhub/backend/app/modules/release/service.py:45-56`——事件名类 + `code = "RELEASE_NOT_ALLOWED"` + 中文 message，由全局 handler 翻译。
 5. **测试建库**：`repo://sillyhub/backend/conftest.py:90`——in-memory engine + 全 model import 注册 + `expire_on_commit=False` session；env 相关测试用 `monkeypatch.setenv` + 直接 `Settings()`（`repo://sillyhub/backend/tests/test_config.py:29-33`），**禁 reload**。
