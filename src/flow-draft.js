@@ -24,6 +24,8 @@ import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks }
 // （fr-index.isThinSkeletonBodies）共用同一字面量——两处独立字符串会被评审实证为「镜像非同源」。
 import { SKELETON_THEN_PLACEHOLDER } from './fr-index.js'
 import { runtimeStatePath } from './runtime-paths.js'
+// 2026-11-28-design-file-list-h1-heading：清单节「在场但解析为空」提前拦截。
+import { detectFileListSectionIssue } from './change-list.js'
 
 /** 读文件并归一化 CRLF→LF（2026-09-25-feedback-fixes④：Python/编辑器写盘 CRLF 会破坏 
  锚定的槽位识别 regex）。 */
@@ -425,6 +427,17 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false, repair
         })
         if (!answered) violations.push(`design「${sec.heading}」未作答——每节至少一行（小改动可写「不适用：<理由>」）；问题原文：${sec.lines.join('／')}`)
       }
+    }
+  }
+
+  // 文件变更清单节（2026-11-28-design-file-list-h1-heading）：标题在场但解析不出任何
+  // 有效路径 → 提前拦截（否则问题推迟到 flow done 才以「交付文件未归因」暴露，归档后
+  // 无法补救）。未写清单节的 design 返回 null，存量变更零影响；adopted design 同样检查
+  // （hunk 归因读的是同一份 design.md）。
+  {
+    const issue = detectFileListSectionIssue(join(changeDir, 'design.md'))
+    if (issue) {
+      violations.push(`design 文件变更清单节未解析出有效路径（标题「${issue.headingLine}」在场）——标题 1～6 级均可（推荐 ##），表格需含文件列（可选操作列），且至少一个合法路径；否则 flow done 会报交付文件未归因`)
     }
   }
 

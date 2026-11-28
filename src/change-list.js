@@ -96,8 +96,12 @@ export function pathMatches(a, b) {
  * 避免两个校验器对「有没有清单」给出矛盾结论）。
  * 容忍可选编号前缀（`## 6. 文件变更清单` / `## 6) 文件变更清单`）——
  * brainstorm Step11 模板鼓励 design 章节带编号，编号前缀不应让 plan-postcheck 解析失败。
+ *
+ * 标题层级 1～6 级均识别（2026-11-28-design-file-list-h1-heading）：此前只认 2～3 级，
+ * design 写一级 `# 文件变更清单` 时整节静默为空，flow done 报交付文件未归因（跨仓实证）。
+ * 捕获组 1 = 标题级别（用于节边界判定）。
  */
-const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/im
+const FILE_LIST_SECTION_RE = /^(#{1,6})\s*(?:\d+[.)]\s*)?(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/im
 
 /**
  * exclude 子标题词集：「不修改/暂缓/保留」类 —— 其下路径从清单移除，不强制 task 覆盖。
@@ -240,10 +244,15 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
   // 子分段不截断（2026-10-13-h2-repo-heading-parse：段头是生态既定约定——brainstorm 模板/
   // plan-postcheck 覆盖对账/design-facts 核验四处消费；此前 h2 段头在此终结「文件变更清单」
   // 节，其后条目整段静默丢失，agent 照告警①书写即丢对账与冻结）。
+  // 2026-11-28：节边界按标题级别判定——一级/二级/三级标题仍以 `#{1,2}` 截断（保持既有
+  // `^##` 行为，`### 新增文件` 分类子段不误断）；四级及以下标题以「同级或更高级」截断。
+  const headingLevel = sectionMatch[1].length
+  const breakLevel = headingLevel >= 4 ? headingLevel : 2
   const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length)
   const lines = []
   for (const line of afterSection.split('\n')) {
-    if (/^##\s/.test(line) && !REPO_SECTION_HEADER_RE.test(line)) break
+    const h = line.match(/^(#{1,6})\s/)
+    if (h && h[1].length <= breakLevel && !REPO_SECTION_HEADER_RE.test(line)) break
     lines.push(line)
   }
   let headerSkipped = false
@@ -400,4 +409,23 @@ export function parseFileChangeList(designMdPath, opts) {
  */
 export function parseFileChangeListDetailed(designMdPath, opts) {
   return _parseFileListDetailed(designMdPath, opts)
+}
+
+/**
+ * 清单节「在场但解析为空」诊断（2026-11-28-design-file-list-h1-heading）。
+ *
+ * 供 flow verify-drafts / 批准门提前提示格式问题：design.md 里写了清单节标题，
+ * 但 parseFileChangeList 解析不出任何有效路径（表格缺失 / 表头无文件列 / 路径全不合法）。
+ * 未写清单节的 design 返回 null（存量变更零影响）。
+ *
+ * @param {string} designMdPath - design.md 文件路径
+ * @returns {{ headingLevel: number, headingLine: string } | null}
+ */
+export function detectFileListSectionIssue(designMdPath) {
+  if (!designMdPath || !existsSync(designMdPath)) return null
+  const content = readFileSync(designMdPath, 'utf8').replace(/\r\n/g, '\n')
+  const m = content.match(FILE_LIST_SECTION_RE)
+  if (!m) return null
+  if (parseFileChangeList(designMdPath).size > 0) return null
+  return { headingLevel: m[1].length, headingLine: m[0].trim() }
 }
